@@ -155,7 +155,7 @@ official CLI needs no new setup:
 
 `AWX_AXI_*` variables cover only what awxkit has no equivalent for: `AWX_AXI_HOME` for the token file
 location, `AWX_AXI_API_BASE_PATH` for the §4.2 gateway case, `AWX_AXI_LIVE` and `AWX_AXI_RECORD` for tests,
-and `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS` for the §6.3 gate.
+`AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS` for the §6.3 gate, and `AWX_AXI_READ_ONLY` for the §6.5 boundary.
 
 ## 4. Target version and version-sensitive surface
 
@@ -261,6 +261,13 @@ are set.
 It is used by `auth login` alone, to mint a token.
 This keeps the password out of the request path of every other command, and it degrades gracefully on
 controllers where an administrator has disabled basic auth.
+
+**The read-only live suite is the one exception, and it exists because of §6.5.**
+Minting a token is a `POST /api/v2/tokens/`, which the live-instance boundary forbids.
+So the live suite authenticates with basic auth directly for its GETs rather than calling `auth login`, and
+`auth login` is itself one of the commands the live suite is forbidden to exercise.
+This is a deliberate inversion of the rule above, confined to `test/live/`, and it is the reason §6.5's
+enforcement lives in the transport rather than in the auth layer.
 
 ### 5.2 `auth login` is non-interactive
 
@@ -383,6 +390,46 @@ awx-axi therefore applies its own redaction (`core/redact.ts`) to every log body
 credentials embedded in SCM URLs and anything matching AWX's own `$encrypted$` marker.
 Redaction is applied on the way to stdout, and the redaction pass is unit-tested against a fixture containing a
 `https://user:token@github.com/...` remote.
+
+### 6.5 The live-instance boundary: read-only, enforced in code
+
+The captain has provided credentials for a real AWX instance at `~/.config/awx-axi/live-smoke.env` (mode `0600`,
+carrying `CONTROLLER_HOST`, `CONTROLLER_USERNAME`, and `CONTROLLER_PASSWORD`).
+
+**That account has full read and write permission, and the captain's order is that nothing on the instance may
+be modified.**
+This is a hard boundary on every live use by any worker, test, or benchmark, and it outranks every convenience
+in this document:
+
+- Live traffic is **read-only GETs only**.
+  No job or workflow launch, relaunch, or cancel.
+  No project sync.
+  No approve or deny.
+  No create, update, or delete of any object.
+  No `POST`, `PUT`, `PATCH`, or `DELETE` of any kind.
+- The one conceivable exception, minting a read-scoped token, is itself a `POST` and is therefore **also
+  forbidden** unless the captain is asked first through the main firstmate.
+  §5.1 records the consequence: the live suite uses basic auth for its GETs instead.
+- The credential file is **sourced, never read for its values**.
+  Nothing prints, copies, commits, or writes those values anywhere, including test fixtures, recorded
+  responses, logs, error messages, benchmark output, and reports.
+- The benchmark (§14.3) uses read-only tasks only.
+
+**A promise in a document is not an enforcement mechanism, so this is enforced at the transport seam.**
+`AWX_AXI_READ_ONLY=1` makes `AwxTransport` refuse every non-GET request before it is issued, raising a
+`READ_ONLY_VIOLATION` error naming the method and route that was attempted.
+The check sits in `HttpTransport` itself, below every domain module and every command, so no command,
+subcommand, retry path, or future contributor can route around it.
+The live harness sets the variable unconditionally rather than accepting it from the ambient environment, and
+`AWX_AXI_READ_ONLY=1` is also available to operators who simply want a safe posture.
+
+This mirrors awx-mcp's `AWX_MCP_READ_ONLY`, with one difference: awx-mcp's read-only mode changes which tools it
+*exposes*, while awx-axi's blocks the request at the wire, which is the stronger guarantee and the one the
+captain's boundary needs.
+
+Two tests carry this rather than a comment: one asserting that every tier-1 write command raises
+`READ_ONLY_VIOLATION` and issues no request when the flag is set, and one asserting that the live suite's own
+harness sets it and that no `test/live/` case names a mutating command.
 
 ## 7. Command surface
 
@@ -904,6 +951,7 @@ stderr carries nothing an agent needs: progress and diagnostics only, per AXI §
 | `TLS_UNTRUSTED` | Certificate verification failed | 1 |
 | `SERVER_BUSY` | 502, 503, or 504 after backoff exhausted | 1 |
 | `SERVER_ERROR` | 500 | 1 |
+| `READ_ONLY_VIOLATION` | A mutating request was attempted while the §6.5 read-only flag was set; the method and route are named and nothing was sent | 1 |
 | `UNKNOWN` | Anything unmapped | 1 |
 
 Two outcomes are deliberately **not** in this table, because they are exit-0 no-ops per AXI §6:
@@ -997,7 +1045,7 @@ src/
   skill/                generated SKILL.md and the --check drift guard
 test/
   fixtures/             recorded AWX 24.6.1 responses
-  live/                 opt-in live smoke suite, gated on AWX_AXI_LIVE=1
+  live/                 opt-in READ-ONLY live smoke suite, gated on AWX_AXI_LIVE=1 (§6.5)
 bench/                  the §14.3 comparison harness against the plain awx CLI
 ```
 
@@ -1041,11 +1089,18 @@ interface AwxResponse {
 
 interface AwxTransport {
   get(route: string, query?: Query): Promise<AwxResponse>;
-  post(route: string, body?: unknown): Promise<AwxResponse>;
+  post(route: string, body?: unknown): Promise<AwxResponse>;   // refused when readOnly
   getPaged(route: string, query: Query, limit: number): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 ```
+
+`post` is the only mutating method on the seam, because §2's no-deletes property means no `del`, `put`, or
+`patch` method exists to call.
+`HttpTransport` checks the §6.5 read-only flag inside `post` and raises `READ_ONLY_VIOLATION` before issuing
+anything.
+Putting the check here rather than in each domain is what makes it a guarantee: there is exactly one function in
+the codebase that can mutate a controller, and it is four lines long.
 
 `status` is on the response rather than swallowed into a thrown error precisely because §3.2 is the design's
 central argument: the status code *is* the semantics for cancel, sync, approve, and launch.
@@ -1120,29 +1175,50 @@ quietly wrong:
 - **The secret-name guard.**
   A unit test asserting that declaring a flag named `--token` throws at registration.
 
-### 11.3 Making the later live smoke test trivial
+### 11.3 The live smoke suite is read-only, and there is no write suite
 
-`test/live/` runs only when `AWX_AXI_LIVE=1`.
-It uses `HttpTransport` and the real token, and asserts **shape, not content**: every command exits 0 or a
-documented code, stdout parses, and required keys are present.
-It never asserts on specific job or template names, so it runs against any controller where the token has read
-access.
+A real controller is now available, under the hard read-only boundary in §6.5.
+That boundary shapes this suite more than anything else in the design.
 
-The read-only suite is the default.
-The write-path suite is separately gated on `AWX_AXI_LIVE_WRITE=1` and needs one disposable job template
-supplied by name, because launching a real playbook is not something a test suite should discover on its own.
+`test/live/` runs only when `AWX_AXI_LIVE=1`, and its harness **sets
+`AWX_AXI_READ_ONLY=1` itself** rather than trusting the environment to carry it.
+It uses `HttpTransport` with basic auth sourced from `~/.config/awx-axi/live-smoke.env`, because minting a token
+is a `POST` and therefore forbidden (§5.1).
+It asserts **shape, not content**: every command exits 0 or a documented code, stdout parses, and required keys
+are present.
+It never asserts on specific job, template, project, or host names, so it stays valid as the instance's contents
+change and so no instance detail is baked into the repository.
 
-The suite doubles as a fixture recorder: `AWX_AXI_RECORD=1` writes real responses into `test/fixtures/` with
-the controller hostname, tokens, organization names, and inventory hostnames scrubbed, so the offline suite can
-be upgraded from source-derived to recorded fixtures in one pass.
+**There is no write-path suite, at any gate, in v1.**
+An earlier draft of this design proposed one behind a second environment variable.
+It is removed rather than merely disabled: a gate that exists can be opened by a future contributor who has not
+read the captain's order, and the whole point of §6.5 is that the guarantee must not depend on someone
+remembering.
+The seven tier-1 write commands are therefore covered **only** by the offline suite, which is where they were
+already covered anyway (§11.2), and by `--dry-run` against the live instance, which issues no mutation and is a
+genuinely useful live check of name resolution and payload construction.
 
-When a controller exists, the whole live validation is:
+Coverage cost, stated plainly: nothing in v1 will ever have executed a real launch, cancel, sync, or approval
+against a real controller.
+Those paths are exercised against recorded fixtures and reasoned from the 24.6.1 source, and that is the honest
+limit of the evidence behind them.
+When the captain wants that verified, it needs a disposable instance or an explicit, scoped authorization, and
+it is a separate conversation rather than a flag.
+
+The suite doubles as a fixture recorder, which is read-only and therefore permitted: `AWX_AXI_RECORD=1` writes
+GET responses into `test/fixtures/` with the controller hostname, organization names, inventory hostnames, and
+any `$encrypted$` field scrubbed.
+A recorder-specific test asserts that no recorded fixture contains the credential file's username or any value
+sourced from it, so the §6.5 no-values-anywhere rule is checked rather than trusted.
+
+The whole live validation is:
 
 ```
-export CONTROLLER_HOST=https://awx.example.com
-awx-axi auth login
+set -a; . ~/.config/awx-axi/live-smoke.env; set +a
 AWX_AXI_LIVE=1 npm run test:live
 ```
+
+No `auth login`, and no exported credential values beyond that subshell.
 
 ## 12. Implementation stack
 
@@ -1238,6 +1314,12 @@ The commission asks for a benchmark against the plain `awx` CLI on success rate,
 turns, in the shape the AXI repo benchmarks `gh-axi` against `gh`.
 `bench/` holds that harness, and it needs a live controller, so it lands after the core commands work.
 
+**Every benchmark task is a read-only question, under §6.5.**
+The harness sets `AWX_AXI_READ_ONLY=1` for the awx-axi side, and the comparison tasks given to the plain `awx`
+CLI are restricted to read verbs by the same rule, since a benchmark that mutated the controller through the
+comparison arm would breach the boundary just as surely as one that mutated it through ours.
+That constrains what the benchmark can claim, and §14.3's fourth bullet is where it bites.
+
 The hypotheses it should test, stated in advance so the benchmark cannot be tuned to flatter the result:
 
 - **Fewer turns on the common questions.**
@@ -1246,9 +1328,13 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
 - **Fewer tokens per answer.**
   4-field TOON rows against full JSON serializer payloads, on a surface where AWX offers no sparse fieldsets so
   every alternative pays full payload cost at the model.
-- **Fewer wrong launches.**
-  The §7.5 preflight is the one measurable safety claim: a benchmark task that passes `--limit` to a template
-  that does not prompt for it should fail loudly with awx-axi and succeed-with-wrong-scope everywhere else.
+- **Fewer wrong launches - measured offline, not live.**
+  The §7.5 preflight is the design's one measurable safety claim, and the natural way to demonstrate it is to
+  pass `--limit` to a template that does not prompt for it and watch awx-axi refuse while everything else
+  launches with the wrong scope.
+  That experiment **launches a real playbook**, so it cannot run against the captain's instance.
+  It moves to the offline suite as a paired fixture case, and the benchmark reports it as offline evidence
+  rather than quietly dropping the claim or quietly running it live.
 - **Where awx-mcp stays ahead.**
   It has 145 tools to v1's 32, so any task touching inventories, credentials, schedules, or RBAC is out of
   awx-axi's reach entirely.
@@ -1314,6 +1400,22 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
     `/api/v2/dashboard/` is deprecated at 24.6.1, and awx-mcp's stats tool targets it. §4.2.
 20. **The benchmark's hypotheses are written before the benchmark runs.**
     Including the two places awx-mcp is expected to stay ahead. §14.3.
+21. **The live instance's read-only boundary is enforced at the transport, not promised in prose.**
+    The captain's instance has full write permission and must not be modified, so `AWX_AXI_READ_ONLY=1` makes the
+    single mutating function on the seam refuse before issuing anything.
+    A document that only *says* read-only is one forgetful contributor away from being wrong. §6.5.
+22. **The write-path live suite is deleted, not gated.**
+    An earlier draft put it behind a second environment variable.
+    A gate that exists can be opened by someone who never read the order, so the suite is gone and the coverage
+    cost is stated openly instead. §11.3.
+23. **The live suite uses basic auth, inverting §5.1's own rule.**
+    Minting a token is a `POST`, so the tool's preferred credential path is itself forbidden on this instance.
+    The exception is confined to `test/live/` and is the reason the read-only check lives in the transport rather
+    than the auth layer. §5.1, §6.5.
+24. **The preflight safety claim is demonstrated offline rather than dropped.**
+    Proving it live would require launching a real playbook with a deliberately wrong scope.
+    The benchmark reports it as offline evidence and says so, rather than quietly omitting the strongest claim in
+    the design. §14.3.
 
 ## 16. Sources consulted
 
