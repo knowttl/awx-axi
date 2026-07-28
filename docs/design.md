@@ -485,6 +485,12 @@ This collapse is what lets one command answer a question that spans kinds.
 jobs, workflow runs, and SCM syncs in a single call, which is not expressible in awx-mcp without four separate
 list tools and a client-side merge.
 
+`--status` matches **one exact AWX status**, or `all`; an unrecognized value is a `VALIDATION_ERROR` (§9.1)
+rather than a silent empty result.
+`--failed` is a separate flag precisely because it is **not** a status: it maps to AWX's own `?failed=true`,
+which matches the whole failed family and so covers both `failed` and `error`.
+Keeping them separate is what makes `--status` predictable enough to reject unknown values.
+
 It also means there is exactly one log command, one cancel command, and one watch command in the whole CLI.
 A project sync's output is `job stdout <sync-id>`, not a separate `project logs`.
 
@@ -785,7 +791,7 @@ The total from the envelope's `count` is always present, so an agent never pagin
 are:
 
 ```
-$ awx-axi job list --status failed --limit 3
+$ awx-axi job list --failed --limit 3
 count: 3 of 47 total
 jobs[3]{id,name,status,finished}:
   1839,Deploy db tier,failed,"2026-07-27T13:41:02Z"
@@ -1295,8 +1301,8 @@ The same mechanism means `job watch`, which has no awx-mcp equivalent at all, wo
 
 The remaining 113 tools (145 total against v1's 32) are roadmap, not omissions, and they are tracked in code
 rather than in prose.
-The seven groups enumerated above account for 86 of those 113; the balance is an ungrouped long tail that the
-coverage diff below reports rather than this document enumerating it.
+The seven groups enumerated below account for 86 of those 113; the balance is an ungrouped long tail that the
+coverage diff reports rather than this document enumerating it.
 
 Each domain declares `mcpEquivalents`.
 A `npm run coverage` script diffs the union of those declarations against a committed snapshot of the awx-mcp
