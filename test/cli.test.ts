@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DESCRIPTION, DOMAINS, main } from "../src/cli.js";
+import type { Domain } from "../src/core/registry.js";
 
 function capture(): { write: (chunk: string) => void; text: () => string } {
   const chunks: string[] = [];
@@ -20,6 +21,9 @@ describe("the CLI shell", () => {
 
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
+    expect(stdout.text()).toContain(
+      'domains: "none yet: this build is the scaffold"',
+    );
   });
 
   it("renders the version for --version", async () => {
@@ -28,6 +32,45 @@ describe("the CLI shell", () => {
     await main({ argv: ["--version"], stdout, env: {} });
 
     expect(stdout.text().trim()).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("renders subcommand help and falls back to noun help", async () => {
+    const domains = DOMAINS as Domain[];
+    domains.push({
+      name: "job",
+      help: "job help",
+      subcommands: [
+        {
+          name: "list",
+          help: "job list help",
+          flags: [],
+          schema: { label: "jobs", defaultFields: [], fieldAllowlist: [] },
+          suggestions: [],
+        },
+      ],
+      mcpEquivalents: [],
+      run: () => Promise.resolve({}),
+    });
+
+    try {
+      const subcommandStdout = capture();
+      await main({
+        argv: ["job", "list", "--help"],
+        stdout: subcommandStdout,
+        env: {},
+      });
+      expect(subcommandStdout.text()).toContain("job list help");
+
+      const nounStdout = capture();
+      await main({
+        argv: ["job", "unknown", "--help"],
+        stdout: nounStdout,
+        env: {},
+      });
+      expect(nounStdout.text()).toContain("job help");
+    } finally {
+      domains.pop();
+    }
   });
 
   it("registers no domains yet", () => {

@@ -3,9 +3,9 @@
  * pipeline this registry will also hold is a later task.
  *
  * A domain module never speaks HTTP and never imports another domain. It
- * declares five things - subcommands with their flag sets, route descriptions,
- * TOON field schemas, contextual-disclosure suggestions, and `mcpEquivalents` -
- * and the core owns everything else.
+ * declares four things - subcommands with their flag sets, TOON field schemas,
+ * contextual-disclosure suggestions, and `mcpEquivalents` - and the core owns
+ * everything else.
  */
 import type { Query } from "./transport.js";
 
@@ -61,12 +61,15 @@ export interface SuggestionRule {
   readonly suggestions: readonly string[];
 }
 
+// How subcommands declare requests, including multi-request flows and name
+// resolution that determines a later path, is deliberately not modeled in this
+// scaffold. The core task will define it against real domains and add read
+// access to DomainContext.
 export interface SubcommandSpec {
   readonly name: string;
   /** Concise per-subcommand `--help`: flags, arguments, and 2-3 examples (§10 of the AXI skill). */
   readonly help: string;
   readonly flags: readonly FlagSpec[];
-  readonly route: (args: readonly string[]) => RouteDescription;
   readonly schema: FieldSchema;
   readonly suggestions: readonly SuggestionRule[];
 }

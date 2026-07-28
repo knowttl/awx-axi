@@ -25,17 +25,23 @@ export interface MainOptions {
 }
 
 export async function main(options: MainOptions = {}): Promise<void> {
+  const argv = options.argv ?? process.argv.slice(2);
   const context: DomainContext = { env: options.env ?? process.env };
 
   await runAxiCli({
-    ...(options.argv === undefined ? {} : { argv: options.argv }),
+    argv,
     ...(options.stdout === undefined ? {} : { stdout: options.stdout }),
     description: DESCRIPTION,
     version: readPackageVersion(),
     topLevelHelp: topLevelHelp(),
     commands: buildCommands(context),
-    getCommandHelp: (command) =>
-      DOMAINS.find((domain) => domain.name === command)?.help,
+    getCommandHelp: (command) => {
+      const domain = DOMAINS.find((candidate) => candidate.name === command);
+      return (
+        domain?.subcommands.find((subcommand) => subcommand.name === argv[1])
+          ?.help ?? domain?.help
+      );
+    },
     home: () => homeCommand(),
   });
 }
@@ -56,7 +62,7 @@ function topLevelHelp(): string {
     bin: "awx-axi",
     description: DESCRIPTION,
     usage: "awx-axi <command> [args] [flags]",
-    commands:
+    domains:
       DOMAINS.length === 0
         ? "none yet: this build is the scaffold"
         : DOMAINS.map((domain) => domain.name).join(", "),
