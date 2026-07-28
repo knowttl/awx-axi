@@ -6,7 +6,7 @@ import type { AwxTransport } from "../src/core/transport.js";
 /**
  * The compile-time no-delete property (design.md §2, §10.2, §10.3).
  *
- * These assertions are checked by `npm run typecheck`, which CI runs: a failure
+ * These assertions are checked by `npm run typecheck`, which the local gate runs: a failure
  * is a type error at build time, not a failed expectation at run time. The
  * runtime cases below exist so the property is named in the test report too.
  */
