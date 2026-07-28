@@ -190,6 +190,11 @@ awx-axi never emits `cancelled`.
   `AWXKIT_API_BASE_PATH`.
   awx-axi handles this by **probing `GET /api/`** for the advertised version list on first use and caching the
   resolved base path, with `AWX_AXI_API_BASE_PATH` as an explicit override.
+  That same first-use probe also reads **`GET /api/v2/ping/`** for the controller *release*, because
+  `GET /api/` advertises the API version list and never the release, and the home header in §8.1 names the
+  release.
+  Both values are cached together, so the release costs one request on first use and nothing afterwards; at
+  24.6.1 `ping` requires no authentication, so the probe also works before credentials are resolved.
   Only 24.6.1 is verified and tested; a gateway-fronted controller is best-effort until someone runs the live
   suite against one.
 - **`MAX_PAGE_SIZE` is operator-tunable.**
@@ -431,7 +436,10 @@ captain's boundary needs.
 
 Two tests carry this rather than a comment: one asserting that every tier-1 write command raises
 `READ_ONLY_VIOLATION` and issues no request when the flag is set, and one asserting that the live suite's own
-harness sets it and that no `test/live/` case names a mutating command.
+harness sets it and that no `test/live/` case **issues** a non-GET request.
+The rule is about what reaches the wire, not about which command names appear: §11.3 covers the write commands
+with `--dry-run` against the live instance, and a dry run constructs a payload without issuing anything, so it
+satisfies this test rather than contradicting it.
 
 ## 7. Command surface
 
@@ -707,9 +715,15 @@ outcome in one call.
 Published because AXI §4's whole argument is that a follow-up call is the expensive thing, and a design that
 hides its own call count cannot be held to that.
 
+Counts price the **id** form of each command.
+Every `<id|name>` argument adds **one** resolve query when a name is passed instead (§7.3), so
+`template launch "Deploy web tier"` is 3 and `--wait` on it is 3 + N.
+`type resolve` below is a different thing: it is the unified-job type lookup, which is needed even when the id
+is numeric.
+
 | Command | Requests | Note |
 | --- | --- | --- |
-| home view | 3 | running jobs, pending approvals, recent failures |
+| home view | 3 | running jobs, pending approvals, recent failures; 4 on first use, when the §4.2 version probe runs and is cached |
 | `job list` | 1 | |
 | `job show` (playbook) | 3 | type resolve, detail, host summaries |
 | `job show` (failed playbook) | 4 | plus failed events for the task rollup |
@@ -721,11 +735,18 @@ hides its own call count cannot be held to that.
 | `template launch` | 2 | preflight GET, launch POST |
 | `template launch --wait` | 2 + N | plus the poll loop |
 | `approval approve` | 1 | 2 when the POST returns 400 and the decision must be read |
-| `project sync` | 2 | resolve, POST; 3 on a 405 |
+| `project sync` | 1 | POST; 2 on a 405 |
 
 ## 8. Output format
 
-TOON on stdout via `axi-sdk-js`'s `renderOutput`, which wraps `@toon-format/toon`'s `encode`.
+TOON on stdout, produced by `axi-sdk-js`'s CLI loop: a command handler **returns** a string or a plain object
+and `runAxiCli` encodes it through `@toon-format/toon`'s `encode`.
+awx-axi never imports an encoder helper, because at the pinned 0.1.8 there is none to import: `dist/index.js`
+re-exports only `cli`, `errors`, `hooks`, and `update`, and the package's `exports` map admits no subpath, so
+`renderOutput`, `errorOutput`, `renderError`, and `homeHeaderOutput` are reachable only by the loop itself
+(§16).
+Rendering by return value rather than by call is therefore the only shape available, and it is also the one
+the other installed AXI tools use.
 
 Three encoder facts were verified empirically against the pinned encoder rather than assumed from the spec,
 because they change what the output can look like:
@@ -863,7 +884,8 @@ actual question behind a stalled workflow.
 Log text does not go through the encoder, for the reason verified in §8: a 200-line body becomes one
 unreadable escaped line, and token cost rises rather than falls.
 
-`renderOutput` accepts a string and passes it through verbatim, which is the sanctioned seam.
+A handler that returns a **string** has it written through verbatim instead of encoded, which is the sanctioned
+seam.
 So `job stdout` emits an encoded header, then the literal `stdout:` marker, then the **raw log body**, then an
 encoded help block:
 
@@ -924,7 +946,11 @@ the job's state to find out *why* before it can say anything true.
 
 ## 9. Errors and exit codes
 
-Errors are TOON on **stdout**, via `axi-sdk-js`'s `AxiError` and `renderError`:
+Errors are TOON on **stdout**.
+A command constructs an `AxiError` from `axi-sdk-js` carrying the message, the stable code, and the help lines,
+and throws it; `runAxiCli` catches it, renders the block below, and sets the exit code.
+awx-axi never formats an error itself, for the §8 reason: the rendering helpers are internal to the SDK at
+0.1.8.
 
 ```
 error: <what went wrong>
@@ -933,8 +959,13 @@ help[N]: <actionable next command>,<another>
 ```
 
 Exit codes: `0` success including empty results and no-ops, `1` error, `2` usage error.
-`exitCodeForError` already maps `VALIDATION_ERROR` to 2; the codes below that must also exit 2 are constructed
-as validation errors for that reason.
+`exitCodeForError` returns 2 for the literal code `VALIDATION_ERROR` and 1 for everything else, so it cannot
+by itself serve the three other codes in §9.1 that must exit 2: `AMBIGUOUS_NAME`, `LAUNCH_WOULD_IGNORE_INPUT`,
+and `LAUNCH_INPUT_REQUIRED`.
+awx-axi therefore passes its own `formatError` to `runAxiCli` - a documented option on `AxiCliOptions` that
+returns the rendered output and the exit code together - and maps those four codes to 2 there.
+The alternative, collapsing the three into `VALIDATION_ERROR`, is rejected: the stable code is the part an
+agent branches on, and §9.1 exists to keep it stable.
 
 stderr carries nothing an agent needs: progress and diagnostics only, per AXI §6.
 
@@ -1002,10 +1033,19 @@ help[2]: Run `awx-axi template survey 12` to see the required questions,Re-run w
 $ awx-axi job stdout 1839 --full
 error: this job's output is 3.2 MB, above the controller's 1.0 MB display limit
 code: OUTPUT_TOO_LARGE
-help[2]: Run `awx-axi job stdout 1839 --download ./1839.log` to fetch the whole thing,Run `awx-axi job stdout 1839 --tail 200` for the end of the output
+help[2]: Run `awx-axi job stdout 1839 --download ./1839.log` to fetch the whole thing,Run `awx-axi job events 1839 --failed` for the failing tasks only
 ```
 
-That second example is only possible because §4.3 case 4 is handled: the controller returned **200** with an
+Neither remedy is a narrower read of the same endpoint, and that is deliberate.
+The 1 MiB check in §4.3 case 4 is applied to the **whole** body before any range is honored: the oversized
+response comes back with `range` `{start: 0, end: 1, absolute_end: 1}` whatever `start_line` and `end_line`
+asked for.
+So `--tail 200` on a 3.2 MB job re-trips the same cap and returns the same error, which would put an agent in a
+retry loop.
+`--download` is the only escape from the cap (§8.4), and `job events --failed` answers the question behind most
+of those reads without touching the stdout endpoint at all.
+
+That example is only possible because §4.3 case 4 is handled: the controller returned **200** with an
 English apology, and awx-axi recognized the shape instead of printing it as job output.
 
 ### 9.4 Unknown flags fail loud
@@ -1236,8 +1276,11 @@ No `auth login`, and no exported credential values beyond that subshell.
 
 Node.js with TypeScript, ESM, matching the other installed AXI tools.
 
-- **`axi-sdk-js`** (pinned `0.1.8`) for the CLI loop, `AxiError`, `exitCodeForError`, the home-view header, the
-  reserved `update` command, and hook installation.
+- **`axi-sdk-js`** (pinned `0.1.8`) for the CLI loop - which owns TOON rendering, the home-view header, and
+  error rendering - plus `AxiError`, `exitCodeForError`, the reserved `update` command, and
+  `installSessionStartHooks`.
+  Those are the symbols the package actually exports (§16); everything else it does is reached by returning a
+  value to the loop or throwing an `AxiError` at it.
   Adopting it rather than reimplementing keeps awx-axi consistent with `gh-axi`, `tasks-axi`, `quota-axi`,
   `lavish-axi`, and `chrome-devtools-axi` in command shape, flag conventions, output shape, help text, and
   error style.
@@ -1462,6 +1505,7 @@ authoritative substitute and is what §4's table is built from.
 | Named URL formats, escaping, job-template legacy behavior | `docs/named_url.md` |
 | Named-URL 403-to-404 rewrite | `awx/api/views/__init__.py:150-169` |
 | Dashboard endpoint deprecated | `awx/api/views/__init__.py:172-174` |
+| `GET /api/` returns the API version list and no release; the release comes from `GET /api/v2/ping/`, which needs no authentication | `awx/api/views/root.py:47-61` (`ApiRootView.get`); `awx/api/views/root.py:145-161` (`ApiV2PingView`, `permission_classes = (AllowAny,)`, `authentication_classes = ()`, `version=get_awx_version()`) |
 | Bulk endpoints and the hidden wrapper workflow | `docs/bulk_api.md` |
 | No sparse fieldsets | Absence of any `fields` query handling in `awx/api/generics.py` and `awx/api/serializers.py` |
 
@@ -1473,6 +1517,9 @@ Other sources:
 | TOON syntax, quoting, escapes, tabular and keyed-tabular forms | `toonformat.dev/reference/syntax-cheatsheet.md`; spec v4.1 index at `toonformat.dev/reference/spec.html` |
 | Encoder behavior for multi-line strings, inline primitive arrays, and the absent keyed-tabular form | Verified empirically against the installed `@toon-format/toon` 2.3.1 on 2026-07-27 |
 | Encoder targets spec v3.3 | `@toon-format/toon@2.3.1` `devDependencies` |
-| `renderOutput` string passthrough, `errorOutput`, `homeHeaderOutput`, `exitCodeForError`, `installSessionStartHooks` | `axi-sdk-js@0.1.8` `dist/output.js`, `dist/output.d.ts` |
+| `axi-sdk-js@0.1.8` root exports: `runAxiCli`, `AxiError`, `exitCodeForError`, `installSessionStartHooks`, `RESERVED_COMMANDS`, the `update` helpers | `axi-sdk-js@0.1.8` `dist/index.js`; verified by importing the installed package on 2026-07-28 |
+| The rendering helpers `renderOutput`, `errorOutput`, `renderError`, `homeHeaderOutput` exist but are **not importable**: `dist/index.js` does not re-export `./output.js`, and the `exports` map rejects `axi-sdk-js/dist/output.js` with `ERR_PACKAGE_PATH_NOT_EXPORTED` | `axi-sdk-js@0.1.8` `dist/index.js`, `dist/output.js`, `package.json` `exports`; verified empirically on 2026-07-28 |
+| String passthrough, the home-header merge, and default error formatting all happen inside `runAxiCli` | `axi-sdk-js@0.1.8` `dist/cli.js` (`runHandler`, `renderCommandOutput`, `defaultFormatError`) |
+| `exitCodeForError` returns 2 only for the literal code `VALIDATION_ERROR`, and `AxiCliOptions.formatError` is the supported way to widen that | `axi-sdk-js@0.1.8` `dist/errors.js`; `dist/cli.d.ts` (`formatError`) |
 | awxkit CLI shape and `CONTROLLER_*` environment variables | `docs/docsite/rst/rest_api/authentication.rst`; legacy controller CLI usage docs |
 | awx-mcp tool inventory and its credential gate | `lycorp-jp/awx-mcp` |
