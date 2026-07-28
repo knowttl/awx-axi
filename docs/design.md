@@ -153,9 +153,11 @@ official CLI needs no new setup:
 | `CONTROLLER_PASSWORD` | Basic-auth password, used by `auth login` only |
 | `CONTROLLER_VERIFY_SSL` | `false` disables TLS verification |
 
-`AWX_AXI_*` variables cover only what awxkit has no equivalent for: `AWX_AXI_HOME` for the token file
-location, `AWX_AXI_API_BASE_PATH` for the §4.2 gateway case, `AWX_AXI_LIVE` and `AWX_AXI_RECORD` for tests,
-`AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS` for the §6.3 gate, and `AWX_AXI_READ_ONLY` for the §6.5 boundary.
+`AWX_AXI_*` variables cover what awxkit has no equivalent for: `AWX_AXI_HOME` for the token file location,
+`AWX_AXI_LIVE` and `AWX_AXI_RECORD` for tests, `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS` for the §6.3 gate, and
+`AWX_AXI_READ_ONLY` for the §6.5 boundary.
+The one exception is `AWX_AXI_API_BASE_PATH` for the §4.2 gateway case, which deliberately mirrors awxkit's own
+`AWXKIT_API_BASE_PATH` under our prefix rather than reading a variable named for another tool.
 
 ## 4. Target version and version-sensitive surface
 
@@ -1122,14 +1124,18 @@ That single interface is what makes §11 possible.
 
 ### 11.1 The constraint, stated honestly
 
-The development machine for v1 has **no AWX instance, no credentials, and no `awx` CLI installed**.
-Nothing in the v1 pipeline has ever executed a real AWX request.
-Every test runs offline against fixtures derived from the 24.6.1 source.
+A real AWX instance and credentials **are** available (§6.5), but only under the hard read-only boundary, and
+the `awx` CLI is **not** installed on the development machine.
+So the shape of the constraint is not "no instance" but "no writes, ever, and no comparison arm yet".
+
+Every test that gates the build runs offline against fixtures derived from the 24.6.1 source.
+The live suite (§11.3) is read-only, asserts shape rather than content, and is deliberately not the thing the
+build depends on.
 This limitation belongs in the README, not buried here.
 
-The benchmark the commission asks for (§14.3) and the live smoke suite both need a reachable controller, and
-both are blocked on that until the captain provides one.
-Neither blocks the core work.
+The benchmark the commission asks for (§14.3) still needs the `awx` CLI installed to have anything to compare
+against, so it remains blocked on that one step; both of its arms are read-only tasks when it does run.
+Nothing here blocks the core work.
 
 ### 11.2 How offline testing works
 
@@ -1318,7 +1324,7 @@ turns, in the shape the AXI repo benchmarks `gh-axi` against `gh`.
 The harness sets `AWX_AXI_READ_ONLY=1` for the awx-axi side, and the comparison tasks given to the plain `awx`
 CLI are restricted to read verbs by the same rule, since a benchmark that mutated the controller through the
 comparison arm would breach the boundary just as surely as one that mutated it through ours.
-That constrains what the benchmark can claim, and §14.3's fourth bullet is where it bites.
+That constrains what the benchmark can claim, and the "fewer wrong launches" hypothesis below is where it bites.
 
 The hypotheses it should test, stated in advance so the benchmark cannot be tuned to flatter the result:
 
