@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/filtering.rst",
+  "$note": "A ?name= filtered query that matched nothing. The envelope's count is what lets awx-axi tell zero, one, and many apart honestly (design.md §7.3).",
+  "status": 200,
+  "body": { "count": 0, "next": null, "previous": null, "results": [] }
+}

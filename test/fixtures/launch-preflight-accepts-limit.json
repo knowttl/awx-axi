@@ -1,0 +1,17 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2410-2521",
+  "$note": "GET .../launch/ on a template that does prompt for limit, so the preflight passes and the POST is allowed to proceed.",
+  "status": 200,
+  "body": {
+    "can_start_without_user_input": true,
+    "passwords_needed_to_start": [],
+    "variables_needed_to_start": [],
+    "ask_limit_on_launch": true,
+    "ask_tags_on_launch": true,
+    "ask_variables_on_launch": true,
+    "survey_enabled": false,
+    "job_template_data": { "id": 12, "name": "Deploy web tier" },
+    "defaults": { "limit": "", "inventory": { "id": 3, "name": "Production" } }
+  }
+}

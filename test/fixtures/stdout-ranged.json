@@ -1,0 +1,10 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4177-4247",
+  "$note": "A project-update stdout read under the display cap. AWX applies UriCleaner.remove_sensitive only on the download renderer, so this txt/json path still carries the credential embedded in the SCM URL (design.md §6.4).",
+  "status": 200,
+  "body": {
+    "range": { "start": 4013, "end": 4212, "absolute_end": 4212 },
+    "content": "PLAY [all] *********************************************************\nTASK [update project] **********************************************\nchanged: [localhost] => {\"cmd\": \"git fetch https://btsai:s3cr3t-token@github.com/knowttl/infra-playbooks\"}\nTASK [set vault] ***************************************************\nok: [localhost] => {\"vault_password\": \"$encrypted$UTF8$AES256$abc123def456\"}\nPLAY RECAP *********************************************************\nlocalhost : ok=3 changed=1 unreachable=0 failed=0\n"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2410-2521",
+  "$note": "AWX's non-field error key: __all__ carries a list of messages that belong to no single field. awx-axi translates it rather than passing it through (design.md \u00a79.3).",
+  "status": 400,
+  "body": {
+    "__all__": [
+      "Job Template does not have a default inventory"
+    ]
+  }
+}

@@ -1,0 +1,797 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/pagination.py:16-131",
+  "$note": "Pagination.cap_page_size silently rewrites an oversized page_size into the next and previous links rather than rejecting it; MAX_PAGE_SIZE is 200 at awx/settings/defaults.py:369. A client that asked for 450 and assumed it got 450 would silently under-read.",
+  "status": 200,
+  "body": {
+    "count": 512,
+    "next": null,
+    "previous": "/api/v2/unified_jobs/?page=2&page_size=200",
+    "results": [
+      {
+        "id": 1400,
+        "type": "job",
+        "name": "Deploy web tier #1400",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1401,
+        "type": "job",
+        "name": "Deploy web tier #1401",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1402,
+        "type": "job",
+        "name": "Deploy web tier #1402",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1403,
+        "type": "job",
+        "name": "Deploy web tier #1403",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1404,
+        "type": "job",
+        "name": "Deploy web tier #1404",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1405,
+        "type": "job",
+        "name": "Deploy web tier #1405",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1406,
+        "type": "job",
+        "name": "Deploy web tier #1406",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1407,
+        "type": "job",
+        "name": "Deploy web tier #1407",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1408,
+        "type": "job",
+        "name": "Deploy web tier #1408",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1409,
+        "type": "job",
+        "name": "Deploy web tier #1409",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1410,
+        "type": "job",
+        "name": "Deploy web tier #1410",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1411,
+        "type": "job",
+        "name": "Deploy web tier #1411",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1412,
+        "type": "job",
+        "name": "Deploy web tier #1412",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1413,
+        "type": "job",
+        "name": "Deploy web tier #1413",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1414,
+        "type": "job",
+        "name": "Deploy web tier #1414",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1415,
+        "type": "job",
+        "name": "Deploy web tier #1415",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1416,
+        "type": "job",
+        "name": "Deploy web tier #1416",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1417,
+        "type": "job",
+        "name": "Deploy web tier #1417",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1418,
+        "type": "job",
+        "name": "Deploy web tier #1418",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1419,
+        "type": "job",
+        "name": "Deploy web tier #1419",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1420,
+        "type": "job",
+        "name": "Deploy web tier #1420",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1421,
+        "type": "job",
+        "name": "Deploy web tier #1421",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1422,
+        "type": "job",
+        "name": "Deploy web tier #1422",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1423,
+        "type": "job",
+        "name": "Deploy web tier #1423",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1424,
+        "type": "job",
+        "name": "Deploy web tier #1424",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1425,
+        "type": "job",
+        "name": "Deploy web tier #1425",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1426,
+        "type": "job",
+        "name": "Deploy web tier #1426",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1427,
+        "type": "job",
+        "name": "Deploy web tier #1427",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1428,
+        "type": "job",
+        "name": "Deploy web tier #1428",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1429,
+        "type": "job",
+        "name": "Deploy web tier #1429",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1430,
+        "type": "job",
+        "name": "Deploy web tier #1430",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1431,
+        "type": "job",
+        "name": "Deploy web tier #1431",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1432,
+        "type": "job",
+        "name": "Deploy web tier #1432",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1433,
+        "type": "job",
+        "name": "Deploy web tier #1433",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1434,
+        "type": "job",
+        "name": "Deploy web tier #1434",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1435,
+        "type": "job",
+        "name": "Deploy web tier #1435",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1436,
+        "type": "job",
+        "name": "Deploy web tier #1436",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1437,
+        "type": "job",
+        "name": "Deploy web tier #1437",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1438,
+        "type": "job",
+        "name": "Deploy web tier #1438",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1439,
+        "type": "job",
+        "name": "Deploy web tier #1439",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1440,
+        "type": "job",
+        "name": "Deploy web tier #1440",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1441,
+        "type": "job",
+        "name": "Deploy web tier #1441",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1442,
+        "type": "job",
+        "name": "Deploy web tier #1442",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1443,
+        "type": "job",
+        "name": "Deploy web tier #1443",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1444,
+        "type": "job",
+        "name": "Deploy web tier #1444",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1445,
+        "type": "job",
+        "name": "Deploy web tier #1445",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1446,
+        "type": "job",
+        "name": "Deploy web tier #1446",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1447,
+        "type": "job",
+        "name": "Deploy web tier #1447",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1448,
+        "type": "job",
+        "name": "Deploy web tier #1448",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1449,
+        "type": "job",
+        "name": "Deploy web tier #1449",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1450,
+        "type": "job",
+        "name": "Deploy web tier #1450",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1451,
+        "type": "job",
+        "name": "Deploy web tier #1451",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1452,
+        "type": "job",
+        "name": "Deploy web tier #1452",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1453,
+        "type": "job",
+        "name": "Deploy web tier #1453",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1454,
+        "type": "job",
+        "name": "Deploy web tier #1454",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1455,
+        "type": "job",
+        "name": "Deploy web tier #1455",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1456,
+        "type": "job",
+        "name": "Deploy web tier #1456",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1457,
+        "type": "job",
+        "name": "Deploy web tier #1457",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1458,
+        "type": "job",
+        "name": "Deploy web tier #1458",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1459,
+        "type": "job",
+        "name": "Deploy web tier #1459",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1460,
+        "type": "job",
+        "name": "Deploy web tier #1460",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1461,
+        "type": "job",
+        "name": "Deploy web tier #1461",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1462,
+        "type": "job",
+        "name": "Deploy web tier #1462",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1463,
+        "type": "job",
+        "name": "Deploy web tier #1463",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1464,
+        "type": "job",
+        "name": "Deploy web tier #1464",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1465,
+        "type": "job",
+        "name": "Deploy web tier #1465",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1466,
+        "type": "job",
+        "name": "Deploy web tier #1466",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1467,
+        "type": "job",
+        "name": "Deploy web tier #1467",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1468,
+        "type": "job",
+        "name": "Deploy web tier #1468",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1469,
+        "type": "job",
+        "name": "Deploy web tier #1469",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1470,
+        "type": "job",
+        "name": "Deploy web tier #1470",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1471,
+        "type": "job",
+        "name": "Deploy web tier #1471",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1472,
+        "type": "job",
+        "name": "Deploy web tier #1472",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1473,
+        "type": "job",
+        "name": "Deploy web tier #1473",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1474,
+        "type": "job",
+        "name": "Deploy web tier #1474",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1475,
+        "type": "job",
+        "name": "Deploy web tier #1475",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1476,
+        "type": "job",
+        "name": "Deploy web tier #1476",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1477,
+        "type": "job",
+        "name": "Deploy web tier #1477",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1478,
+        "type": "job",
+        "name": "Deploy web tier #1478",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1479,
+        "type": "job",
+        "name": "Deploy web tier #1479",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1480,
+        "type": "job",
+        "name": "Deploy web tier #1480",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1481,
+        "type": "job",
+        "name": "Deploy web tier #1481",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1482,
+        "type": "job",
+        "name": "Deploy web tier #1482",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1483,
+        "type": "job",
+        "name": "Deploy web tier #1483",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1484,
+        "type": "job",
+        "name": "Deploy web tier #1484",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1485,
+        "type": "job",
+        "name": "Deploy web tier #1485",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1486,
+        "type": "job",
+        "name": "Deploy web tier #1486",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1487,
+        "type": "job",
+        "name": "Deploy web tier #1487",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1488,
+        "type": "job",
+        "name": "Deploy web tier #1488",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1489,
+        "type": "job",
+        "name": "Deploy web tier #1489",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1490,
+        "type": "job",
+        "name": "Deploy web tier #1490",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1491,
+        "type": "job",
+        "name": "Deploy web tier #1491",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1492,
+        "type": "job",
+        "name": "Deploy web tier #1492",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1493,
+        "type": "job",
+        "name": "Deploy web tier #1493",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1494,
+        "type": "job",
+        "name": "Deploy web tier #1494",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1495,
+        "type": "job",
+        "name": "Deploy web tier #1495",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1496,
+        "type": "job",
+        "name": "Deploy web tier #1496",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1497,
+        "type": "job",
+        "name": "Deploy web tier #1497",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1498,
+        "type": "job",
+        "name": "Deploy web tier #1498",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1499,
+        "type": "job",
+        "name": "Deploy web tier #1499",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1500,
+        "type": "job",
+        "name": "Deploy web tier #1500",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1501,
+        "type": "job",
+        "name": "Deploy web tier #1501",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1502,
+        "type": "job",
+        "name": "Deploy web tier #1502",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1503,
+        "type": "job",
+        "name": "Deploy web tier #1503",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1504,
+        "type": "job",
+        "name": "Deploy web tier #1504",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1505,
+        "type": "job",
+        "name": "Deploy web tier #1505",
+        "status": "failed",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1506,
+        "type": "job",
+        "name": "Deploy web tier #1506",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1507,
+        "type": "job",
+        "name": "Deploy web tier #1507",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1508,
+        "type": "job",
+        "name": "Deploy web tier #1508",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1509,
+        "type": "job",
+        "name": "Deploy web tier #1509",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1510,
+        "type": "job",
+        "name": "Deploy web tier #1510",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      },
+      {
+        "id": 1511,
+        "type": "job",
+        "name": "Deploy web tier #1511",
+        "status": "successful",
+        "finished": "2026-07-27T13:41:02Z"
+      }
+    ]
+  }
+}

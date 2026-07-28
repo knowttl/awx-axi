@@ -9,6 +9,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - `axi-sdk-js` and `@toon-format/toon` are pinned to exact versions on purpose (design §12): the encoder's emitted syntax is observable output, so an upgrade must be a reviewed change with a snapshot diff.
 - `axi-sdk-js@0.1.8` root-exports only `runAxiCli`, `AxiError`, `exitCodeForError`, `installSessionStartHooks`, `RESERVED_COMMANDS`, and the `update` helpers. The rendering helpers (`renderOutput`, `errorOutput`, `renderError`, `homeHeaderOutput`) and the `AxiRenderable` type are **not** importable: render by returning a value to the loop, report errors by throwing an `AxiError` at it.
 - The captain's AWX controller is read-only by standing order: read-only GETs only, and minting a token is a POST and therefore also forbidden. Never read, print, or commit any value from `~/.config/awx-axi/live-smoke.env`.
+- **How a domain declares its requests:** a subcommand exports a `plan` generator (`src/core/registry.ts`) that yields request descriptions - `read`, `readPaged`, `readText`, `write`, `delay` - and is resumed with each result, so a later route may depend on an earlier response (`template launch <name>`) while the domain executes nothing itself. `runPlan` is the only place a request is issued. A domain cannot express a DELETE, PUT, or PATCH: the union has no member that would carry one, asserted at compile time in `test/no-delete.test.ts`.
+- Tests are offline against `RecordedTransport` (domain level) or a fixture-serving `fetch` stub (`test/support/fixtures.ts`, the only way to assert `HttpTransport`'s own wire behavior). Every fixture carries `$tag`, `$source`, and `$note`; `test/fixtures.test.ts` enforces that.
 
 ## Maintaining this file
 

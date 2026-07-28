@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4567-4607",
+  "$note": "A ?name= filtered query with exactly one match. summary_fields.organization is what makes the ambiguous case reportable with an organization column.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 12,
+        "type": "job_template",
+        "name": "Deploy web tier",
+        "summary_fields": { "organization": { "id": 1, "name": "Production" } }
+      }
+    ]
+  }
+}

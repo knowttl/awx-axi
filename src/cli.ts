@@ -4,15 +4,23 @@ import { fileURLToPath } from "node:url";
 import { encode } from "@toon-format/toon";
 import { runAxiCli, type AxiCliCommand } from "axi-sdk-js";
 
+import { AUTH_HELP, authCommand, type AuthContext } from "./commands/auth.js";
 import { homeCommand } from "./commands/home.js";
+import {
+  createBasicAuthTransport,
+  createTransport,
+  type Env,
+} from "./core/auth.js";
+import { formatError } from "./core/errors.js";
 import type { Domain, DomainContext } from "./core/registry.js";
+import type { AwxTransport } from "./core/transport.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
 /**
  * Noun to domain-module map (design.md §10.1).
  *
- * Empty in the scaffold: every domain is its own task. The list lives here
+ * Empty in this build: every domain is its own task. The list lives here
  * rather than in `core/registry.ts` because every domain imports the registry
  * for its contract types, so holding the list there would be a circular import.
  */
@@ -21,12 +29,27 @@ export const DOMAINS: readonly Domain[] = [];
 export interface MainOptions {
   readonly argv?: string[];
   readonly stdout?: { write: (chunk: string) => unknown };
-  readonly env?: Record<string, string | undefined>;
+  readonly env?: Env;
+  /** Injected offline by the test suite; `HttpTransport` in production. */
+  readonly createTransport?: (env: Env) => AwxTransport;
+  readonly createBasicAuthTransport?: (env: Env) => AwxTransport;
+  /** Injected offline so the §7.9 backoff costs no wall-clock time. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 export async function main(options: MainOptions = {}): Promise<void> {
   const argv = options.argv ?? process.argv.slice(2);
-  const context: DomainContext = { env: options.env ?? process.env };
+  const env = options.env ?? process.env;
+  const buildTransport = options.createTransport ?? createTransport;
+  const buildBasicAuthTransport =
+    options.createBasicAuthTransport ?? createBasicAuthTransport;
+
+  const context: DomainContext & AuthContext = {
+    env,
+    createTransport: () => buildTransport(env),
+    createBasicAuthTransport: () => buildBasicAuthTransport(env),
+    ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
+  };
 
   await runAxiCli({
     argv,
@@ -35,6 +58,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
     version: readPackageVersion(),
     topLevelHelp: topLevelHelp(),
     commands: buildCommands(context),
+    // `exitCodeForError` maps only the literal `VALIDATION_ERROR` to 2, and
+    // three other codes must also exit 2 (§9).
+    formatError,
     renderUnknownCommand: (command) =>
       `${encode({
         error: `Unknown command: ${command}`,
@@ -42,6 +68,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
         help: ["Run `awx-axi --help` to see available commands"],
       })}\n`,
     getCommandHelp: (command) => {
+      if (command === "auth") {
+        return AUTH_HELP;
+      }
       const domain = DOMAINS.find((candidate) => candidate.name === command);
       return (
         domain?.subcommands.find((subcommand) => subcommand.name === argv[1])
@@ -52,11 +81,13 @@ export async function main(options: MainOptions = {}): Promise<void> {
   });
 }
 
-/** One registered command per domain entry. */
+/** One registered command per domain entry, plus the core commands. */
 function buildCommands(
-  context: DomainContext,
+  context: DomainContext & AuthContext,
 ): Record<string, AxiCliCommand<undefined>> {
-  const commands: Record<string, AxiCliCommand<undefined>> = {};
+  const commands: Record<string, AxiCliCommand<undefined>> = {
+    auth: (args) => authCommand(args, context),
+  };
   for (const domain of DOMAINS) {
     commands[domain.name] = (args) => domain.run(args, context);
   }
@@ -68,9 +99,10 @@ function topLevelHelp(): string {
     bin: "awx-axi",
     description: DESCRIPTION,
     usage: "awx-axi <command> [args] [flags]",
+    commands: "auth",
     domains:
       DOMAINS.length === 0
-        ? "none yet: this build is the scaffold"
+        ? "none yet: this build is the core"
         : DOMAINS.map((domain) => domain.name).join(", "),
   })}\n`;
 }

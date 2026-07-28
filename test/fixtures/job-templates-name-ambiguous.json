@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/named_url.md",
+  "$note": "Two job templates share a name across organizations. A legacy bare-name named URL resolves this to the OLDEST match; awx-axi refuses instead (design.md §7.3, §15.13).",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 12,
+        "type": "job_template",
+        "name": "Deploy web tier",
+        "summary_fields": { "organization": { "id": 1, "name": "Production" } }
+      },
+      {
+        "id": 41,
+        "type": "job_template",
+        "name": "Deploy web tier",
+        "summary_fields": { "organization": { "id": 2, "name": "Staging" } }
+      }
+    ]
+  }
+}

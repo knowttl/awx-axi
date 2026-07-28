@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/main/constants.py:44-45",
+  "$note": "A job still in AWX's ACTIVE_STATES. A 405 on a job in this set means a cancelable job refused cancellation, which is a server error rather than a no-op (design.md §9.2).",
+  "status": 200,
+  "body": { "id": 1841, "type": "job", "name": "Deploy web tier", "status": "running", "elapsed": 154.8 }
+}

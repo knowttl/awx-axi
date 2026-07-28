@@ -1,0 +1,9 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:150-169",
+  "$note": "AWX's permission error body shape: a single `detail` string. It is the third and last of the three body shapes \u00a79.3 handles explicitly.",
+  "status": 403,
+  "body": {
+    "detail": "You do not have permission to perform this action."
+  }
+}

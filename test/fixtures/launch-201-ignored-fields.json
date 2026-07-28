@@ -1,0 +1,14 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2410-2521",
+  "$note": "A successful launch (201) that silently discarded a submitted field into ignored_fields and ran the job anyway. This is the race in design.md §7.5: someone toggled ask_limit_on_launch between the preflight and the POST. The job IS running, so this is exit 0 with a warning, not an error.",
+  "status": 201,
+  "body": {
+    "id": 1844,
+    "type": "job",
+    "name": "Deploy web tier",
+    "status": "pending",
+    "job_template": 12,
+    "ignored_fields": { "limit": "db-02" }
+  }
+}

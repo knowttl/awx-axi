@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1057-1075",
+  "$note": "A project whose SCM update is already running. A 405 here means the requested state is already being reached, so it is an exit-0 no-op naming the running sync.",
+  "status": 200,
+  "body": { "id": 4, "type": "project", "name": "infra-playbooks", "scm_type": "git", "status": "running", "current_update": { "id": 1846 } }
+}

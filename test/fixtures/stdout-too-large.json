@@ -1,0 +1,10 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4177-4247",
+  "$note": "Above STDOUT_MAX_BYTES_DISPLAY (1048576, awx/settings/defaults.py:202) the stdout endpoint answers HTTP 200 whose content is an English apology and whose range is clamped to {start: 0, end: 1, absolute_end: 1}, whatever start_line and end_line asked for. A client that trusts the status code prints the apology as job output.",
+  "status": 200,
+  "body": {
+    "range": { "start": 0, "end": 1, "absolute_end": 1 },
+    "content": "Standard Output too large to display (3355443 bytes), only download supported for sizes over 1048576 bytes"
+  }
+}

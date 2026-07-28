@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4567-4607",
+  "$note": "AWX's field-error body shape: a dict of field name to a list of messages. Raw payloads never reach stdout (design.md §9.3).",
+  "status": 400,
+  "body": { "extra_vars": ["survey question \"approver\" is required"] }
+}

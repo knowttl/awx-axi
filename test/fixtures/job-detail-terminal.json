@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/main/models/unified_jobs.py:76-107",
+  "$note": "A job in a terminal status. Reading this after a 405 is what turns the bare status code into `already finished (failed), nothing to cancel`, an exit-0 no-op.",
+  "status": 200,
+  "body": { "id": 1839, "type": "job", "name": "Deploy db tier", "status": "failed", "elapsed": 64.2 }
+}
