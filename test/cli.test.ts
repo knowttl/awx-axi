@@ -73,6 +73,24 @@ describe("the CLI shell", () => {
     }
   });
 
+  it("gives a complete help command for an unknown command", async () => {
+    const stdout = capture();
+    const previousExitCode = process.exitCode;
+
+    try {
+      await main({ argv: ["job"], stdout, env: {} });
+
+      expect(process.exitCode).toBe(2);
+      expect(stdout.text()).toContain('error: "Unknown command: job"');
+      expect(stdout.text()).toContain("code: VALIDATION_ERROR");
+      expect(stdout.text()).toContain(
+        "help[1]: Run `awx-axi --help` to see available commands",
+      );
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
+
   it("registers no domains yet", () => {
     expect(DOMAINS).toHaveLength(0);
   });

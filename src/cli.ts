@@ -35,6 +35,12 @@ export async function main(options: MainOptions = {}): Promise<void> {
     version: readPackageVersion(),
     topLevelHelp: topLevelHelp(),
     commands: buildCommands(context),
+    renderUnknownCommand: (command) =>
+      `${encode({
+        error: `Unknown command: ${command}`,
+        code: "VALIDATION_ERROR",
+        help: ["Run `awx-axi --help` to see available commands"],
+      })}\n`,
     getCommandHelp: (command) => {
       const domain = DOMAINS.find((candidate) => candidate.name === command);
       return (
