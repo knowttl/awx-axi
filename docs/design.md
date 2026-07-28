@@ -820,7 +820,7 @@ job:
   type: job
   name: Deploy db tier
   status: failed
-  template: 12 (Deploy web tier)
+  template: 13 (Deploy db tier)
   launched_by: btsai
   started: "2026-07-27T13:39:58Z"
   elapsed: 64.2
@@ -869,7 +869,7 @@ job_stdout:
   status: failed
   lines: 4013-4212 of 4212
 stdout:
-PLAY [web] *********************************************************
+PLAY [db] **********************************************************
 TASK [Restart postgresql] ******************************************
 fatal: [db-02]: FAILED! => {"changed": false, "msg": "Unit not found"}
 PLAY RECAP *********************************************************
