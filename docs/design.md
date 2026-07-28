@@ -149,8 +149,8 @@ official CLI needs no new setup:
 | --- | --- |
 | `CONTROLLER_HOST` | Controller base URL, e.g. `https://awx.example.com` |
 | `CONTROLLER_OAUTH_TOKEN` | Bearer token, preferred credential |
-| `CONTROLLER_USERNAME` | Basic-auth username, used by `auth login` only |
-| `CONTROLLER_PASSWORD` | Basic-auth password, used by `auth login` only |
+| `CONTROLLER_USERNAME` | Basic-auth username, used by `auth login` and the read-only live suite (§5.1) |
+| `CONTROLLER_PASSWORD` | Basic-auth password, used by `auth login` and the read-only live suite (§5.1) |
 | `CONTROLLER_VERIFY_SSL` | `false` disables TLS verification |
 
 `AWX_AXI_*` variables cover what awxkit has no equivalent for: `AWX_AXI_HOME` for the token file location,
@@ -565,12 +565,12 @@ So every launch does a **preflight `GET .../launch/`** first, which reports `can
 awx-axi compares the caller's flags against that and **refuses before any side effect**:
 
 ```
-$ awx-axi template launch 12 --limit db-02
-error: template 12 does not accept --limit at launch; the job would run against the whole inventory
+$ awx-axi template launch 18 --limit db-02
+error: template 18 does not accept --limit at launch; the job would run against the whole inventory
 code: LAUNCH_WOULD_IGNORE_INPUT
 ignored[1]{flag,reason}:
   --limit,ask_limit_on_launch is disabled on this template
-help[2]: Run `awx-axi template launch 12` to launch with the template's own limit,Run `awx-axi template show 12` to see which flags this template accepts
+help[2]: Run `awx-axi template launch 18` to launch with the template's own limit,Run `awx-axi template show 18` to see which flags this template accepts
 ```
 
 Exit 2, since this is a usage error against this particular template.
@@ -588,15 +588,15 @@ At that point the job is running, so awx-axi exits **0** and reports it prominen
 non-zero:
 
 ```
-$ awx-axi template launch 12 --limit db-02
+$ awx-axi template launch 18 --limit db-02
 job:
-  id: 1843
-  template: 12 (Deploy web tier)
+  id: 1844
+  template: 18 (Nightly patch)
   status: pending
 warning: 1 field was ignored by the controller and the job is running without it
 ignored[1]{field,submitted}:
   limit,db-02
-help[2]: Run `awx-axi job cancel 1843` if this is not what you wanted,Run `awx-axi job watch 1843` to follow it to completion
+help[2]: Run `awx-axi job cancel 1844` if this is not what you wanted,Run `awx-axi job watch 1844` to follow it to completion
 ```
 
 Exiting non-zero here would be worse than the warning: an agent that reads a failure exit code while a job is
@@ -759,7 +759,7 @@ approvals[1]{id,workflow,waiting}:
   57,Release pipeline,18m
 failures[2]{id,name,status,finished}:
   1839,Deploy db tier,failed,"2026-07-27T13:41:02Z"
-  1837,Sync inventory,error,"2026-07-27T12:10:44Z"
+  1837,"Patch: all hosts",error,"2026-07-27T12:10:44Z"
 help[3]: Run `awx-axi job show <id>` for a job's result,Run `awx-axi approval show 57` to see what it gates,Run `awx-axi template list` to see what can be launched
 ```
 
@@ -1293,7 +1293,10 @@ The same mechanism means `job watch`, which has no awx-mcp equivalent at all, wo
 
 ### 14.2 Tracking the rest
 
-The remaining 113 tools are roadmap, not omissions, and they are tracked in code rather than in prose.
+The remaining 113 tools (145 total against v1's 32) are roadmap, not omissions, and they are tracked in code
+rather than in prose.
+The seven groups enumerated above account for 86 of those 113; the balance is an ungrouped long tail that the
+coverage diff below reports rather than this document enumerating it.
 
 Each domain declares `mcpEquivalents`.
 A `npm run coverage` script diffs the union of those declarations against a committed snapshot of the awx-mcp
