@@ -106,7 +106,7 @@ function buildCommands(
 ): Record<string, AxiCliCommand<undefined>> {
   const commands: Record<string, AxiCliCommand<undefined>> = {
     auth: (args) => authCommand(args, context),
-    setup: (args) => setupCommand(args, { homeDir: context.env.HOME }),
+    setup: (args) => setupCommand(args, { env: context.env }),
   };
   for (const domain of DOMAINS) {
     commands[domain.name] = async (args) => {

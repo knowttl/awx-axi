@@ -5,6 +5,7 @@
  */
 import { installSessionStartHooks } from "axi-sdk-js";
 
+import type { Env } from "../core/auth.js";
 import { validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
 import type { Renderable } from "../core/registry.js";
@@ -21,8 +22,10 @@ examples:
 const SUBCOMMANDS = ["hooks"];
 
 export interface SetupOptions {
+  /** Optional test seam for the side-effectful install function. */
   readonly installHooks?: () => void;
-  readonly homeDir?: string;
+  /** Execution context used to resolve a non-default home directory. */
+  readonly env?: Env;
 }
 
 export async function setupCommand(
@@ -45,10 +48,11 @@ export async function setupCommand(
   });
 
   if (options.installHooks === undefined) {
-    if (options.homeDir === undefined) {
+    const homeDir = options.env?.HOME;
+    if (homeDir === undefined) {
       installSessionStartHooks();
     } else {
-      installSessionStartHooks({ homeDir: options.homeDir });
+      installSessionStartHooks({ homeDir });
     }
   } else {
     options.installHooks();
