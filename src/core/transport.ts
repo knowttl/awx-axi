@@ -155,6 +155,13 @@ export type FetchLike = (
 export interface HttpTransportOptions {
   /** Controller base URL, e.g. `https://awx.example.com`. */
   readonly baseUrl: string;
+  /**
+   * The API base path, `/api/v2/` at 24.6.1 and elsewhere on a gateway-fronted
+   * controller (§4.2). Required, so no construction site can quietly ignore
+   * `AWX_AXI_API_BASE_PATH`. Keeps its trailing slash: routes are declared
+   * base-relative (`jobs/1839/`) and resolved against it exactly once.
+   */
+  readonly apiBasePath: string;
   /** The `Authorization` header value, when a credential resolved. */
   readonly authorization?: string;
   /** The §6.5 boundary. */
@@ -169,10 +176,19 @@ export interface HttpTransportOptions {
 export class HttpTransport implements AwxTransport {
   readonly #options: HttpTransportOptions;
   readonly #fetch: FetchLike;
+  /**
+   * `baseUrl` and `apiBasePath` joined once, here, so every route resolves
+   * against the configured API root and no call site repeats it. A
+   * base-relative route (`jobs/1839/`) lands under it, and AWX's own `next`
+   * link - an absolute path - still replaces the path outright, which is what
+   * keeps multi-page walking correct (§4.3 case 1).
+   */
+  readonly #apiRoot: URL;
 
   constructor(options: HttpTransportOptions) {
     this.#options = options;
     this.#fetch = options.fetch ?? ((url, init) => fetch(url, init));
+    this.#apiRoot = new URL(options.apiBasePath, options.baseUrl);
   }
 
   async get(route: string, query: Query = {}): Promise<AwxResponse> {
@@ -216,7 +232,7 @@ export class HttpTransport implements AwxTransport {
     query: Query,
     body: unknown,
   ): Promise<AwxResponse> {
-    const url = new URL(route, this.#options.baseUrl);
+    const url = new URL(route, this.#apiRoot);
     for (const [key, value] of Object.entries(query)) {
       url.searchParams.set(key, String(value));
     }

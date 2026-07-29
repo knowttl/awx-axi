@@ -69,11 +69,15 @@ export interface ParsedArgs {
  * subcommand's valid flags inlined so the correction takes one turn (§9.4). A
  * dropped flag is worse than an error: the agent gets plausible-looking output
  * it believes is filtered.
+ *
+ * A surplus positional is rejected the same way and for the same reason:
+ * `maxArgs` is required of every caller so no subcommand can silently drop one.
  */
 export function parseFlags(
   subcommand: string,
   argv: readonly string[],
   flags: readonly FlagSpec[],
+  maxArgs: number,
 ): ParsedArgs {
   const known = new Map(flags.map((flag) => [`--${flag.name}`, flag]));
   const args: string[] = [];
@@ -119,7 +123,33 @@ export function parseFlags(
     parsed[spec.name] = value;
   }
 
+  if (args.length > maxArgs) {
+    throw surplusArgs(args, subcommand, maxArgs);
+  }
+
   return { args, flags: parsed };
+}
+
+/**
+ * Name the surplus arguments, so the correction takes one turn rather than a
+ * guess at which one was too many (§9.4).
+ */
+function surplusArgs(
+  args: readonly string[],
+  subcommand: string,
+  maxArgs: number,
+): Error {
+  const surplus = args.slice(maxArgs);
+  const kept = args.slice(0, maxArgs).join(" ");
+
+  return validationError(
+    `\`${subcommand}\` takes ${maxArgs} argument${maxArgs === 1 ? "" : "s"} but got ${args.length}: ${surplus.join(", ")} ${surplus.length === 1 ? "is" : "are"} unexpected`,
+    [
+      maxArgs === 0
+        ? `Run \`awx-axi ${subcommand}\` with no arguments`
+        : `Run \`awx-axi ${subcommand} ${kept}\` to act on ${kept} alone, once per argument`,
+    ],
+  );
 }
 
 function unknownFlag(

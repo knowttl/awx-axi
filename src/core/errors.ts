@@ -147,16 +147,16 @@ function defaultSummary(code: string, status: number): string {
  * produces it for. Without that gate a 500's traceback dict reads as a field
  * error and lands on stdout, which is exactly the dependency noise AXI §6
  * forbids.
+ *
+ * A bare string is **not** one of the three shapes and is never described: the
+ * transport hands back raw text whenever the body would not parse as JSON, so
+ * describing it would put a Django `DEBUG=False` error page on stdout - the same
+ * leak the 400 gate above exists to close.
  */
 export function describeAwxBody(
   body: unknown,
   status = 400,
 ): string | undefined {
-  if (typeof body === "string") {
-    return body.trim().length > 0 && body.length <= 200
-      ? body.trim()
-      : undefined;
-  }
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     return undefined;
   }

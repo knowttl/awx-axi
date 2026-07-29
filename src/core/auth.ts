@@ -50,8 +50,16 @@ export function resolveController(env: Env): ControllerConfig {
     host: new URL(baseUrl).host,
     baseUrl,
     verifySsl: env.CONTROLLER_VERIFY_SSL !== "false",
-    apiBasePath: env.AWX_AXI_API_BASE_PATH ?? "/api/v2/",
+    apiBasePath: withTrailingSlash(env.AWX_AXI_API_BASE_PATH ?? "/api/v2/"),
   };
+}
+
+/**
+ * The API base path keeps its trailing slash, because a route is resolved
+ * against it: `new URL("jobs/", ".../api/v2")` would drop the `v2` segment.
+ */
+function withTrailingSlash(path: string): string {
+  return path.endsWith("/") ? path : `${path}/`;
 }
 
 /** `$AWX_AXI_HOME/token`, default `~/.awx-axi/token` (§5.1). */
@@ -151,6 +159,7 @@ export function createTransport(env: Env): AwxTransport {
 
   return new HttpTransport({
     baseUrl: config.baseUrl,
+    apiBasePath: config.apiBasePath,
     authorization: `Bearer ${credential.token}`,
     readOnly: isReadOnly(env),
   });
@@ -176,6 +185,7 @@ export function createBasicAuthTransport(env: Env): AwxTransport {
   );
   return new HttpTransport({
     baseUrl: config.baseUrl,
+    apiBasePath: config.apiBasePath,
     authorization: `Basic ${encoded}`,
     readOnly: isReadOnly(env),
   });

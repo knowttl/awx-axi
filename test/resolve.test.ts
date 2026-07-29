@@ -6,9 +6,10 @@ import { RecordedTransport } from "../src/core/transport.js";
 import { exchange, loadFixture } from "./support/fixtures.js";
 
 const OPTIONS = {
-  listRoute: "/api/v2/job_templates/",
+  listRoute: "job_templates/",
   noun: "job template",
   listCommand: "template list",
+  command: "template launch",
 } as const;
 
 function resolve(
@@ -42,7 +43,7 @@ describe("resolving an <id|name> argument", () => {
     await expect(result).resolves.toBe(12);
     expect(transport.requests[0]).toMatchObject({
       method: "GET",
-      route: "/api/v2/job_templates/",
+      route: "job_templates/",
       query: { name: "Deploy web tier" },
     });
   });
@@ -87,6 +88,37 @@ describe("resolving an <id|name> argument", () => {
           { id: 41, name: "Deploy web tier", organization: "Staging" },
         ],
       },
+      // §7.3's own example: a complete command the agent can run as-is.
+      suggestions: [
+        "Re-run with the id, e.g. `awx-axi template launch 12`",
+      ],
+    });
+  });
+
+  it("reports the envelope's total, and says when the candidates are partial", async () => {
+    const transport = new RecordedTransport([
+      {
+        status: 200,
+        body: {
+          count: 30,
+          next: "/api/v2/job_templates/?name=Deploy+web+tier&page=2",
+          results: [
+            { id: 12, name: "Deploy web tier" },
+            { id: 41, name: "Deploy web tier" },
+          ],
+        },
+      },
+    ]);
+
+    await expect(
+      runPlan(resolveId("Deploy web tier", OPTIONS), { transport }),
+    ).rejects.toMatchObject({
+      // 30 from the envelope, not the 2 rows this page happened to carry.
+      message: '30 job templates are named "Deploy web tier"',
+      suggestions: [
+        "Re-run with the id, e.g. `awx-axi template launch 12`",
+        expect.stringContaining("Only 2 of the 30 candidates are listed above"),
+      ],
     });
   });
 
@@ -96,7 +128,7 @@ describe("resolving an <id|name> argument", () => {
     ]);
     await result;
 
-    // A named-URL lookup would have been `/api/v2/job_templates/Deploy web
+    // A named-URL lookup would have been `job_templates/Deploy web
     // tier++Production/`, and a 403 on it is rewritten to the same `Not found.`
     // a missing object returns - so a named lookup cannot tell "does not exist"
     // from "you cannot see it".
@@ -105,7 +137,7 @@ describe("resolving an <id|name> argument", () => {
     expect(invisible.body).toEqual({ detail: "Not found." });
 
     for (const request of transport.requests) {
-      expect(request.route).toBe("/api/v2/job_templates/");
+      expect(request.route).toBe("job_templates/");
     }
   });
 });

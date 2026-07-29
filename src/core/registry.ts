@@ -23,6 +23,45 @@ import type {
  */
 export type Renderable = string | Record<string, unknown>;
 
+const EXIT_CODE = Symbol("awx-axi.exitCode");
+
+/**
+ * A renderable plus the exit code the CLI must exit with (§10.2).
+ *
+ * §7.9 requires `job watch` to exit 1 when the watched job ended `failed`,
+ * `error`, or `canceled` **while still printing the job block**, so throwing an
+ * `AxiError` is the wrong mechanism: the command worked and is reporting bad
+ * news, and an error block is not what it did. This is the whole channel: there
+ * is no outcome taxonomy above it.
+ */
+export interface ExitCodeResult {
+  readonly [EXIT_CODE]: number;
+  readonly output: Renderable;
+}
+
+/** What a subcommand's plan may return: a renderable, or one plus an exit code. */
+export type DomainResult = Renderable | ExitCodeResult;
+
+/** Report `output` and exit with `exitCode`, rather than rendering an error. */
+export function withExitCode(
+  output: Renderable,
+  exitCode: number,
+): ExitCodeResult {
+  return { [EXIT_CODE]: exitCode, output };
+}
+
+/** Split a domain result into what to render and what to exit with. */
+export function splitResult(result: DomainResult): {
+  output: Renderable;
+  exitCode: number;
+} {
+  if (typeof result === "object" && EXIT_CODE in result) {
+    const wrapped = result as ExitCodeResult;
+    return { output: wrapped.output, exitCode: wrapped[EXIT_CODE] };
+  }
+  return { output: result as Renderable, exitCode: 0 };
+}
+
 /** Everything a domain needs from the core. */
 export interface DomainContext {
   readonly env: Record<string, string | undefined>;
@@ -223,10 +262,17 @@ export interface SubcommandSpec {
   /** Concise per-subcommand `--help`: flags, arguments, and 2-3 examples (§10 of the AXI skill). */
   readonly help: string;
   readonly flags: readonly FlagSpec[];
+  /**
+   * How many positional arguments this subcommand accepts (§9.4). Declared
+   * rather than inferred because a surplus positional is the same failure as an
+   * unknown flag: `cancel 1839 1841` that cancels only 1839 and reports success
+   * is worse than an error (AXI §6).
+   */
+  readonly maxArgs: number;
   readonly schema: FieldSchema;
   readonly suggestions: readonly SuggestionRule[];
   /** The requests this subcommand needs, declared as data (§10.2). */
-  plan(input: SubcommandInput): Plan<Renderable>;
+  plan(input: SubcommandInput): Plan<DomainResult>;
 }
 
 /**
@@ -242,7 +288,7 @@ export interface Domain {
   /** The awx-mcp tool names this domain covers, read by §14.2's coverage tool. */
   readonly mcpEquivalents: readonly string[];
   /** Dispatch to a subcommand through the core pipeline. Issues no request itself. */
-  run(args: string[], context: DomainContext): Promise<Renderable>;
+  run(args: string[], context: DomainContext): Promise<DomainResult>;
 }
 
 export type DomainSpec = Omit<Domain, "run">;
@@ -285,6 +331,7 @@ export function defineDomain(spec: DomainSpec): Domain {
         `${spec.name} ${subcommand.name}`,
         args.slice(1),
         subcommand.flags,
+        subcommand.maxArgs,
       );
 
       return runPlan(

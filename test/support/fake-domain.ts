@@ -12,15 +12,16 @@ import { AxiError } from "axi-sdk-js";
 
 import { AwxAxiError, errorForResponse } from "../../src/core/errors.js";
 import { detailOutput, listOutput, project } from "../../src/core/output.js";
-import { isActiveStatus, pollUntilTerminal } from "../../src/core/poll.js";
+import { isActiveStatus, pollUntilTerminal, succeeded } from "../../src/core/poll.js";
 import {
   defineDomain,
   read,
   readPaged,
+  withExitCode,
   write,
   type Domain,
+  type DomainResult,
   type Plan,
-  type Renderable,
   type SubcommandInput,
 } from "../../src/core/registry.js";
 import { resolveId, resolveUnifiedJob } from "../../src/core/resolve.js";
@@ -35,16 +36,16 @@ const EMPTY_SCHEMA = {
  * A multi-request read: the unified-job type resolve determines the detail
  * route, and the host rollup is the follow-up an agent asks for every time.
  */
-function* showPlan(input: SubcommandInput): Plan<Renderable> {
+function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = Number(input.args[0]);
   const unified = yield* resolveUnifiedJob(id);
 
-  const detail = yield* read(`/api/v2/${unified.type}s/${id}/`);
+  const detail = yield* read(`${unified.type}s/${id}/`);
   if (detail.status !== 200) {
     throw errorForResponse(detail, { subject: `job ${id}` });
   }
 
-  const hosts = yield* readPaged(`/api/v2/jobs/${id}/job_events/`, {}, 50);
+  const hosts = yield* readPaged(`jobs/${id}/job_events/`, {}, 50);
   const body = detail.body as Record<string, unknown>;
 
   return detailOutput({
@@ -64,14 +65,15 @@ function* showPlan(input: SubcommandInput): Plan<Renderable> {
  * comes back, and the preflight response decides whether the write happens at
  * all (§7.5).
  */
-function* launchPlan(input: SubcommandInput): Plan<Renderable> {
+function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
-    listRoute: "/api/v2/job_templates/",
+    listRoute: "job_templates/",
     noun: "job template",
     listCommand: "gadget list",
+    command: "gadget launch",
   });
 
-  const preflight = yield* read(`/api/v2/job_templates/${id}/launch/`);
+  const preflight = yield* read(`job_templates/${id}/launch/`);
   if (preflight.status !== 200) {
     throw errorForResponse(preflight, { subject: `template ${id}` });
   }
@@ -108,7 +110,7 @@ function* launchPlan(input: SubcommandInput): Plan<Renderable> {
   }
 
   const launch = yield* write(
-    `/api/v2/job_templates/${id}/launch/`,
+    `job_templates/${id}/launch/`,
     typeof limit === "string" ? { limit } : {},
   );
   if (launch.status !== 201) {
@@ -144,9 +146,9 @@ function* launchPlan(input: SubcommandInput): Plan<Renderable> {
 }
 
 /** The §9.2 disambiguation for a job: a bare 405 costs exactly one read. */
-function* cancelPlan(input: SubcommandInput): Plan<Renderable> {
+function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = Number(input.args[0]);
-  const response = yield* write(`/api/v2/jobs/${id}/cancel/`);
+  const response = yield* write(`jobs/${id}/cancel/`);
 
   if (response.status === 202) {
     return { job: { id, status: "canceled" } };
@@ -155,7 +157,7 @@ function* cancelPlan(input: SubcommandInput): Plan<Renderable> {
     throw errorForResponse(response, { subject: `job ${id}` });
   }
 
-  const detail = yield* read(`/api/v2/jobs/${id}/`);
+  const detail = yield* read(`jobs/${id}/`);
   const status = (detail.body as { status?: string } | null)?.status ?? "";
 
   if (!isActiveStatus(status)) {
@@ -173,9 +175,9 @@ function* cancelPlan(input: SubcommandInput): Plan<Renderable> {
 }
 
 /** The §9.2 disambiguation for a project: the same 405, a different outcome. */
-function* syncPlan(input: SubcommandInput): Plan<Renderable> {
+function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = Number(input.args[0]);
-  const response = yield* write(`/api/v2/projects/${id}/update/`);
+  const response = yield* write(`projects/${id}/update/`);
 
   if (response.status === 202) {
     return { project: { id, status: "syncing" } };
@@ -184,7 +186,7 @@ function* syncPlan(input: SubcommandInput): Plan<Renderable> {
     throw errorForResponse(response, { subject: `project ${id}` });
   }
 
-  const detail = yield* read(`/api/v2/projects/${id}/`);
+  const detail = yield* read(`projects/${id}/`);
   const body = (detail.body ?? {}) as Record<string, unknown>;
 
   if (body.scm_type === "") {
@@ -213,12 +215,12 @@ export function setWatchClock(clock: WatchClock): void {
   watchClock = clock;
 }
 
-function* watchPlan(input: SubcommandInput): Plan<Renderable> {
+function* watchPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = Number(input.args[0]);
   const timeout = input.flags.timeout;
 
   const result = yield* pollUntilTerminal({
-    route: `/api/v2/jobs/${id}/`,
+    route: `jobs/${id}/`,
     resumeCommand: `awx-axi gadget watch ${id}`,
     now: () => watchClock.now(),
     intervalMs: 5_000,
@@ -227,7 +229,7 @@ function* watchPlan(input: SubcommandInput): Plan<Renderable> {
       : {}),
   });
 
-  return detailOutput({
+  const block = detailOutput({
     label: "job",
     fields: {
       id,
@@ -235,10 +237,15 @@ function* watchPlan(input: SubcommandInput): Plan<Renderable> {
       polls: result.polls,
     },
   });
+
+  // §7.9: the exit code follows the watched job, and the block is still printed
+  // as output rather than as an error - the command did exactly what it was
+  // asked to do.
+  return succeeded(result.status) ? block : withExitCode(block, 1);
 }
 
-function* listPlan(input: SubcommandInput): Plan<Renderable> {
-  const paged = yield* readPaged("/api/v2/unified_jobs/", {}, 450);
+function* listPlan(input: SubcommandInput): Plan<DomainResult> {
+  const paged = yield* readPaged("unified_jobs/", {}, 450);
 
   return listOutput({
     label: EMPTY_SCHEMA.label,
@@ -259,6 +266,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "list",
       help: "gadget list [--failed]",
       flags: [{ name: "failed", description: "only failures", takesValue: false }],
+      maxArgs: 0,
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: listPlan,
@@ -267,6 +275,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "show",
       help: "gadget show <id>",
       flags: [],
+      maxArgs: 1,
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: showPlan,
@@ -278,6 +287,7 @@ export const fakeDomain: Domain = defineDomain({
         { name: "limit", description: "host pattern", takesValue: true },
         { name: "status", description: "unused, for the hint test", takesValue: true },
       ],
+      maxArgs: 1,
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: launchPlan,
@@ -286,6 +296,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "cancel",
       help: "gadget cancel <id>",
       flags: [],
+      maxArgs: 1,
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: cancelPlan,
@@ -294,6 +305,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "sync",
       help: "gadget sync <id>",
       flags: [],
+      maxArgs: 1,
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: syncPlan,
@@ -304,6 +316,7 @@ export const fakeDomain: Domain = defineDomain({
       flags: [
         { name: "timeout", description: "seconds", takesValue: true },
       ],
+      maxArgs: 1,
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: watchPlan,

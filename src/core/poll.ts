@@ -31,13 +31,24 @@ export function isActiveStatus(status: unknown): boolean {
   return typeof status === "string" && ACTIVE_STATES.includes(status);
 }
 
+/**
+ * True for a status AWX considers finished.
+ *
+ * Termination is decided against this set rather than by "not active", so a
+ * response carrying no status - or one this build does not know - is surfaced as
+ * unusable instead of rendered as a completed run.
+ */
+export function isTerminalStatus(status: unknown): boolean {
+  return typeof status === "string" && TERMINAL_STATES.includes(status);
+}
+
 /** `successful` exits 0; `failed`, `error`, and `canceled` exit 1 (§7.9). */
 export function succeeded(status: string): boolean {
   return status === "successful";
 }
 
 export interface PollOptions {
-  /** The detail route to re-read, e.g. `/api/v2/jobs/1843/`. */
+  /** The detail route to re-read, base-relative, e.g. `jobs/1843/`. */
   readonly route: string;
   /** Hard ceiling in milliseconds. Defaults to §7.9's 600 seconds. */
   readonly timeoutMs?: number;
@@ -73,7 +84,7 @@ export function* pollUntilTerminal(options: PollOptions): Plan<PollResult> {
 
   let interval = options.intervalMs ?? 5_000;
   let polls = 0;
-  let status = "";
+  let status: string | undefined;
 
   for (;;) {
     const response = yield* read(options.route);
@@ -84,26 +95,54 @@ export function* pollUntilTerminal(options: PollOptions): Plan<PollResult> {
     }
     status = statusOf(response.body);
 
+    if (isTerminalStatus(status)) {
+      return {
+        status: status as string,
+        body: response.body,
+        waitedMs: now() - start,
+        polls,
+      };
+    }
     if (!isActiveStatus(status)) {
-      return { status, body: response.body, waitedMs: now() - start, polls };
+      throw unusableStatus(status, options.resumeCommand);
     }
 
-    if (now() - start >= timeoutMs) {
+    const elapsed = now() - start;
+    if (elapsed >= timeoutMs) {
       break;
     }
 
-    yield* delay(interval);
+    // Clamped to what is left of the budget, so `--timeout` is the hard ceiling
+    // §7.9 calls it rather than the ceiling plus one backoff interval.
+    yield* delay(Math.min(interval, timeoutMs - elapsed));
     interval = Math.min(interval * 2, maxIntervalMs);
   }
 
   throw new AxiError(
-    `still ${status} after ${Math.round((now() - start) / 1000)}s`,
+    `still ${String(status)} after ${Math.round((now() - start) / 1000)}s`,
     "WATCH_TIMEOUT",
     [`Run \`${options.resumeCommand}\` to keep watching`],
   );
 }
 
-function statusOf(body: unknown): string {
+/**
+ * A response that reports neither an active nor a finished status says nothing
+ * about the run, and rendering it as an outcome would invent one.
+ */
+function unusableStatus(
+  status: string | undefined,
+  resumeCommand: string,
+): AxiError {
+  return new AxiError(
+    status === undefined
+      ? "the controller reported no status for the watched job"
+      : `the controller reported an unrecognized status "${status}" for the watched job`,
+    "UNKNOWN",
+    [`Run \`${resumeCommand}\` to read it again`],
+  );
+}
+
+function statusOf(body: unknown): string | undefined {
   const status = (body as { status?: unknown } | null)?.status;
-  return typeof status === "string" ? status : "";
+  return typeof status === "string" && status.length > 0 ? status : undefined;
 }

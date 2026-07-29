@@ -12,7 +12,11 @@ import {
   type Env,
 } from "./core/auth.js";
 import { formatError } from "./core/errors.js";
-import type { Domain, DomainContext } from "./core/registry.js";
+import {
+  splitResult,
+  type Domain,
+  type DomainContext,
+} from "./core/registry.js";
 import type { AwxTransport } from "./core/transport.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
@@ -89,7 +93,17 @@ function buildCommands(
     auth: (args) => authCommand(args, context),
   };
   for (const domain of DOMAINS) {
-    commands[domain.name] = (args) => domain.run(args, context);
+    commands[domain.name] = async (args) => {
+      // `runAxiCli` sets a non-zero exit code only from a thrown error, and
+      // §7.9's `job watch` must exit 1 while still rendering the job block. The
+      // exit code is applied here, where the handler's value is returned to the
+      // loop, so the core owns it rather than each domain (§10.2).
+      const { output, exitCode } = splitResult(await domain.run(args, context));
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+      }
+      return output;
+    };
   }
   return commands;
 }

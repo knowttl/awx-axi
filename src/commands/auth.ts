@@ -60,7 +60,7 @@ export async function authCommand(
     );
   }
 
-  parseFlags(`auth ${name}`, args.slice(1), []);
+  parseFlags(`auth ${name}`, args.slice(1), [], 0);
 
   switch (name) {
     case "login":
@@ -96,7 +96,7 @@ async function login(context: AuthContext): Promise<Renderable> {
 
   const transport = context.createBasicAuthTransport();
 
-  const response = await transport.post("/api/v2/tokens/", {
+  const response = await transport.post("tokens/", {
     description: "awx-axi",
     scope: "write",
   });
@@ -160,7 +160,7 @@ async function status(context: AuthContext): Promise<Renderable> {
     credential.path === undefined
       ? credential.source
       : collapseHome(credential.path, context.env);
-  const response = await context.createTransport().get("/api/v2/me/");
+  const response = await context.createTransport().get("me/");
   const valid = response.status === 200;
 
   return {

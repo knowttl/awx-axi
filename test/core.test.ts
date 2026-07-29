@@ -126,6 +126,7 @@ describe("the secret-name guard (design.md §5.3)", () => {
             name: "launch",
             help: "",
             flags: [{ name: "token", description: "", takesValue: true }],
+            maxArgs: 1,
             schema: { label: "g", defaultFields: [], fieldAllowlist: [] },
             suggestions: [],
             // eslint-disable-next-line require-yield
@@ -147,14 +148,14 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
   ];
 
   it("rejects by name and inlines the valid flags", () => {
-    expect(() => parseFlags("job list", ["--state", "failed"], FLAGS)).toThrow(
+    expect(() => parseFlags("job list", ["--state", "failed"], FLAGS, 1)).toThrow(
       /unknown flag --state for `job list`/,
     );
   });
 
   it("points a renamed flag at its replacement", () => {
     try {
-      parseFlags("job list", ["--state", "failed"], FLAGS);
+      parseFlags("job list", ["--state", "failed"], FLAGS, 1);
       expect.unreachable();
     } catch (error) {
       expect((error as { suggestions: string[] }).suggestions).toEqual([
@@ -165,7 +166,31 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
   });
 
   it("always allows --help", () => {
-    expect(parseFlags("job list", ["--help"], FLAGS).flags).toEqual({});
+    expect(parseFlags("job list", ["--help"], FLAGS, 0).flags).toEqual({});
+  });
+
+  it("rejects a surplus positional by name, so nothing acts on the first alone", () => {
+    try {
+      parseFlags("job cancel", ["1839", "1841"], FLAGS, 1);
+      expect.unreachable();
+    } catch (error) {
+      const failure = error as { code: string; message: string; suggestions: string[] };
+      expect(failure.code).toBe("VALIDATION_ERROR");
+      expect(failure.message).toContain("1841 is unexpected");
+      expect(failure.suggestions[0]).toContain("awx-axi job cancel 1839");
+    }
+  });
+
+  it("names every surplus positional, not just the first", () => {
+    expect(() => parseFlags("job cancel", ["1", "2", "3"], FLAGS, 1)).toThrow(
+      /2, 3 are unexpected/,
+    );
+  });
+
+  it("refuses any positional for a subcommand that takes none", () => {
+    expect(() => parseFlags("auth status", ["extra"], [], 0)).toThrow(
+      /takes 0 arguments but got 1/,
+    );
   });
 
   it("parses values, booleans, positionals, and = form", () => {
@@ -173,6 +198,7 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
       "job list",
       ["1839", "--status=failed", "--failed", "--limit", "20"],
       FLAGS,
+      1,
     );
 
     expect(parsed.args).toEqual(["1839"]);

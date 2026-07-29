@@ -44,6 +44,7 @@ describe("the CLI shell", () => {
           name: "list",
           help: "job list help",
           flags: [],
+          maxArgs: 0,
           schema: { label: "jobs", defaultFields: [], fieldAllowlist: [] },
           suggestions: [],
           // A plan that declares no request: this domain is only ever asked

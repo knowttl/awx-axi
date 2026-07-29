@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -22,6 +22,9 @@ function home(): string {
 }
 
 afterEach(() => {
+  for (const path of homes) {
+    rmSync(path, { recursive: true, force: true });
+  }
   homes.length = 0;
 });
 
@@ -83,6 +86,19 @@ describe("credential resolution (design.md §5.1)", () => {
     expect(config.verifySsl).toBe(false);
     expect(config.apiBasePath).toBe("/api/v2/");
   });
+
+  it("takes the §4.2 gateway override, with the trailing slash a route needs", () => {
+    // Without the trailing slash, `new URL("jobs/", ".../api/controller/v2")`
+    // would resolve to `/api/controller/jobs/`: the override would silently
+    // send every request to the wrong path. `test/transport.test.ts` asserts the
+    // composed URL on the wire.
+    expect(
+      resolveController({
+        CONTROLLER_HOST: "awx.example.com",
+        AWX_AXI_API_BASE_PATH: "/api/controller/v2",
+      }).apiBasePath,
+    ).toBe("/api/controller/v2/");
+  });
 });
 
 describe("`auth login` (design.md §5.2)", () => {
@@ -112,7 +128,7 @@ describe("`auth login` (design.md §5.2)", () => {
     expect(run.exitCode).toBe(0);
     expect(run.transport.requests[0]).toMatchObject({
       method: "POST",
-      route: "/api/v2/tokens/",
+      route: "tokens/",
     });
     expect(run.stdout).toContain("user: btsai");
     expect(run.stdout).toContain("scope: write");
@@ -157,7 +173,7 @@ describe("`auth login` (design.md §5.2)", () => {
 
     expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain("code: READ_ONLY_VIOLATION");
-    expect(run.stdout).toContain("POST /api/v2/tokens/");
+    expect(run.stdout).toContain("POST tokens/");
     expect(run.transport.requests).toHaveLength(0);
   });
 

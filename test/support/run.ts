@@ -18,6 +18,8 @@ export interface CliRunOptions {
   readonly script?: readonly (string | RecordedExchange)[];
   readonly env?: Record<string, string | undefined>;
   readonly domain?: Domain;
+  /** Records the §7.9 backoff waits. Resolves immediately by default. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -52,7 +54,7 @@ export async function runCli(
     env: options.env ?? {},
     createTransport: () => transport,
     createBasicAuthTransport: () => transport,
-    sleep: () => Promise.resolve(),
+    sleep: options.sleep ?? (() => Promise.resolve()),
   };
 
   try {

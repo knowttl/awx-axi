@@ -32,9 +32,9 @@ describe("a multi-request read", () => {
     expect(run.exitCode).toBe(0);
     // Three requests, and the second route was built from the first response.
     expect(run.transport.requests.map((request) => request.route)).toEqual([
-      "/api/v2/unified_jobs/",
-      "/api/v2/jobs/1839/",
-      "/api/v2/jobs/1839/job_events/",
+      "unified_jobs/",
+      "jobs/1839/",
+      "jobs/1839/job_events/",
     ]);
     expect(run.stdout).toContain("status: failed");
     expect(run.stdout).toContain("events: 231");
@@ -54,15 +54,13 @@ describe("a resolve-then-write flow", () => {
     expect(run.exitCode).toBe(0);
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
-      route: "/api/v2/job_templates/",
+      route: "job_templates/",
       query: { name: "Deploy web tier" },
     });
-    expect(run.transport.requests[1]?.route).toBe(
-      "/api/v2/job_templates/12/launch/",
-    );
+    expect(run.transport.requests[1]?.route).toBe("job_templates/12/launch/");
     expect(run.transport.requests[2]).toMatchObject({
       method: "POST",
-      route: "/api/v2/job_templates/12/launch/",
+      route: "job_templates/12/launch/",
     });
   });
 
@@ -154,7 +152,7 @@ describe("the read-only boundary reaches through the whole CLI (§6.5)", () => {
 
     expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain("code: READ_ONLY_VIOLATION");
-    expect(run.stdout).toContain("POST /api/v2/job_templates/12/launch/");
+    expect(run.stdout).toContain("POST job_templates/12/launch/");
     // The preflight GET happened; the POST never reached the transport.
     expect(
       run.transport.requests.filter((request) => request.method === "POST"),
@@ -174,9 +172,63 @@ describe("the poll loop (design.md §7.9)", () => {
       ],
     });
 
-    expect(run.exitCode).toBe(0);
+    // §7.9: the exit code follows the watched job, and the job block is still
+    // rendered as output rather than as an error block.
+    expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain("status: failed");
     expect(run.stdout).toContain("polls: 3");
+    expect(run.stdout).not.toContain("code:");
+  });
+
+  it("exits 0 when the watched job succeeded", async () => {
+    setWatchClock({ now: () => 0 });
+
+    const run = await runCli(["gadget", "watch", "1843"], {
+      script: [
+        { status: 200, body: { id: 1843, status: "running" } },
+        { status: 200, body: { id: 1843, status: "successful" } },
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("status: successful");
+  });
+
+  it("surfaces a response with no status rather than reporting a completed run", async () => {
+    setWatchClock({ now: () => 0 });
+
+    const run = await runCli(["gadget", "watch", "1843"], {
+      script: [{ status: 200, body: { id: 1843 } }],
+    });
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("reported no status");
+    expect(run.stdout).not.toContain("status: \n");
+  });
+
+  it("clamps the last wait to the remaining budget, so the timeout is a ceiling", async () => {
+    let clock = 0;
+    setWatchClock({ now: () => clock });
+
+    const waits: number[] = [];
+    const run = await runCli(["gadget", "watch", "1843", "--timeout", "12"], {
+      script: [
+        { status: 200, body: { id: 1843, status: "running" } },
+        { status: 200, body: { id: 1843, status: "running" } },
+        { status: 200, body: { id: 1843, status: "running" } },
+      ],
+      sleep: (ms) => {
+        waits.push(ms);
+        clock += ms;
+        return Promise.resolve();
+      },
+    });
+
+    // 5s, then the remaining 7s of the 12s budget rather than a full 10s
+    // backoff step that would overshoot it.
+    expect(waits).toEqual([5_000, 7_000]);
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("code: WATCH_TIMEOUT");
   });
 
   it("gives up at the hard timeout rather than blocking unbounded", async () => {
@@ -200,6 +252,22 @@ describe("the poll loop (design.md §7.9)", () => {
     expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain("code: WATCH_TIMEOUT");
     expect(run.stdout).toContain("awx-axi gadget watch 1843");
+  });
+});
+
+describe("surplus positionals fail loud (design.md §9.4)", () => {
+  it("refuses a second id rather than acting on the first alone", async () => {
+    const run = await runCli(["gadget", "cancel", "1839", "1841"], {
+      script: ["cancel-405"],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    // The surplus argument is named, so the correction takes one turn.
+    expect(run.stdout).toContain("1841");
+    expect(run.stdout).toContain("awx-axi gadget cancel 1839");
+    // And nothing was cancelled.
+    expect(run.transport.requests).toHaveLength(0);
   });
 });
 

@@ -12,12 +12,13 @@ const BASE = "https://awx.example.com";
 
 function transport(
   fixtures: readonly string[],
-  options: { readOnly?: boolean } = {},
+  options: { readOnly?: boolean; apiBasePath?: string } = {},
 ): { transport: HttpTransport; calls: ReturnType<typeof fixtureFetch>["calls"] } {
   const { fetch, calls } = fixtureFetch(fixtures);
   return {
     transport: new HttpTransport({
       baseUrl: BASE,
+      apiBasePath: options.apiBasePath ?? "/api/v2/",
       authorization: "Bearer test",
       readOnly: options.readOnly ?? false,
       fetch,
@@ -34,11 +35,7 @@ describe("getPaged (design.md §4.3 cases 1-3)", () => {
       "unified-jobs-page-3",
     ]);
 
-    const result = await http.getPaged(
-      "/api/v2/unified_jobs/",
-      { type: "job" },
-      450,
-    );
+    const result = await http.getPaged("unified_jobs/", { type: "job" }, 450);
 
     // The client asked for 450 rows in one page; AWX capped page_size at 200
     // and said so only through the next link, so three reads are required.
@@ -48,12 +45,32 @@ describe("getPaged (design.md §4.3 cases 1-3)", () => {
     expect(calls[1]?.url.searchParams.get("page")).toBe("2");
     expect(result.rows).toHaveLength(450);
     expect(result.count).toBe(512);
+    // The base-relative route landed under the API base path, and AWX's own
+    // next link - an absolute path - still resolved to the same collection.
+    expect(calls[0]?.url.pathname).toBe("/api/v2/unified_jobs/");
+    expect(calls[2]?.url.pathname).toBe("/api/v2/unified_jobs/");
+  });
+
+  it("walks pages under an AWX_AXI_API_BASE_PATH override too (§4.2)", async () => {
+    const { transport: http, calls } = transport(
+      ["unified-jobs-page-1", "unified-jobs-page-2"],
+      { apiBasePath: "/api/controller/v2/" },
+    );
+
+    const result = await http.getPaged("unified_jobs/", {}, 400);
+
+    // The first route was composed with the override; the second came from the
+    // envelope's own link, which is followed as given rather than rebuilt.
+    expect(calls[0]?.url.pathname).toBe("/api/controller/v2/unified_jobs/");
+    expect(calls[1]?.url.pathname).toBe("/api/v2/unified_jobs/");
+    expect(calls[1]?.url.searchParams.get("page")).toBe("2");
+    expect(result.rows).toHaveLength(400);
   });
 
   it("reports the server's own count, never one inferred from the rows", async () => {
     const { transport: http } = transport(["unified-jobs-page-1"]);
 
-    const result = await http.getPaged("/api/v2/unified_jobs/", {}, 200);
+    const result = await http.getPaged("unified_jobs/", {}, 200);
 
     expect(result.rows).toHaveLength(200);
     expect(result.count).toBe(512);
@@ -66,7 +83,7 @@ describe("getPaged (design.md §4.3 cases 1-3)", () => {
       "unified-jobs-page-3",
     ]);
 
-    await http.getPaged("/api/v2/unified_jobs/", { type: "job" }, 450);
+    await http.getPaged("unified_jobs/", { type: "job" }, 450);
 
     for (const call of calls) {
       expect(call.url.search).not.toContain("count_disabled");
@@ -83,7 +100,7 @@ describe("getPaged (design.md §4.3 cases 1-3)", () => {
     const { transport: http, calls } = transport(["job-events-page"]);
 
     const result = await http.getPaged(
-      "/api/v2/jobs/1839/job_events/",
+      "jobs/1839/job_events/",
       { failed: true },
       50,
     );
@@ -98,7 +115,7 @@ describe("getText (design.md §4.3 case 4)", () => {
   it("surfaces the oversized-output apology as a typed condition, not as content", async () => {
     const { transport: http } = transport(["stdout-too-large"]);
 
-    const text = await http.getText("/api/v2/jobs/1839/stdout/", {
+    const text = await http.getText("jobs/1839/stdout/", {
       format: "json",
       start_line: 0,
     });
@@ -116,7 +133,7 @@ describe("getText (design.md §4.3 case 4)", () => {
   it("passes an ordinary ranged read through untouched", async () => {
     const { transport: http } = transport(["stdout-ranged"]);
 
-    const text = await http.getText("/api/v2/project_updates/1846/stdout/");
+    const text = await http.getText("project_updates/1846/stdout/");
 
     expect(text.tooLarge).toBe(false);
     expect(text.rangeStart).toBe(4013);
@@ -141,7 +158,7 @@ describe("status codes (design.md §3.2)", () => {
   it("preserves a 405 on the response rather than throwing", async () => {
     const { transport: http } = transport(["cancel-405"]);
 
-    const response = await http.post("/api/v2/jobs/1839/cancel/");
+    const response = await http.post("jobs/1839/cancel/");
 
     expect(response.status).toBe(405);
   });
@@ -149,7 +166,7 @@ describe("status codes (design.md §3.2)", () => {
   it("preserves a 403 body for translation rather than swallowing it", async () => {
     const { transport: http } = transport(["error-detail"]);
 
-    const response = await http.get("/api/v2/job_templates/12/");
+    const response = await http.get("job_templates/12/");
 
     expect(response.status).toBe(403);
     expect(response.body).toEqual({
@@ -165,10 +182,10 @@ describe("the read-only boundary (design.md §6.5)", () => {
     });
 
     await expect(
-      http.post("/api/v2/job_templates/12/launch/", { limit: "db-02" }),
+      http.post("job_templates/12/launch/", { limit: "db-02" }),
     ).rejects.toMatchObject({
       code: "READ_ONLY_VIOLATION",
-      message: expect.stringContaining("POST /api/v2/job_templates/12/launch/"),
+      message: expect.stringContaining("POST job_templates/12/launch/"),
     });
 
     // The proof is here, not in the thrown error: nothing reached the wire.
@@ -180,7 +197,7 @@ describe("the read-only boundary (design.md §6.5)", () => {
       readOnly: true,
     });
 
-    const response = await http.get("/api/v2/jobs/1839/");
+    const response = await http.get("jobs/1839/");
 
     expect(response.status).toBe(200);
     expect(calls).toHaveLength(1);
@@ -192,7 +209,7 @@ describe("the read-only boundary (design.md §6.5)", () => {
     });
 
     await expect(
-      recorded.post("/api/v2/jobs/1841/cancel/"),
+      recorded.post("jobs/1841/cancel/"),
     ).rejects.toMatchObject({ code: "READ_ONLY_VIOLATION" });
     expect(recorded.requests).toHaveLength(0);
   });
@@ -202,6 +219,7 @@ describe("network failures (design.md §9.1)", () => {
   it("maps a refused connection to CONTROLLER_UNREACHABLE", async () => {
     const http = new HttpTransport({
       baseUrl: BASE,
+      apiBasePath: "/api/v2/",
       readOnly: false,
       fetch: () =>
         Promise.reject(
@@ -213,7 +231,7 @@ describe("network failures (design.md §9.1)", () => {
         ),
     });
 
-    await expect(http.get("/api/v2/ping/")).rejects.toMatchObject({
+    await expect(http.get("ping/")).rejects.toMatchObject({
       code: "CONTROLLER_UNREACHABLE",
     });
   });
@@ -221,6 +239,7 @@ describe("network failures (design.md §9.1)", () => {
   it("maps a certificate failure to TLS_UNTRUSTED", async () => {
     const http = new HttpTransport({
       baseUrl: BASE,
+      apiBasePath: "/api/v2/",
       readOnly: false,
       fetch: () =>
         Promise.reject(
@@ -232,7 +251,7 @@ describe("network failures (design.md §9.1)", () => {
         ),
     });
 
-    await expect(http.get("/api/v2/ping/")).rejects.toMatchObject({
+    await expect(http.get("ping/")).rejects.toMatchObject({
       code: "TLS_UNTRUSTED",
     });
   });
