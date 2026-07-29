@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "./support/run.js";
 
 /**
- * The `approval` read surface (design.md §7.7): the read-only inbox of
- * decisions waiting on a human, and what each one gates. Driven end to end
- * through the CLI against `RecordedTransport`, offline, with no network and no
- * mocking framework (§10.2, §11.2).
+ * The `approval` domain (design.md §7.7): the inbox of decisions waiting on a
+ * human - list, show, approve, and deny. Driven end to end through the CLI
+ * against `RecordedTransport`, offline, with no network and no mocking
+ * framework (§10.2, §11.2).
  */
 describe("approval list (design.md §7.7)", () => {
   it("defaults to pending only and reports the server's total", async () => {
