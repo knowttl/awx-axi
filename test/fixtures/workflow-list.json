@@ -1,0 +1,21 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2410-2521",
+  "$note": "Workflow job template list envelope. Returns available workflow templates for execution.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 10,
+        "name": "Release pipeline",
+        "summary_fields": {
+          "organization": { "id": 1, "name": "Default" },
+          "last_job": { "id": 1840, "status": "successful" }
+        }
+      }
+    ]
+  }
+}

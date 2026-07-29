@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "./support/run.js";
 
 /**
- * The `approval` read surface (design.md §7.7): the read-only inbox of
- * decisions waiting on a human, and what each one gates. Driven end to end
- * through the CLI against `RecordedTransport`, offline, with no network and no
- * mocking framework (§10.2, §11.2).
+ * The `approval` domain (design.md §7.7): the inbox of decisions waiting on a
+ * human - list, show, approve, and deny. Driven end to end through the CLI
+ * against `RecordedTransport`, offline, with no network and no mocking
+ * framework (§10.2, §11.2).
  */
 describe("approval list (design.md §7.7)", () => {
   it("defaults to pending only and reports the server's total", async () => {
@@ -169,5 +169,46 @@ describe("the read surface issues only reads", () => {
     expect(
       run.transport.requests.every((request) => request.method === "GET"),
     ).toBe(true);
+  });
+});
+
+describe("approval approve and deny (design.md §7.7)", () => {
+  it("approval approve dry run issues no POST", async () => {
+    const run = await runCli(["approval", "approve", "57", "--dry-run"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("dry_run:");
+    expect(run.stdout).toContain("POST workflow_approvals/57/approve/");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it("approval approve posts to approve endpoint", async () => {
+    const run = await runCli(["approval", "approve", "57"], {
+      script: ["approval-approve-204"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("id: 57");
+    expect(run.stdout).toContain("status: approved");
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "workflow_approvals/57/approve/",
+    });
+  });
+
+  it("approval deny posts to deny endpoint", async () => {
+    const run = await runCli(["approval", "deny", "57"], {
+      script: ["approval-deny-204"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("id: 57");
+    expect(run.stdout).toContain("status: denied");
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "workflow_approvals/57/deny/",
+    });
   });
 });

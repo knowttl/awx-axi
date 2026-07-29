@@ -1,0 +1,20 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4567-4607",
+  "$note": "Job template detail response. Reports playbook, project, inventory, and launch prompt flags.",
+  "status": 200,
+  "body": {
+    "id": 12,
+    "name": "Deploy web tier",
+    "playbook": "deploy/web.yml",
+    "survey_enabled": true,
+    "ask_limit_on_launch": true,
+    "ask_tags_on_launch": true,
+    "ask_variables_on_launch": true,
+    "summary_fields": {
+      "project": { "id": 4, "name": "infra-playbooks" },
+      "inventory": { "id": 3, "name": "Production" },
+      "last_job": { "id": 1841, "status": "running" }
+    }
+  }
+}

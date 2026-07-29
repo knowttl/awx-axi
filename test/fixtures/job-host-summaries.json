@@ -1,0 +1,16 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4413-4437",
+  "$note": "Host summaries for a playbook job run. Provides host counts for ok, changed, failed, unreachable.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": null,
+    "results": [
+      { "id": 1, "host_name": "db-01", "ok": 3, "changed": 1, "failed": 0, "unreachable": 0, "dark": 0, "summary_fields": { "host": { "id": 1, "name": "db-01" } } },
+      { "id": 2, "host_name": "db-02", "ok": 2, "changed": 0, "failed": 1, "unreachable": 0, "dark": 0, "summary_fields": { "host": { "id": 2, "name": "db-02" } } },
+      { "id": 3, "host_name": "db-03", "ok": 3, "changed": 0, "failed": 0, "unreachable": 0, "dark": 0, "summary_fields": { "host": { "id": 3, "name": "db-03" } } }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1057-1075",
+  "$note": "Project playbooks list response. Lists playbooks found in the SCM checkout.",
+  "status": 200,
+  "body": [
+    "site.yml",
+    "deploy/web.yml",
+    "deploy/db.yml"
+  ]
+}

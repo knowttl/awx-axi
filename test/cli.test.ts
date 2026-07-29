@@ -21,7 +21,7 @@ describe("the CLI shell", () => {
 
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
-    expect(stdout.text()).toContain("domains: approval");
+    expect(stdout.text()).toContain("domains: \"job, template, workflow, approval, project\"");
   });
 
   it("renders the version for --version", async () => {
@@ -35,15 +35,15 @@ describe("the CLI shell", () => {
   it("renders subcommand help and falls back to noun help", async () => {
     const domains = DOMAINS as Domain[];
     domains.push({
-      name: "job",
-      help: "job help",
+      name: "widget",
+      help: "widget help",
       subcommands: [
         {
           name: "list",
-          help: "job list help",
+          help: "widget list help",
           flags: [],
           positionals: { names: [], required: 0 },
-          schema: { label: "jobs", defaultFields: [], fieldAllowlist: [] },
+          schema: { label: "widgets", defaultFields: [], fieldAllowlist: [] },
           suggestions: [],
           // A plan that declares no request: this domain is only ever asked
           // for its help text.
@@ -60,19 +60,19 @@ describe("the CLI shell", () => {
     try {
       const subcommandStdout = capture();
       await main({
-        argv: ["job", "list", "--help"],
+        argv: ["widget", "list", "--help"],
         stdout: subcommandStdout,
         env: {},
       });
-      expect(subcommandStdout.text()).toContain("job list help");
+      expect(subcommandStdout.text()).toContain("widget list help");
 
       const nounStdout = capture();
       await main({
-        argv: ["job", "unknown", "--help"],
+        argv: ["widget", "unknown", "--help"],
         stdout: nounStdout,
         env: {},
       });
-      expect(nounStdout.text()).toContain("job help");
+      expect(nounStdout.text()).toContain("widget help");
     } finally {
       domains.pop();
     }
@@ -83,10 +83,10 @@ describe("the CLI shell", () => {
     const previousExitCode = process.exitCode;
 
     try {
-      await main({ argv: ["job"], stdout, env: {} });
+      await main({ argv: ["unknowncmd"], stdout, env: {} });
 
       expect(process.exitCode).toBe(2);
-      expect(stdout.text()).toContain('error: "Unknown command: job"');
+      expect(stdout.text()).toContain('error: "Unknown command: unknowncmd"');
       expect(stdout.text()).toContain("code: VALIDATION_ERROR");
       expect(stdout.text()).toContain(
         "help[1]: Run `awx-axi --help` to see available commands",

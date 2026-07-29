@@ -1,0 +1,17 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1057-1075",
+  "$note": "Project detail payload. Reports SCM repository configuration and sync status.",
+  "status": 200,
+  "body": {
+    "id": 4,
+    "name": "infra-playbooks",
+    "scm_type": "git",
+    "scm_url": "https://github.com/ansible/infra-playbooks",
+    "scm_branch": "main",
+    "status": "successful",
+    "summary_fields": {
+      "last_job": { "id": 1838, "status": "successful" }
+    }
+  }
+}
