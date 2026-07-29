@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1057-1075",
+  "$note": "Project updates history response. Reports recent SCM sync jobs for the project.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 1838,
+        "name": "infra-playbooks update",
+        "status": "successful",
+        "finished": "2026-07-27T13:02:00Z"
+      }
+    ]
+  }
+}

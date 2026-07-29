@@ -1,0 +1,15 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4282-4304",
+  "$note": "Workflow job template detail payload. Describes workflow configuration and survey status.",
+  "status": 200,
+  "body": {
+    "id": 10,
+    "name": "Release pipeline",
+    "survey_enabled": true,
+    "summary_fields": {
+      "organization": { "id": 1, "name": "Default" },
+      "last_job": { "id": 1840, "status": "successful" }
+    }
+  }
+}

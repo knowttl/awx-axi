@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4524-4551",
+  "$note": "Approval deny response 204 No Content. Indicates the step was successfully denied.",
+  "status": 204,
+  "body": null
+}

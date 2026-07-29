@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4567-4607",
+  "$note": "Survey specification for a job template. Defines user questions and required inputs.",
+  "status": 200,
+  "body": {
+    "name": "Deploy web tier survey",
+    "description": "Specify target cluster environment and approver",
+    "spec": [
+      {
+        "question_name": "Target Environment",
+        "variable": "target_env",
+        "type": "multiplechoice",
+        "required": true,
+        "default": "staging"
+      }
+    ]
+  }
+}

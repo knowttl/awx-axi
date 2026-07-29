@@ -1,22 +1,21 @@
 /**
- * The `approval` domain: the read-only approval inbox (design.md §7.7).
+ * The `approval` domain: the workflow approval inbox (design.md §7.7).
  *
  * Approvals are a top-level noun rather than living under `workflow` because
  * they are the one thing in AWX waiting on a human decision, which makes them
- * an inbox. This module builds the read surface - `approval list` and
- * `approval show` - which answers what is waiting, what it gates, and when it
- * was requested. `approve` and `deny` are a later task (§6.1).
- *
- * Per §10.2 this domain speaks no HTTP and imports no other domain: it declares
- * the reads it needs through the core's resumable plan generator, and the core
- * owns auth, pagination, error translation, and TOON encoding.
+ * an inbox. This module builds the inbox surface - `approval list`,
+ * `approval show`, `approval approve`, and `approval deny`.
  */
+import { AxiError } from "axi-sdk-js";
+
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput } from "../../core/output.js";
 import {
   defineDomain,
   read,
   readPaged,
+  withExitCode,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -24,38 +23,18 @@ import {
 } from "../../core/registry.js";
 import { resolveId } from "../../core/resolve.js";
 
-/**
- * An approval inbox is a short queue, so the default covers the pending set in
- * one call the way §8.2's `job list` default does for a history scan, rather
- * than the whole-inventory 100 used for the launchable-thing lists.
- */
 const DEFAULT_LIST_LIMIT = 20;
-
-/**
- * The node graph of one workflow run is bounded, so a single generous page
- * reads it whole. `blocks` in §7.7 is derived from this list; under-reading it
- * would silently drop downstream steps.
- */
 const NODE_LIMIT = 200;
 
 const LIST_SCHEMA = {
   label: "approvals",
-  // §7.7 gives no `--fields` flag for `approval list`, so the allowlist is
-  // empty and the schema is fixed: id, the approval's name, the workflow it
-  // gates, and its decision status (which is what `--all` makes worth showing).
   defaultFields: ["id", "name", "workflow", "status"],
   fieldAllowlist: [],
 } as const;
 
-/**
- * One approval row for the list, flattened from the API's nested shape. A type
- * alias rather than an interface so it satisfies the core's `Row` index
- * signature.
- */
 type ApprovalRow = {
   readonly id: number;
   readonly name: string;
-  /** The workflow run's name, from `summary_fields.source_workflow_job`. */
   readonly workflow: string | null;
   readonly status: string;
 };
@@ -75,10 +54,6 @@ function toRow(raw: unknown): ApprovalRow {
   };
 }
 
-/**
- * `approval list` defaults to pending only; `--all` includes decided ones
- * (§7.7). The default filter is a `status=pending` query, dropped by `--all`.
- */
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const all = input.flags.all === true;
   const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT);
@@ -109,18 +84,11 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
-/** One downstream step an approval gates, for the §7.7 `blocks` block. */
 interface Block {
   readonly node: number;
   readonly template: string | null;
 }
 
-/**
- * `blocks` comes from the workflow job's node list, and it is the difference
- * between an informed approval and a blind one (§7.7). The approval's own node
- * is the one whose spawned `job` is this approval; the steps it releases are
- * that node's success and always edges.
- */
 function computeBlocks(rows: readonly unknown[], approvalId: number): Block[] {
   const nodes = rows.map((row) => (row ?? {}) as Record<string, unknown>);
   const byId = new Map<number, Record<string, unknown>>();
@@ -161,12 +129,6 @@ function computeBlocks(rows: readonly unknown[], approvalId: number): Block[] {
   });
 }
 
-/**
- * `approval show` prints what the step gates before anyone decides (§7.7): the
- * approval detail, then the downstream steps read from the workflow's node
- * list. Two reads for a numeric id, or three when a name is resolved first
- * (§7.3).
- */
 function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "workflow_approvals/",
@@ -220,8 +182,6 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
       expires: body.approval_expiration ?? null,
       blocks,
     },
-    // The help lines are the whole reason `show` exists: it makes a later
-    // approve or deny an informed action rather than a blind one (§7.7).
     help: [
       `Run \`awx-axi approval approve ${id}\` to release the ${blocks.length} downstream step${blocks.length === 1 ? "" : "s"}`,
       `Run \`awx-axi approval deny ${id}\` to fail the workflow at this step`,
@@ -229,11 +189,124 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
-/**
- * Parse `--limit` to a positive integer, or reject it before any read. §9.1
- * codes a non-positive limit `VALIDATION_ERROR`, exit 2, and AXI §6 requires it
- * be caught before any dependent call.
- */
+function* approvePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "workflow_approvals/",
+    noun: "approval",
+    listCommand: "approval list",
+    command: "approval approve",
+  });
+
+  if (input.flags["dry-run"] === true) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "approve",
+        approval: id,
+        would_send: `POST workflow_approvals/${id}/approve/`,
+      },
+      help: ["Re-run without --dry-run to approve"],
+    });
+  }
+
+  const res = yield* write(`workflow_approvals/${id}/approve/`);
+  if (res.status === 400 || res.status === 405) {
+    const detail = yield* read(`workflow_approvals/${id}/`);
+    if (detail.status === 200) {
+      const body = (detail.body ?? {}) as Record<string, unknown>;
+      const status = typeof body.status === "string" ? body.status : "";
+      if (status === "approved") {
+        return withExitCode(
+          {
+            approval: `${id} already approved (no-op)`,
+          },
+          0,
+        );
+      }
+      if (status === "denied") {
+        throw new AxiError(
+          `approval ${id} was already denied and cannot be approved`,
+          "ALREADY_DECIDED",
+          ["Run `awx-axi approval list --all` to see decided approvals"],
+        );
+      }
+    }
+    throw errorForResponse(res, { subject: `approval ${id}` });
+  }
+
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `approval ${id}` });
+  }
+
+  return detailOutput({
+    label: "approval",
+    fields: {
+      id,
+      status: "approved",
+    },
+    help: ["Run `awx-axi approval list` to see remaining pending approvals"],
+  });
+}
+
+function* denyPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "workflow_approvals/",
+    noun: "approval",
+    listCommand: "approval list",
+    command: "approval deny",
+  });
+
+  if (input.flags["dry-run"] === true) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "deny",
+        approval: id,
+        would_send: `POST workflow_approvals/${id}/deny/`,
+      },
+      help: ["Re-run without --dry-run to deny"],
+    });
+  }
+
+  const res = yield* write(`workflow_approvals/${id}/deny/`);
+  if (res.status === 400 || res.status === 405) {
+    const detail = yield* read(`workflow_approvals/${id}/`);
+    if (detail.status === 200) {
+      const body = (detail.body ?? {}) as Record<string, unknown>;
+      const status = typeof body.status === "string" ? body.status : "";
+      if (status === "denied") {
+        return withExitCode(
+          {
+            approval: `${id} already denied (no-op)`,
+          },
+          0,
+        );
+      }
+      if (status === "approved") {
+        throw new AxiError(
+          `approval ${id} was already approved and cannot be denied`,
+          "ALREADY_DECIDED",
+          ["Run `awx-axi approval list --all` to see decided approvals"],
+        );
+      }
+    }
+    throw errorForResponse(res, { subject: `approval ${id}` });
+  }
+
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `approval ${id}` });
+  }
+
+  return detailOutput({
+    label: "approval",
+    fields: {
+      id,
+      status: "denied",
+    },
+    help: ["Run `awx-axi approval list` to see remaining pending approvals"],
+  });
+}
+
 function positiveLimit(
   raw: string | true | undefined,
   fallback: number,
@@ -257,11 +330,17 @@ export const approvalDomain: Domain = defineDomain({
     "approval: the workflow approval inbox - what is waiting on a human decision",
     "",
     "Subcommands:",
-    "  list   [--all] [--limit <n>]   pending approvals, or all with --all",
-    "  show   <id|name>               what one approval gates before deciding",
+    "  list      [--all] [--limit <n>]   pending approvals, or all with --all",
+    "  show      <id|name>               what one approval gates before deciding",
+    "  approve   <id|name>               approve a pending workflow approval",
+    "  deny      <id|name>               deny a pending workflow approval",
   ].join("\n"),
-  // The awx-mcp tools this read surface covers, read by §14.2's coverage tool.
-  mcpEquivalents: ["list_pending_approvals", "get_approval"],
+  mcpEquivalents: [
+    "list_pending_approvals",
+    "get_approval",
+    "approve_approval",
+    "deny_approval",
+  ],
   subcommands: [
     {
       name: "list",
@@ -325,7 +404,6 @@ export const approvalDomain: Domain = defineDomain({
       ].join("\n"),
       flags: [],
       positionals: { names: ["<id|name>"], required: 1 },
-      // A detail view has no list schema; the fixed shape lives in the plan.
       schema: {
         label: "approval",
         defaultFields: [],
@@ -341,6 +419,28 @@ export const approvalDomain: Domain = defineDomain({
         },
       ],
       plan: showPlan,
+    },
+    {
+      name: "approve",
+      help: "awx-axi approval approve <id|name> [--dry-run]",
+      flags: [
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "approval", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: approvePlan,
+    },
+    {
+      name: "deny",
+      help: "awx-axi approval deny <id|name> [--dry-run]",
+      flags: [
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "approval", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: denyPlan,
     },
   ],
 });

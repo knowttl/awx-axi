@@ -19,6 +19,10 @@ import {
 } from "./core/registry.js";
 import type { AwxTransport } from "./core/transport.js";
 import { approvalDomain } from "./domains/approval/index.js";
+import { jobDomain } from "./domains/job/index.js";
+import { projectDomain } from "./domains/project/index.js";
+import { templateDomain } from "./domains/template/index.js";
+import { workflowDomain } from "./domains/workflow/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
@@ -29,7 +33,13 @@ export const DESCRIPTION = "Inspect and run AWX automation from the shell";
  * imports the registry for its contract types, so holding the list there would
  * be a circular import.
  */
-export const DOMAINS: readonly Domain[] = [approvalDomain];
+export const DOMAINS: readonly Domain[] = [
+  jobDomain,
+  templateDomain,
+  workflowDomain,
+  approvalDomain,
+  projectDomain,
+];
 
 export interface MainOptions {
   readonly argv?: string[];
@@ -123,7 +133,11 @@ function topLevelHelp(): string {
 }
 
 function readPackageVersion(): string {
-  const path = fileURLToPath(new URL("../package.json", import.meta.url));
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  return (parsed as { version: string }).version;
+  try {
+    const path = fileURLToPath(new URL("../package.json", import.meta.url));
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return (parsed as { version: string }).version;
+  } catch {
+    return "0.1.0";
+  }
 }
