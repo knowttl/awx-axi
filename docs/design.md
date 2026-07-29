@@ -1316,7 +1316,7 @@ break session start.
 On any error the hook prints a single line naming the problem and the fix, and exits 0.
 
 The installable skill is generated from the same content the home view prints, with live state stripped, and
-`npm run skill:check` fails CI when the committed `SKILL.md` drifts from the generator.
+`test/skill.test.ts` fails CI when the committed `SKILL.md` drifts from the generator (as part of `npm test`).
 
 ## 14. Coverage against awx-mcp, and roadmap
 

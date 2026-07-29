@@ -37,7 +37,7 @@ Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or 
 ## Commands
 
 ```
-commands[5 domains]:
+commands[6 domains]:
   auth       login, status, logout
   job        list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
   template   list, show <id|name>, survey <id|name>, launch <id|name>
