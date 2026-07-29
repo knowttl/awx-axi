@@ -54,12 +54,47 @@ export function assertNoSecretFlags(
   }
 }
 
+/**
+ * Refuse an arity declaration that cannot be satisfied, at module load.
+ *
+ * A subcommand requiring more arguments than it names could never be called,
+ * and the error it would print would name nothing. Like the secret guard above,
+ * this fails the import rather than waiting for a caller to find it.
+ */
+export function assertUsableArity(
+  subcommand: string,
+  positionals: PositionalSpec,
+): void {
+  if (
+    positionals.required < 0 ||
+    positionals.required > positionals.names.length
+  ) {
+    throw new Error(
+      `\`${subcommand}\` requires ${positionals.required} of ${positionals.names.length} declared positional arguments: the range is unsatisfiable`,
+    );
+  }
+}
+
 /** A flag's value, or `true` for a boolean flag such as `--failed`. */
 export type ParsedFlags = Readonly<Record<string, string | true>>;
 
 export interface ParsedArgs {
   readonly args: readonly string[];
   readonly flags: ParsedFlags;
+}
+
+/**
+ * The positional arguments a subcommand accepts, as one inclusive range (§9.4).
+ *
+ * The names are what the errors print, so a caller learns which argument is
+ * missing rather than only that one is. This is argument **count** and nothing
+ * else: `<id|name>` accepts a name by design, and resolving it is §7.3's job.
+ */
+export interface PositionalSpec {
+  /** Argument names in order, e.g. `["<id|name>"]`. The count is the maximum. */
+  readonly names: readonly string[];
+  /** How many are required, counted from the left. */
+  readonly required: number;
 }
 
 /**
@@ -70,14 +105,17 @@ export interface ParsedArgs {
  * dropped flag is worse than an error: the agent gets plausible-looking output
  * it believes is filtered.
  *
- * A surplus positional is rejected the same way and for the same reason:
- * `maxArgs` is required of every caller so no subcommand can silently drop one.
+ * Positional arity is checked the same way and for the same reason, at both
+ * ends. A surplus argument means `cancel 1839 1841` silently cancels only 1839;
+ * a missing one means `cancel` builds `POST jobs/NaN/cancel/` and hands it to
+ * the one function that can change a controller, before anything validates it.
+ * `positionals` is required of every caller so no subcommand can skip either.
  */
 export function parseFlags(
   subcommand: string,
   argv: readonly string[],
   flags: readonly FlagSpec[],
-  maxArgs: number,
+  positionals: PositionalSpec,
 ): ParsedArgs {
   const known = new Map(flags.map((flag) => [`--${flag.name}`, flag]));
   const args: string[] = [];
@@ -123,11 +161,36 @@ export function parseFlags(
     parsed[spec.name] = value;
   }
 
-  if (args.length > maxArgs) {
-    throw surplusArgs(args, subcommand, maxArgs);
+  if (args.length < positionals.required) {
+    throw missingArgs(args, subcommand, positionals);
+  }
+  if (args.length > positionals.names.length) {
+    throw surplusArgs(args, subcommand, positionals);
   }
 
   return { args, flags: parsed };
+}
+
+/**
+ * Name the argument that is missing, so the correction takes one turn rather
+ * than a lookup. §9.1 codes this `VALIDATION_ERROR`, exit 2, and AXI §6 requires
+ * it be caught before any dependent call.
+ */
+function missingArgs(
+  args: readonly string[],
+  subcommand: string,
+  positionals: PositionalSpec,
+): Error {
+  const missing = positionals.names.slice(args.length, positionals.required);
+
+  return validationError(
+    `\`${subcommand}\` needs ${joinNames(missing)}`,
+    [
+      `Run \`awx-axi ${subcommand} ${positionals.names
+        .slice(0, positionals.required)
+        .join(" ")}\``,
+    ],
+  );
 }
 
 /**
@@ -137,8 +200,9 @@ export function parseFlags(
 function surplusArgs(
   args: readonly string[],
   subcommand: string,
-  maxArgs: number,
+  positionals: PositionalSpec,
 ): Error {
+  const maxArgs = positionals.names.length;
   const surplus = args.slice(maxArgs);
   const kept = args.slice(0, maxArgs).join(" ");
 
@@ -150,6 +214,12 @@ function surplusArgs(
         : `Run \`awx-axi ${subcommand} ${kept}\` to act on ${kept} alone, once per argument`,
     ],
   );
+}
+
+function joinNames(names: readonly string[]): string {
+  return names.length <= 1
+    ? (names[0] ?? "an argument")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1] as string}`;
 }
 
 function unknownFlag(

@@ -92,6 +92,29 @@ describe("a resolve-then-write flow", () => {
   });
 });
 
+describe("positional arity fails loud at both ends (design.md §9.4)", () => {
+  it("rejects a missing required id before building a mutating request", async () => {
+    const run = await runCli(["gadget", "cancel"], { script: [] });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("`gadget cancel` needs <id>");
+    // The point of the lower bound: `POST jobs/NaN/cancel/` never reaches the
+    // one function that can change a controller.
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it("rejects a surplus id rather than silently acting on the first", async () => {
+    const run = await runCli(["gadget", "cancel", "1839", "1841"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("1841 is unexpected");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+});
+
 describe("the 405 disambiguation (design.md §9.2)", () => {
   it("costs exactly one follow-up read", async () => {
     const run = await runCli(["gadget", "cancel", "1839"], {
@@ -130,6 +153,32 @@ describe("the 405 disambiguation (design.md §9.2)", () => {
 
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("already syncing as 1846 (no-op)");
+  });
+
+  it("never fabricates a no-op when the follow-up read itself failed", async () => {
+    const run = await runCli(["gadget", "cancel", "1839"], {
+      script: ["cancel-405", "error-detail"],
+    });
+
+    // A 403 on the follow-up read must translate, not fall through to an empty
+    // status and print `already finished (), nothing to cancel (no-op)`.
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("code: FORBIDDEN");
+    expect(run.stdout).not.toContain("no-op");
+  });
+
+  it("never claims a running sync the follow-up read did not name", async () => {
+    const run = await runCli(["gadget", "sync", "4"], {
+      script: [
+        "cancel-405",
+        { status: 200, body: { id: 4, scm_type: "git", status: "successful" } },
+      ],
+    });
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("code: SERVER_ERROR");
+    expect(run.stdout).not.toContain("undefined");
+    expect(run.stdout).not.toContain("no-op");
   });
 
   it("sync on a project with no SCM source is SYNC_UNAVAILABLE at exit 1", async () => {

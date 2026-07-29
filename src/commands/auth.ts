@@ -60,7 +60,10 @@ export async function authCommand(
     );
   }
 
-  parseFlags(`auth ${name}`, args.slice(1), [], 0);
+  parseFlags(`auth ${name}`, args.slice(1), [], {
+    names: [],
+    required: 0,
+  });
 
   switch (name) {
     case "login":

@@ -158,7 +158,20 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   const detail = yield* read(`jobs/${id}/`);
-  const status = (detail.body as { status?: string } | null)?.status ?? "";
+  // The follow-up read is what turns a bare 405 into a true statement, so it
+  // has to be trusted only when it succeeded: a 403 or 500 here would otherwise
+  // fall through to an empty status and print a fabricated exit-0 no-op.
+  if (detail.status !== 200) {
+    throw errorForResponse(detail, { subject: `job ${id}` });
+  }
+  const status = (detail.body as { status?: string } | null)?.status;
+  if (typeof status !== "string" || status.length === 0) {
+    throw new AxiError(
+      `job ${id} refused cancellation and its current state could not be read`,
+      "SERVER_ERROR",
+      [`Run \`awx-axi gadget show ${id}\` to see its current state`],
+    );
+  }
 
   if (!isActiveStatus(status)) {
     return {
@@ -187,6 +200,9 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   const detail = yield* read(`projects/${id}/`);
+  if (detail.status !== 200) {
+    throw errorForResponse(detail, { subject: `project ${id}` });
+  }
   const body = (detail.body ?? {}) as Record<string, unknown>;
 
   if (body.scm_type === "") {
@@ -198,9 +214,19 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   const running = (body.current_update ?? {}) as Record<string, unknown>;
+  // A no-op claim must rest on an observed running sync, never on a response
+  // that failed to name one.
+  if (typeof running.id !== "number") {
+    throw new AxiError(
+      `project ${id} refused the sync and no running sync could be found`,
+      "SERVER_ERROR",
+      [`Run \`awx-axi gadget show ${id}\` to see its current state`],
+    );
+  }
+
   return {
-    project: `${id} is already syncing as ${String(running.id)} (no-op)`,
-    help: [`Run \`awx-axi gadget watch ${String(running.id)}\` to follow it`],
+    project: `${id} is already syncing as ${running.id} (no-op)`,
+    help: [`Run \`awx-axi gadget watch ${running.id}\` to follow it`],
   };
 }
 
@@ -266,7 +292,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "list",
       help: "gadget list [--failed]",
       flags: [{ name: "failed", description: "only failures", takesValue: false }],
-      maxArgs: 0,
+      positionals: { names: [], required: 0 },
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: listPlan,
@@ -275,7 +301,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "show",
       help: "gadget show <id>",
       flags: [],
-      maxArgs: 1,
+      positionals: { names: ["<id>"], required: 1 },
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: showPlan,
@@ -287,7 +313,7 @@ export const fakeDomain: Domain = defineDomain({
         { name: "limit", description: "host pattern", takesValue: true },
         { name: "status", description: "unused, for the hint test", takesValue: true },
       ],
-      maxArgs: 1,
+      positionals: { names: ["<id|name>"], required: 1 },
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: launchPlan,
@@ -296,7 +322,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "cancel",
       help: "gadget cancel <id>",
       flags: [],
-      maxArgs: 1,
+      positionals: { names: ["<id>"], required: 1 },
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: cancelPlan,
@@ -305,7 +331,7 @@ export const fakeDomain: Domain = defineDomain({
       name: "sync",
       help: "gadget sync <id>",
       flags: [],
-      maxArgs: 1,
+      positionals: { names: ["<id>"], required: 1 },
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: syncPlan,
@@ -316,7 +342,7 @@ export const fakeDomain: Domain = defineDomain({
       flags: [
         { name: "timeout", description: "seconds", takesValue: true },
       ],
-      maxArgs: 1,
+      positionals: { names: ["<id>"], required: 1 },
       schema: EMPTY_SCHEMA,
       suggestions: [],
       plan: watchPlan,

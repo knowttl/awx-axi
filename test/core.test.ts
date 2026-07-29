@@ -6,10 +6,20 @@ import {
   errorForResponse,
   formatError,
 } from "../src/core/errors.js";
-import { assertNoSecretFlags, parseFlags } from "../src/core/flags.js";
+import {
+  assertNoSecretFlags,
+  assertUsableArity,
+  parseFlags,
+} from "../src/core/flags.js";
 import { countLine, listOutput, rawRegion, truncate } from "../src/core/output.js";
 import { redact } from "../src/core/redact.js";
-import { defineDomain } from "../src/core/registry.js";
+import {
+  defineDomain,
+  read,
+  readPaged,
+  readText,
+  write,
+} from "../src/core/registry.js";
 import { loadFixture } from "./support/fixtures.js";
 
 describe("error translation (design.md §9.3)", () => {
@@ -126,7 +136,7 @@ describe("the secret-name guard (design.md §5.3)", () => {
             name: "launch",
             help: "",
             flags: [{ name: "token", description: "", takesValue: true }],
-            maxArgs: 1,
+            positionals: { names: ["<id>"], required: 1 },
             schema: { label: "g", defaultFields: [], fieldAllowlist: [] },
             suggestions: [],
             // eslint-disable-next-line require-yield
@@ -140,6 +150,10 @@ describe("the secret-name guard (design.md §5.3)", () => {
   });
 });
 
+const NO_ARGS = { names: [], required: 0 } as const;
+const ONE_ARG = { names: ["<id>"], required: 1 } as const;
+const OPTIONAL_ARG = { names: ["<id>"], required: 0 } as const;
+
 describe("unknown flags fail loud (design.md §9.4)", () => {
   const FLAGS = [
     { name: "status", description: "", takesValue: true },
@@ -148,14 +162,14 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
   ];
 
   it("rejects by name and inlines the valid flags", () => {
-    expect(() => parseFlags("job list", ["--state", "failed"], FLAGS, 1)).toThrow(
+    expect(() => parseFlags("job list", ["--state", "failed"], FLAGS, OPTIONAL_ARG)).toThrow(
       /unknown flag --state for `job list`/,
     );
   });
 
   it("points a renamed flag at its replacement", () => {
     try {
-      parseFlags("job list", ["--state", "failed"], FLAGS, 1);
+      parseFlags("job list", ["--state", "failed"], FLAGS, OPTIONAL_ARG);
       expect.unreachable();
     } catch (error) {
       expect((error as { suggestions: string[] }).suggestions).toEqual([
@@ -166,12 +180,12 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
   });
 
   it("always allows --help", () => {
-    expect(parseFlags("job list", ["--help"], FLAGS, 0).flags).toEqual({});
+    expect(parseFlags("job list", ["--help"], FLAGS, NO_ARGS).flags).toEqual({});
   });
 
   it("rejects a surplus positional by name, so nothing acts on the first alone", () => {
     try {
-      parseFlags("job cancel", ["1839", "1841"], FLAGS, 1);
+      parseFlags("job cancel", ["1839", "1841"], FLAGS, ONE_ARG);
       expect.unreachable();
     } catch (error) {
       const failure = error as { code: string; message: string; suggestions: string[] };
@@ -182,13 +196,42 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
   });
 
   it("names every surplus positional, not just the first", () => {
-    expect(() => parseFlags("job cancel", ["1", "2", "3"], FLAGS, 1)).toThrow(
+    expect(() => parseFlags("job cancel", ["1", "2", "3"], FLAGS, ONE_ARG)).toThrow(
       /2, 3 are unexpected/,
     );
   });
 
+  it("rejects a missing required positional, naming it", () => {
+    try {
+      parseFlags("job cancel", [], FLAGS, ONE_ARG);
+      expect.unreachable();
+    } catch (error) {
+      const failure = error as {
+        code: string;
+        message: string;
+        suggestions: string[];
+      };
+      expect(failure.code).toBe("VALIDATION_ERROR");
+      expect(failure.message).toBe("`job cancel` needs <id>");
+      expect(failure.suggestions[0]).toBe("Run `awx-axi job cancel <id>`");
+    }
+  });
+
+  it("names every missing required positional", () => {
+    expect(() =>
+      parseFlags("job move", [], FLAGS, {
+        names: ["<id>", "<destination>"],
+        required: 2,
+      }),
+    ).toThrow(/needs <id> and <destination>/);
+  });
+
+  it("accepts an omitted optional positional", () => {
+    expect(parseFlags("job list", [], FLAGS, OPTIONAL_ARG).args).toEqual([]);
+  });
+
   it("refuses any positional for a subcommand that takes none", () => {
-    expect(() => parseFlags("auth status", ["extra"], [], 0)).toThrow(
+    expect(() => parseFlags("auth status", ["extra"], [], NO_ARGS)).toThrow(
       /takes 0 arguments but got 1/,
     );
   });
@@ -198,7 +241,7 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
       "job list",
       ["1839", "--status=failed", "--failed", "--limit", "20"],
       FLAGS,
-      1,
+      ONE_ARG,
     );
 
     expect(parsed.args).toEqual(["1839"]);
@@ -207,6 +250,30 @@ describe("unknown flags fail loud (design.md §9.4)", () => {
       failed: true,
       limit: "20",
     });
+  });
+});
+
+describe("the base-relative route guard (design.md §4.2)", () => {
+  it.each([
+    ["read", () => read("/api/v2/jobs/1839/")],
+    ["readPaged", () => readPaged("/api/v2/jobs/", {}, 20)],
+    ["readText", () => readText("/api/v2/jobs/1839/stdout/")],
+    ["write", () => write("/api/v2/jobs/1839/cancel/")],
+  ])("refuses a leading slash declared through %s", (_name, declare) => {
+    // A leading slash resolves identically under the default /api/v2/, so only
+    // an AWX_AXI_API_BASE_PATH override would expose it - silently. Hence the
+    // guard rather than prose.
+    expect(() => declare().next()).toThrow(/must be base-relative/);
+  });
+
+  it("accepts the base-relative form every domain is meant to write", () => {
+    expect(() => read("jobs/1839/").next()).not.toThrow();
+  });
+
+  it("refuses an arity range no caller could satisfy, at definition time", () => {
+    expect(() =>
+      assertUsableArity("gadget cancel", { names: ["<id>"], required: 2 }),
+    ).toThrow(/unsatisfiable/);
   });
 });
 

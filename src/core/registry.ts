@@ -7,7 +7,13 @@
  * `mcpEquivalents` - and the core owns everything else.
  */
 import { validationError } from "./errors.js";
-import { assertNoSecretFlags, parseFlags, type ParsedFlags } from "./flags.js";
+import {
+  assertNoSecretFlags,
+  assertUsableArity,
+  parseFlags,
+  type ParsedFlags,
+  type PositionalSpec,
+} from "./flags.js";
 import type {
   AwxResponse,
   AwxTransport,
@@ -130,8 +136,30 @@ export type RequestResult =
  */
 export type Plan<T> = Generator<AwxRequest, T, RequestResult>;
 
+/**
+ * A domain-declared route is **base-relative**: `jobs/1839/`, never
+ * `/api/v2/jobs/1839/`. `HttpTransport` joins it onto the configured API root
+ * once, so a leading slash would escape that root and send the request to the
+ * server's own top level.
+ *
+ * A leading slash resolves identically under the default `/api/v2/`, so nothing
+ * at 24.6.1 would notice - it would only break under an `AWX_AXI_API_BASE_PATH`
+ * override, silently. That silence is why the invariant is enforced here, in
+ * the four helpers every domain-declared route passes through, rather than in
+ * prose. AWX's own absolute `next` links are unaffected: `walkPages` follows
+ * them directly and never goes through these helpers.
+ */
+function assertBaseRelative(path: string): void {
+  if (path.startsWith("/")) {
+    throw new Error(
+      `route "${path}" must be base-relative: drop the leading slash so it resolves under the configured API root (design.md §4.2)`,
+    );
+  }
+}
+
 /** Declare a single read. */
 export function* read(path: string, query?: Query): Plan<AwxResponse> {
+  assertBaseRelative(path);
   const result = yield {
     kind: "read",
     route: query === undefined ? { path } : { path, query },
@@ -145,12 +173,14 @@ export function* readPaged(
   query: Query,
   limit: number,
 ): Plan<PagedResult> {
+  assertBaseRelative(path);
   const result = yield { kind: "readPaged", route: { path, query }, limit };
   return result as PagedResult;
 }
 
 /** Declare a stdout read, including the §4.3 case 4 oversized condition. */
 export function* readText(path: string, query?: Query): Plan<TextResponse> {
+  assertBaseRelative(path);
   const result = yield {
     kind: "readText",
     route: query === undefined ? { path } : { path, query },
@@ -163,6 +193,7 @@ export function* readText(path: string, query?: Query): Plan<TextResponse> {
  * anything is issued when the §6.5 read-only flag is set.
  */
 export function* write(path: string, body?: unknown): Plan<AwxResponse> {
+  assertBaseRelative(path);
   const result = yield {
     kind: "write",
     path,
@@ -263,12 +294,13 @@ export interface SubcommandSpec {
   readonly help: string;
   readonly flags: readonly FlagSpec[];
   /**
-   * How many positional arguments this subcommand accepts (§9.4). Declared
-   * rather than inferred because a surplus positional is the same failure as an
+   * The positional arguments this subcommand accepts, as one range (§9.4).
+   * Declared rather than inferred because both ends are the same failure as an
    * unknown flag: `cancel 1839 1841` that cancels only 1839 and reports success
-   * is worse than an error (AXI §6).
+   * is worse than an error, and `cancel` with no id would build a mutating
+   * request out of nothing (AXI §6).
    */
-  readonly maxArgs: number;
+  readonly positionals: PositionalSpec;
   readonly schema: FieldSchema;
   readonly suggestions: readonly SuggestionRule[];
   /** The requests this subcommand needs, declared as data (§10.2). */
@@ -304,6 +336,7 @@ export type DomainSpec = Omit<Domain, "run">;
 export function defineDomain(spec: DomainSpec): Domain {
   for (const subcommand of spec.subcommands) {
     assertNoSecretFlags(`${spec.name} ${subcommand.name}`, subcommand.flags);
+    assertUsableArity(`${spec.name} ${subcommand.name}`, subcommand.positionals);
   }
 
   return {
@@ -331,7 +364,7 @@ export function defineDomain(spec: DomainSpec): Domain {
         `${spec.name} ${subcommand.name}`,
         args.slice(1),
         subcommand.flags,
-        subcommand.maxArgs,
+        subcommand.positionals,
       );
 
       return runPlan(
