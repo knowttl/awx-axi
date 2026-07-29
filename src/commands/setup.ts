@@ -22,6 +22,7 @@ const SUBCOMMANDS = ["hooks"];
 
 export interface SetupOptions {
   readonly installHooks?: () => void;
+  readonly homeDir?: string;
 }
 
 export async function setupCommand(
@@ -43,8 +44,15 @@ export async function setupCommand(
     required: 0,
   });
 
-  const install = options.installHooks ?? installSessionStartHooks;
-  install();
+  if (options.installHooks === undefined) {
+    if (options.homeDir === undefined) {
+      installSessionStartHooks();
+    } else {
+      installSessionStartHooks({ homeDir: options.homeDir });
+    }
+  } else {
+    options.installHooks();
+  }
 
   return {
     setup: {

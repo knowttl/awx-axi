@@ -55,11 +55,11 @@ Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or 
 \`\`\`
 commands[5 domains]:
   auth       login, status, logout
-  job        list, show <id>, stdout <id>, events <id>, host-summaries <id>, cancel <id>, watch <id>
+  job        list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
   template   list, show <id|name>, survey <id|name>, launch <id|name>
-  workflow   list, show <id|name>, survey <id|name>, launch <id|name>
+  workflow   list, show <id|name>, survey <id|name>, launch <id|name>, nodes <run-id>
   approval   list, show <id|name>, approve <id|name>, deny <id|name>
-  project    list, show <id|name>, playbooks <id|name>, updates <id|name>
+  project    list, show <id|name>, playbooks <id|name>, updates <id|name>, sync <id|name>
   setup      hooks
 
 built-in:

@@ -70,17 +70,19 @@ describe("setup command (design.md §13)", () => {
     const stdout = capture();
     const tempHome = mkdtempSync(join(tmpdir(), "awx-axi-setup-cli-test-"));
 
-    await main({
-      argv: ["setup", "hooks"],
-      stdout,
-      env: { HOME: tempHome },
-    });
+    try {
+      await main({
+        argv: ["setup", "hooks"],
+        stdout,
+        env: { HOME: tempHome },
+      });
 
-    expect(stdout.text()).toContain(
-      "installed session-start hooks for Claude Code, Codex, and OpenCode",
-    );
-
-    rmSync(tempHome, { recursive: true, force: true });
+      expect(stdout.text()).toContain(
+        "installed session-start hooks for Claude Code, Codex, and OpenCode",
+      );
+    } finally {
+      rmSync(tempHome, { recursive: true, force: true });
+    }
   });
 
   it("renders help text for setup command", async () => {
