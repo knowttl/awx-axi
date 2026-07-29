@@ -1090,7 +1090,7 @@ src/
     workflow/           list, show, survey, launch, nodes
     approval/           list, show, approve, deny
     project/            list, show, playbooks, updates, sync
-  skill/                generated SKILL.md and the --check drift guard
+  skills/               generated SKILL.md and the --check drift guard
 test/
   fixtures/             recorded AWX 24.6.1 responses
   live/                 opt-in READ-ONLY live smoke suite, gated on AWX_AXI_LIVE=1 (§6.5)
