@@ -1,0 +1,22 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4012-4023",
+  "$note": "A single pending WorkflowApproval detail. approval_expiration is the SerializerMethodField that returns created plus timeout while pending; created is the request time. summary_fields.source_workflow_job names the workflow run (design.md §7.7).",
+  "status": 200,
+  "body": {
+    "id": 57,
+    "type": "workflow_approval",
+    "name": "Prod release gate",
+    "status": "pending",
+    "timeout": 3600,
+    "timed_out": false,
+    "created": "2026-07-27T14:02:11Z",
+    "started": "2026-07-27T14:02:11Z",
+    "approval_expiration": "2026-07-27T15:02:11Z",
+    "can_approve_or_deny": true,
+    "summary_fields": {
+      "source_workflow_job": { "id": 1840, "name": "Release pipeline", "status": "running" },
+      "workflow_approval_template": { "id": 30, "name": "Prod release gate", "timeout": 3600 }
+    }
+  }
+}

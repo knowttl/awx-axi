@@ -1,0 +1,31 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/named_url.md",
+  "$note": "Two workflow approvals share the node name across separate workflow runs, which is common because an approval node name is reused every time its workflow runs. awx-axi refuses with AMBIGUOUS_NAME rather than picking one (design.md §7.3).",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 57,
+        "type": "workflow_approval",
+        "name": "Prod release gate",
+        "status": "pending",
+        "summary_fields": {
+          "source_workflow_job": { "id": 1840, "name": "Release pipeline" }
+        }
+      },
+      {
+        "id": 88,
+        "type": "workflow_approval",
+        "name": "Prod release gate",
+        "status": "pending",
+        "summary_fields": {
+          "source_workflow_job": { "id": 1902, "name": "Release pipeline" }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4275-4318",
+  "$note": "The node list of workflow run 1840. Node 8 spawned approval 57 (its `job`), and its success_nodes plus always_nodes are the downstream steps that approval gates - the `blocks` block in design.md §7.7. summary_fields.unified_job_template names each step.",
+  "status": 200,
+  "body": {
+    "count": 4,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 8,
+        "job": 57,
+        "workflow_job": 1840,
+        "unified_job_template": 30,
+        "success_nodes": [9],
+        "failure_nodes": [],
+        "always_nodes": [10],
+        "summary_fields": {
+          "job": { "id": 57, "name": "Prod release gate", "type": "workflow_approval" },
+          "unified_job_template": { "id": 30, "name": "Prod release gate" }
+        }
+      },
+      {
+        "id": 9,
+        "job": null,
+        "workflow_job": 1840,
+        "unified_job_template": 12,
+        "success_nodes": [],
+        "failure_nodes": [],
+        "always_nodes": [],
+        "summary_fields": {
+          "unified_job_template": { "id": 12, "name": "Deploy web tier" }
+        }
+      },
+      {
+        "id": 10,
+        "job": null,
+        "workflow_job": 1840,
+        "unified_job_template": 22,
+        "success_nodes": [],
+        "failure_nodes": [],
+        "always_nodes": [],
+        "summary_fields": {
+          "unified_job_template": { "id": 22, "name": "Smoke test" }
+        }
+      },
+      {
+        "id": 7,
+        "job": 1839,
+        "workflow_job": 1840,
+        "unified_job_template": 13,
+        "success_nodes": [8],
+        "failure_nodes": [],
+        "always_nodes": [],
+        "summary_fields": {
+          "job": { "id": 1839, "name": "Build artifact", "type": "job" },
+          "unified_job_template": { "id": 13, "name": "Build artifact" }
+        }
+      }
+    ]
+  }
+}

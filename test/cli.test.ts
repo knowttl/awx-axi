@@ -21,9 +21,7 @@ describe("the CLI shell", () => {
 
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
-    expect(stdout.text()).toContain(
-      'domains: "none yet: this build is the core"',
-    );
+    expect(stdout.text()).toContain("domains: approval");
   });
 
   it("renders the version for --version", async () => {
@@ -98,7 +96,7 @@ describe("the CLI shell", () => {
     }
   });
 
-  it("registers no domains yet", () => {
-    expect(DOMAINS).toHaveLength(0);
+  it("registers the approval domain", () => {
+    expect(DOMAINS.map((domain) => domain.name)).toContain("approval");
   });
 });

@@ -18,17 +18,18 @@ import {
   type DomainContext,
 } from "./core/registry.js";
 import type { AwxTransport } from "./core/transport.js";
+import { approvalDomain } from "./domains/approval/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
 /**
  * Noun to domain-module map (design.md §10.1).
  *
- * Empty in this build: every domain is its own task. The list lives here
- * rather than in `core/registry.ts` because every domain imports the registry
- * for its contract types, so holding the list there would be a circular import.
+ * The list lives here rather than in `core/registry.ts` because every domain
+ * imports the registry for its contract types, so holding the list there would
+ * be a circular import.
  */
-export const DOMAINS: readonly Domain[] = [];
+export const DOMAINS: readonly Domain[] = [approvalDomain];
 
 export interface MainOptions {
   readonly argv?: string[];

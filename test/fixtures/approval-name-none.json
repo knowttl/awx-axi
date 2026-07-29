@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/filtering.rst",
+  "$note": "A ?name= filtered query on workflow_approvals that matched nothing. Both the exact and the name__iexact fallback return this, yielding NAME_NOT_FOUND (design.md §7.3).",
+  "status": 200,
+  "body": { "count": 0, "next": null, "previous": null, "results": [] }
+}
