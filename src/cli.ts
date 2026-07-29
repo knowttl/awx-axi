@@ -6,6 +6,7 @@ import { runAxiCli, type AxiCliCommand } from "axi-sdk-js";
 
 import { AUTH_HELP, authCommand, type AuthContext } from "./commands/auth.js";
 import { homeCommand } from "./commands/home.js";
+import { SETUP_HELP, setupCommand } from "./commands/setup.js";
 import {
   createBasicAuthTransport,
   createTransport,
@@ -86,6 +87,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
       if (command === "auth") {
         return AUTH_HELP;
       }
+      if (command === "setup") {
+        return SETUP_HELP;
+      }
       const domain = DOMAINS.find((candidate) => candidate.name === command);
       return (
         domain?.subcommands.find((subcommand) => subcommand.name === argv[1])
@@ -102,6 +106,7 @@ function buildCommands(
 ): Record<string, AxiCliCommand<undefined>> {
   const commands: Record<string, AxiCliCommand<undefined>> = {
     auth: (args) => authCommand(args, context),
+    setup: (args) => setupCommand(args),
   };
   for (const domain of DOMAINS) {
     commands[domain.name] = async (args) => {
@@ -124,7 +129,7 @@ function topLevelHelp(): string {
     bin: "awx-axi",
     description: DESCRIPTION,
     usage: "awx-axi <command> [args] [flags]",
-    commands: "auth",
+    commands: "auth, setup",
     domains:
       DOMAINS.length === 0
         ? "none yet: this build is the core"
