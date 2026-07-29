@@ -1,0 +1,37 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4054-4057",
+  "$note": "A ?status=pending filtered list of workflow_approvals. summary_fields.source_workflow_job carries the workflow run's id and name, which is what the `workflow` list column and the `approval show` header are built from (design.md §7.7).",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 57,
+        "type": "workflow_approval",
+        "name": "Prod release gate",
+        "status": "pending",
+        "timeout": 3600,
+        "created": "2026-07-27T14:02:11Z",
+        "approval_expiration": "2026-07-27T15:02:11Z",
+        "summary_fields": {
+          "source_workflow_job": { "id": 1840, "name": "Release pipeline", "status": "running" }
+        }
+      },
+      {
+        "id": 61,
+        "type": "workflow_approval",
+        "name": "DB migration gate",
+        "status": "pending",
+        "timeout": 0,
+        "created": "2026-07-27T14:20:03Z",
+        "approval_expiration": null,
+        "summary_fields": {
+          "source_workflow_job": { "id": 1845, "name": "Nightly migration", "status": "running" }
+        }
+      }
+    ]
+  }
+}

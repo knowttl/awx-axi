@@ -1,0 +1,22 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4054-4057",
+  "$note": "A ?name= filtered query on workflow_approvals with exactly one match. The count of 1 is what lets `approval show <name>` resolve to a single id and proceed (design.md §7.3).",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 57,
+        "type": "workflow_approval",
+        "name": "Prod release gate",
+        "status": "pending",
+        "summary_fields": {
+          "source_workflow_job": { "id": 1840, "name": "Release pipeline" }
+        }
+      }
+    ]
+  }
+}
