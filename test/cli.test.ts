@@ -22,7 +22,7 @@ describe("the CLI shell", () => {
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
     expect(stdout.text()).toContain(
-      'domains: "none yet: this build is the scaffold"',
+      'domains: "none yet: this build is the core"',
     );
   });
 
@@ -44,8 +44,15 @@ describe("the CLI shell", () => {
           name: "list",
           help: "job list help",
           flags: [],
+          positionals: { names: [], required: 0 },
           schema: { label: "jobs", defaultFields: [], fieldAllowlist: [] },
           suggestions: [],
+          // A plan that declares no request: this domain is only ever asked
+          // for its help text.
+          // eslint-disable-next-line require-yield
+          plan: function* () {
+            return {};
+          },
         },
       ],
       mcpEquivalents: [],

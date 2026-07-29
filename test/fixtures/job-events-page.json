@@ -1,0 +1,15 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4413-4437",
+  "$note": "One page of a job-event list read with page_size. Passing ?limit=N instead would switch AWX to LimitPagination (awx/api/pagination.py:16-131), which returns a bare {\"results\": [...]} with no count at all.",
+  "status": 200,
+  "body": {
+    "count": 231,
+    "next": null,
+    "previous": null,
+    "results": [
+      { "id": 90011, "event": "runner_on_failed", "host_name": "db-02", "task": "Restart postgresql", "failed": true },
+      { "id": 90012, "event": "playbook_on_stats", "host_name": "", "task": "", "failed": false }
+    ]
+  }
+}

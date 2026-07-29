@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:150-169",
+  "$note": "api_exception_handler rewrites a 403 to `Not found.` for any request that arrived through a named URL, to avoid leaking resource existence. This body is what a named lookup of a template the account CANNOT SEE returns: identical to a template that does not exist. §7.3 resolves by filtered query instead, which is why no awx-axi request ever produces this response.",
+  "status": 404,
+  "body": { "detail": "Not found." }
+}

@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1057-1075",
+  "$note": "A project with an empty scm_type can never be synced, and its sync endpoint answers the same bare 405 as a finished job's cancel endpoint.",
+  "status": 200,
+  "body": { "id": 7, "type": "project", "name": "manual-playbooks", "scm_type": "", "status": "successful" }
+}

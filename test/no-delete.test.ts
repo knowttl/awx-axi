@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RouteDescription } from "../src/core/registry.js";
+import type { AwxRequest, RouteDescription } from "../src/core/registry.js";
 import type { AwxTransport } from "../src/core/transport.js";
 
 /**
@@ -35,6 +35,16 @@ type _RouteCarriesNoVerb = Expect<
 >;
 type _RouteSurfaceIsClosed = Expect<Equal<keyof RouteDescription, "path" | "query">>;
 
+// The request-declaration model closes the same door: a domain declares its
+// requests as data, and the union has no member that could carry a DELETE, a
+// PUT, or a PATCH. `write` is the only member the core routes to `post`.
+type _RequestKindsAreClosed = Expect<
+  Equal<
+    AwxRequest["kind"],
+    "read" | "readPaged" | "readText" | "write" | "delay"
+  >
+>;
+
 describe("the no-delete property", () => {
   it("exposes no delete, put, or patch on the transport", () => {
     const surface: Array<keyof AwxTransport> = [
@@ -51,5 +61,17 @@ describe("the no-delete property", () => {
     const surface: Array<keyof RouteDescription> = ["path", "query"];
 
     expect(surface).toHaveLength(2);
+  });
+
+  it("offers a domain no request kind that could be a delete", () => {
+    const kinds: Array<AwxRequest["kind"]> = [
+      "read",
+      "readPaged",
+      "readText",
+      "write",
+      "delay",
+    ];
+
+    expect(kinds).toHaveLength(5);
   });
 });

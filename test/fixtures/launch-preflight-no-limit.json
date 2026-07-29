@@ -1,0 +1,18 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2410-2521",
+  "$note": "GET .../launch/ on a template with ask_limit_on_launch disabled. can_start_without_user_input is true, so the launch would succeed and silently drop --limit into ignored_fields.",
+  "status": 200,
+  "body": {
+    "can_start_without_user_input": true,
+    "passwords_needed_to_start": [],
+    "variables_needed_to_start": [],
+    "ask_limit_on_launch": false,
+    "ask_tags_on_launch": false,
+    "ask_variables_on_launch": true,
+    "ask_inventory_on_launch": false,
+    "survey_enabled": false,
+    "job_template_data": { "id": 18, "name": "Nightly patch" },
+    "defaults": { "limit": "", "inventory": { "id": 3, "name": "Production" } }
+  }
+}

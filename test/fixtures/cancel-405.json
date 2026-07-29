@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/generics.py:1006-1020",
+  "$note": "Cancel on a job that is no longer cancelable answers a bare 405 with no body, via http_method_not_allowed. Project sync on a project with no SCM source answers the same 405, which is why §9.2 costs exactly one follow-up read.",
+  "status": 405,
+  "body": null
+}
