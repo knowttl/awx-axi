@@ -453,7 +453,7 @@ awx-axi workflow   <subcommand>       workflow job templates and node rollups
 awx-axi approval   <subcommand>       the workflow approval inbox
 awx-axi project    <subcommand>       projects and SCM syncs
 awx-axi auth       login|status|logout
-awx-axi setup      [--app claude|codex|opencode|all]
+awx-axi setup      hooks
 awx-axi update                        reserved by axi-sdk-js
 ```
 
@@ -1299,10 +1299,11 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
 
 ## 13. Session integration and skill
 
-Per AXI §7, both integration paths ship, and both are opt-in through an explicit setup command:
+Per AXI §7, both integration paths ship, and both are opt-in through
+`awx-axi setup hooks`:
 
 ```
-awx-axi setup --app claude|codex|opencode|all
+awx-axi setup hooks
 ```
 
 The hook runs the home view (§8.1) at session start, so an agent opens every session already knowing what is
