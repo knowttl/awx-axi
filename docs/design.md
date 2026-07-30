@@ -14,7 +14,7 @@ Where a behavior is version-sensitive, §4 says so explicitly.
 `awx-axi` is an agent-facing CLI for operating an AWX controller from the shell, built to the AXI standard
 (the user-level `axi` skill).
 
-v1 buys depth in the five domains an operator actually touches during an incident or a release, and declines
+v1 buys depth in six domains an operator actually touches during an incident or a release, and declines
 breadth across AWX's configuration surface.
 
 **v1 core:**
@@ -27,11 +27,13 @@ breadth across AWX's configuration surface.
 2. **Workflows.**
    Workflow job templates, launching them, per-node rollups for a running or finished workflow, and the
    approval inbox: list, show, approve, deny.
-3. **Projects.**
+3. **Ad hoc commands.**
+   Inspect historical command runs by id, including show, events, and stdout reads.
+4. **Projects.**
    List, inspect, trigger an SCM sync, list playbooks, and list recent syncs.
-4. **Schedules.**
+5. **Schedules.**
    List and inspect scheduled unified-job runs.
-5. **Execution environments.**
+6. **Execution environments.**
    List and inspect container images so template runtime is visible before launch.
 
 **Supporting reads (enablers, not a product surface of their own):**
@@ -58,12 +60,13 @@ There is no template create, update, delete, or copy in v1.
   Role grants and revocations are the highest-blast-radius writes in AWX and are out of v1.
 - **No ad hoc command execution.**
   `run_ad_hoc_command` runs arbitrary modules against arbitrary hosts with no template review.
-  Reading an existing ad hoc command's result is in scope through the unified `job` noun; creating one is not.
+  Reading an existing ad hoc command's result is in scope through the unified `job` noun and dedicated
+  `ad-hoc` noun; creating one is not.
 - **No bulk endpoints.**
   `/api/v2/bulk/job_launch` wraps its jobs in a workflow job that a non-admin cannot see in the UI job list,
   which is a confusing enough side effect that it needs its own design pass.
 - **No websocket streaming.**
-  `job watch` polls (§7.9). AWX's event websocket is a separate transport with its own auth handshake.
+  `job watch` polls (§7.10). AWX's event websocket is a separate transport with its own auth handshake.
 
 ## 3. Backend choice: the AWX REST API v2
 
@@ -454,6 +457,7 @@ awx-axi job        <subcommand>       the unified run surface
 awx-axi template   <subcommand>       job templates: the launch enabler
 awx-axi workflow   <subcommand>       workflow job templates and node rollups
 awx-axi approval   <subcommand>       the workflow approval inbox
+awx-axi ad-hoc     <subcommand>       inspect ad hoc command history
 awx-axi project    <subcommand>       projects and SCM syncs
 awx-axi inventory  <subcommand>       inventories, groups, hosts, sources, updates
 awx-axi auth       login|status|logout
@@ -461,7 +465,7 @@ awx-axi setup      hooks
 awx-axi update                        reserved by axi-sdk-js
 ```
 
-Eight nouns.
+Nine nouns.
 `job` carries the most weight deliberately, per §7.2.
 
 ### 7.2 `job` - one noun for everything AWX runs
@@ -490,7 +494,7 @@ the concrete type to pick `/api/v2/jobs/1839/` versus `/api/v2/workflow_jobs/183
 awx-axi resolves it with one filtered list request (`/api/v2/unified_jobs/?id=1839`), reads `type` from the
 single result, and then GETs the typed endpoint.
 Passing `--type` skips that request.
-The cost is documented in §7.10 rather than hidden.
+The cost is documented in §7.11 rather than hidden.
 
 This collapse is what lets one command answer a question that spans kinds.
 `awx-axi job list --type all --failed --since 2h` answers "what broke in the last two hours" across playbook
@@ -678,13 +682,26 @@ awx-axi project list                 [--search] [--limit] [--fields]
 awx-axi project show <id|name>
 awx-axi project playbooks <id|name>
 awx-axi project updates <id|name>    [--limit]
+awx-axi project roles <id|name>
 awx-axi project sync <id|name>       [--wait] [--timeout] [--dry-run]
 ```
 
 The verb is `sync`, not `update`, so it cannot be read as "modify the project record".
 A sync's log is `job stdout <sync-id>` (§7.2), and its progress is `job watch <sync-id>`.
 
-### 7.9 `job watch` - bounded polling
+### 7.9 `ad-hoc` - inspect command runs
+
+```
+awx-axi ad-hoc list                  [--search] [--limit]
+awx-axi ad-hoc show <id>
+awx-axi ad-hoc events <id>           [--host] [--task] [--limit]
+awx-axi ad-hoc stdout <id>           [--tail N | --lines A-B]
+```
+
+This is a read-only inspector for ad hoc command runs, parallel to `job`, so operators can jump to command
+details without first narrowing by unified job type.
+
+### 7.10 `job watch` - bounded polling
 
 ```
 $ awx-axi job watch 1843 --timeout 300
@@ -714,7 +731,7 @@ is deliberate: `awx-axi job watch` is what a caller puts in a script that should
 `--wait` on the launch commands is the same loop, so `template launch 12 --wait` launches and returns the
 outcome in one call.
 
-### 7.10 Request cost per command
+### 7.11 Request cost per command
 
 Published because AXI §4's whole argument is that a follow-up call is the expensive thing, and a design that
 hides its own call count cannot be held to that.
@@ -1015,7 +1032,7 @@ splits:
 | `project sync` | A sync already running | exit 0, no-op naming the running sync's id |
 | `project sync` | `scm_type` empty | exit 1, `SYNC_UNAVAILABLE`: this project has no SCM source |
 
-The extra request is the price of telling the truth, and §7.10 publishes it.
+The extra request is the price of telling the truth, and §7.11 publishes it.
 
 ### 9.3 Translation, not passthrough
 
@@ -1089,11 +1106,12 @@ src/
     registry.ts         the domain contract types and the shared list/detail pipeline
   commands/             auth, home, setup
   domains/
+    ad-hoc/              list, show, events, stdout
     job/                list, show, stdout, events, hosts, cancel, relaunch, watch
     template/           list, show, survey, launch
     workflow/           list, show, survey, launch, nodes
     approval/           list, show, approve, deny
-    project/            list, show, playbooks, updates, sync
+    project/            list, show, playbooks, updates, roles, sync
     inventory/          list, show, groups, hosts, sources, updates, constructed-list, constructed-show
     schedule/           list, show
     execution-environment/ list, show
@@ -1126,7 +1144,7 @@ The consequences that matter:
 
 - Adding a domain is one directory under `src/domains/` plus one entry in `DOMAINS`.
   No core change, no cross-domain edit.
-  Growing from v1's 8 domains toward the §14 roadmap does not touch the core.
+  Growing from v1's 9 domains toward the §14 roadmap does not touch the core.
 - Because domains return route descriptions rather than executing them, every domain is unit-testable with no
   network and no mocking framework.
 - Because error translation is centralized, a new AWX error shape is fixed once for every command.
@@ -1333,7 +1351,7 @@ The inventory captured for this design enumerates **145 tools**; the commission 
 The design tracks the enumerated list and treats the one-tool delta as an open item for §14.2's tool to
 reconcile against the upstream repository when it is built, rather than silently picking a number.
 
-v1 implements **45 of those tools** across 8 domains:
+v1 implements **50 of those tools** across 9 domains:
 
 | awx-mcp group | Tools | v1 covers | awx-axi commands |
 | --- | --- | --- | --- |
@@ -1343,16 +1361,17 @@ v1 implements **45 of those tools** across 8 domains:
 | Workflow Jobs & Approvals | 11 | 9 | `job list/show/cancel/relaunch`, `workflow nodes`, `approval list/show/approve/deny` |
 | Schedules | 5 | 2 | `schedule list/show` |
 | Execution Environments | 3 | 3 | `execution-environment list/show` |
-| Projects | 11 | 8 | `project list/show/sync/playbooks/updates`, `job stdout/cancel/show` |
+| Ad Hoc | 4 | 4 | `ad-hoc list/show/events/stdout` |
+| Projects | 11 | 9 | `project list/show/sync/playbooks/updates/roles`, `job stdout/cancel/show` |
 | Inventories | 8 | 8 | `inventory list/show/groups/hosts/sources/updates/constructed-list/constructed-show` |
 
-The unified-job collapse (§7.2) is why the Projects row reaches 8 with only 5 project commands: project-update
+The unified-job collapse (§7.2) is why the Projects row reaches 9 with only 6 project commands: project-update
 list, get, cancel, and stdout are served by the `job` noun.
 The same mechanism means `job watch`, which has no awx-mcp equivalent at all, works for every kind of run.
 
 ### 14.2 Tracking the rest
 
-The remaining 100 tools (145 total against v1's 45) are roadmap, not omissions, and they are tracked in code
+The remaining 95 tools (145 total against v1's 50) are roadmap, not omissions, and they are tracked in code
 rather than in prose.
 The groups enumerated below account for the largest missing surfaces; the balance is an ungrouped long tail that the
 coverage diff reports rather than this document enumerating it.
@@ -1367,7 +1386,7 @@ Roadmap order, by what unblocks the most operator work per domain added:
 
 1. **Inventories, hosts, groups** (26 tools) - read first.
    `job hosts` already answers "which host failed"; the follow-up is "what else is in that group".
-2. **Ad hoc commands** (3) - read now, execute only behind a §6-style gate.
+2. **Ad hoc commands** (4) - read now, execute only behind a §6-style gate.
 3. **Organizations, teams, RBAC** (17) - reads only; grants stay out.
 4. **Instances, notifications, labels**.
 5. **System jobs and activity stream** (9+) - `job` already reads system jobs; the activity stream is the audit
@@ -1458,7 +1477,7 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
     A name-pattern check in `core/flags.ts` that fails its own unit test if someone adds `--token`. §5.3.
 17. **`job watch` has a hard default timeout of 600s and exits with the job's outcome.**
     An agent that hangs is worse than one that reports a timeout, and a watch command is what a caller puts in
-    a script that should fail when the playbook fails. §7.9.
+    a script that should fail when the playbook fails. §7.10.
 18. **awx-axi redacts log output itself.**
     AWX applies URI cleaning only on the download renderer, so the paths awx-axi reads are not guaranteed
     clean. §6.4.
