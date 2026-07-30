@@ -46,7 +46,7 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toContain("## Tips");
   });
 
-  it("contains schedule and execution-environment usage guidance", () => {
+  it("contains notification and activity guidance", () => {
     const markdown = createSkillMarkdown();
 
     expect(markdown).toContain("schedule list");
@@ -56,7 +56,10 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toContain("user show <id|name>");
     expect(markdown).toContain("system-job-template show <id|name>");
     expect(markdown).toContain("system-job notifications");
-    expect(markdown).toContain("commands[16 total]");
+    expect(markdown).toMatch(/notification\s+list, show <id>/);
+    expect(markdown).toMatch(/notification-template\s+list, show <id\|name>/);
+    expect(markdown).toMatch(/activity-stream\s+list, show <id>/);
+    expect(markdown).toContain("commands[19 total]");
   });
 
   it("matches the committed skills/awx-axi/SKILL.md file verbatim", () => {

@@ -1,0 +1,26 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5370-5410",
+  "$note": "Notification detail used for field projection and redaction checks.",
+  "status": 200,
+  "body": {
+    "id": 101,
+    "status": "failed",
+    "notification_type": "webhook",
+    "created": "2026-01-05T11:00:00Z",
+    "notifications_sent": 3,
+    "error": "Delivery failed: $encrypted$UTF8$AES256$abc",
+    "recipients": "ops@example.com",
+    "subject": "Deployment failed",
+    "body": {
+      "text": "https://user:secret-token@hooks.example.com/failure",
+      "message": "rollback required"
+    },
+    "summary_fields": {
+      "notification_template": {
+        "id": 12,
+        "name": "webhook-ops"
+      }
+    }
+  }
+}

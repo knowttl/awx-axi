@@ -22,7 +22,7 @@ describe("the CLI shell", () => {
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
     expect(stdout.text()).toContain(
-      "domains: \"job, template, workflow, organization, system-job-template, system-job, credential, approval, ad-hoc, project, inventory, schedule, execution-environment, user\"",
+      "domains: \"job, template, workflow, organization, system-job-template, system-job, credential, approval, ad-hoc, project, inventory, schedule, execution-environment, user, notification, notification-template, activity-stream\"",
     );
     expect(stdout.text()).toContain('commands: "auth, setup"');
   });
@@ -97,15 +97,18 @@ describe("the CLI shell", () => {
     }
   });
 
-  it("registers the approval domain", () => {
-    expect(DOMAINS.map((domain) => domain.name)).toContain("approval");
-    expect(DOMAINS.map((domain) => domain.name)).toContain("schedule");
-    expect(DOMAINS.map((domain) => domain.name)).toContain(
-      "execution-environment",
-    );
-    expect(DOMAINS.map((domain) => domain.name)).toContain("organization");
-    expect(DOMAINS.map((domain) => domain.name)).toContain("credential");
-    expect(DOMAINS.map((domain) => domain.name)).toContain("user");
+  it("registers the notification domains", () => {
+    const names = DOMAINS.map((domain) => domain.name);
+
+    expect(names).toContain("approval");
+    expect(names).toContain("schedule");
+    expect(names).toContain("execution-environment");
+    expect(names).toContain("organization");
+    expect(names).toContain("credential");
+    expect(names).toContain("user");
+    expect(names).toContain("notification");
+    expect(names).toContain("notification-template");
+    expect(names).toContain("activity-stream");
   });
 
   it("registers the inventory domain", () => {

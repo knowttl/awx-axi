@@ -1,0 +1,37 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5389-5410",
+  "$note": "Notification template list payload from the AWX 24.6.1 serializer. Includes template identity and owning organization.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "email-ops",
+        "notification_type": "email",
+        "created": "2026-01-02T10:00:00Z",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Default"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "name": "slack-team",
+        "notification_type": "slack",
+        "created": "2026-01-03T11:00:00Z",
+        "summary_fields": {
+          "organization": {
+            "id": 2,
+            "name": "Infra"
+          }
+        }
+      }
+    ]
+  }
+}

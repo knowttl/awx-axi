@@ -1,0 +1,12 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4370-4406",
+  "$note": "Empty activity stream list for scoped/object filters.",
+  "status": 200,
+  "body": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}

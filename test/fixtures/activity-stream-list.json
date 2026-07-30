@@ -1,0 +1,39 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4370-4406",
+  "$note": "Activity stream list with two entries showing object metadata and operation filters.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 9001,
+        "operation": "create",
+        "object1": "project/12",
+        "object2": "main-project",
+        "object_type": "project",
+        "object_association": null,
+        "timestamp": "2026-01-08T12:00:00Z",
+        "actor": {
+          "id": 1,
+          "name": "admin"
+        }
+      },
+      {
+        "id": 9002,
+        "operation": "update",
+        "object1": "job/1839",
+        "object2": "deploy",
+        "object_type": "job",
+        "object_association": "job 1839",
+        "timestamp": "2026-01-08T12:05:00Z",
+        "actor": {
+          "id": 2,
+          "name": "scheduler"
+        }
+      }
+    ]
+  }
+}

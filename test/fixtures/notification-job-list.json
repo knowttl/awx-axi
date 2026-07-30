@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4630-4664",
+  "$note": "Scoped notification list for a job resource.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 103,
+        "status": "pending",
+        "notification_type": "slack",
+        "created": "2026-01-07T10:00:00Z",
+        "summary_fields": {
+          "notification_template": {
+            "id": 11,
+            "name": "slack-team"
+          }
+        }
+      }
+    ]
+  }
+}
