@@ -1,0 +1,27 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/rest_api/api_ref.rst.txt:1500-1600",
+  "$note": "List endpoint for ad hoc commands. This returns command runs and allows searching and pagination, suitable for read-only inspection.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 401,
+        "name": "Gather host facts",
+        "status": "successful",
+        "created": "2026-07-27T12:00:00Z",
+        "started": "2026-07-27T12:00:01Z",
+        "finished": "2026-07-27T12:00:10Z",
+        "summary_fields": {
+          "inventory": {
+            "id": 5,
+            "name": "production"
+          }
+        }
+      }
+    ]
+  }
+}

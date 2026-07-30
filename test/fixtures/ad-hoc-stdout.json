@@ -1,0 +1,14 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/rest_api/api_ref.rst.txt:1781-1860",
+  "$note": "Ad hoc stdout endpoint returns plain text output when format=txt and includes range metadata for partial reads.",
+  "status": 200,
+  "body": {
+    "range": {
+      "start": 1,
+      "end": 4,
+      "absolute_end": 4
+    },
+    "content": "PLAY [all]\nTASK [Gathering Facts]\nok: [web-01]\n"
+  }
+}

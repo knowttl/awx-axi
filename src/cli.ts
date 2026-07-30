@@ -20,6 +20,7 @@ import {
 } from "./core/registry.js";
 import type { AwxTransport } from "./core/transport.js";
 import { approvalDomain } from "./domains/approval/index.js";
+import { adHocDomain } from "./domains/ad-hoc/index.js";
 import { executionEnvironmentDomain } from "./domains/execution-environment/index.js";
 import { jobDomain } from "./domains/job/index.js";
 import { inventoryDomain } from "./domains/inventory/index.js";
@@ -42,6 +43,7 @@ export const DOMAINS: readonly Domain[] = [
   templateDomain,
   workflowDomain,
   approvalDomain,
+  adHocDomain,
   projectDomain,
   inventoryDomain,
   scheduleDomain,

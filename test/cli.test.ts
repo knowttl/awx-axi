@@ -22,7 +22,7 @@ describe("the CLI shell", () => {
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
     expect(stdout.text()).toContain(
-      "domains: \"job, template, workflow, approval, project, inventory, schedule, execution-environment\"",
+      "domains: \"job, template, workflow, approval, ad-hoc, project, inventory, schedule, execution-environment\"",
     );
     expect(stdout.text()).toContain('commands: "auth, setup"');
   });

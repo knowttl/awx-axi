@@ -45,6 +45,21 @@ describe("project domain (design.md §7.8)", () => {
     expect(run.stdout).toContain("infra-playbooks update");
   });
 
+  it("project roles lists object roles for access metadata", async () => {
+    const run = await runCli(["project", "roles", "4"], {
+      script: ["project-object-roles"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "GET",
+      route: "projects/4/object_roles/",
+      query: { page_size: 100 },
+    });
+    expect(run.stdout).toContain("roles");
+    expect(run.stdout).toContain("project_admin");
+  });
+
   it("project sync dry run issues no POST", async () => {
     const run = await runCli(["project", "sync", "4", "--dry-run"], {
       script: ["project-detail"],
