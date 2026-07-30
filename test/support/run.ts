@@ -35,7 +35,10 @@ export async function runCli(
     (options.script ?? []).map((step) =>
       typeof step === "string" ? exchange(step) : step,
     ),
-    { readOnly: options.env?.AWX_AXI_READ_ONLY === "1", env: options.env },
+    {
+      readOnly: options.env?.AWX_AXI_READ_ONLY === "1",
+      ...(options.env !== undefined ? { env: options.env } : {}),
+    },
   );
 
   const chunks: string[] = [];
