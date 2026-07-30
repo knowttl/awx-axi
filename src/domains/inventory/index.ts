@@ -20,7 +20,7 @@ import {
   type SubcommandInput,
 } from "../../core/registry.js";
 import { resolveId } from "../../core/resolve.js";
-import { type PagedResult } from "../../core/transport.js";
+import { type PagedResult, type Query } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const UPDATES_LIMIT = 25;
@@ -229,6 +229,41 @@ function toUpdateRow(raw: unknown, sourceName: string, sourceId: number): Row {
     finished: toString(record.finished),
     created: toString(record.created),
   };
+}
+
+type ListPage = {
+  readonly rows: readonly unknown[];
+  readonly next: string | undefined;
+};
+
+function readListPage(body: unknown, subject: string): ListPage {
+  if (body === null || typeof body !== "object") {
+    throw new Error(`the controller returned a list page with no envelope for ${subject}`);
+  }
+
+  const record = body as Record<string, unknown>;
+  if (!Array.isArray(record.results)) {
+    throw new Error(`the controller returned a list page with no results for ${subject}`);
+  }
+
+  return {
+    rows: record.results,
+    next: typeof record.next === "string" ? record.next : undefined,
+  };
+}
+
+function parseNextQuery(next: string): Query {
+  const divider = next.indexOf("?");
+  if (divider < 0) {
+    return {};
+  }
+
+  const query: Query = {};
+  const params = new URLSearchParams(next.slice(divider + 1));
+  for (const [key, value] of params) {
+    query[key] = value;
+  }
+  return query;
 }
 
 function assertValidStatus(raw: string | undefined): void {
@@ -441,20 +476,7 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
 
   assertValidStatus(status);
 
-  const sourceQuery: Record<string, string | number | boolean> = {};
-  const sourcePages = yield* readPaged(`inventories/${id}/inventory_sources/`, sourceQuery, DEFAULT_LIST_LIMIT);
-
-  if (sourcePages.rows.length === 0) {
-    return listOutput({
-      label: UPDATES_SCHEMA.label,
-      rows: [],
-      count: 0,
-      empty: "0 inventory sources found, and therefore 0 inventory updates",
-      help: [
-        `Run \`awx-axi inventory sources ${id}\` to confirm what this inventory is sourced from`,
-      ],
-    });
-  }
+  const updates: Row[] = [];
 
   const updatesQuery: Record<string, string | number | boolean> = {};
   if (search !== undefined) {
@@ -464,31 +486,67 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     updatesQuery.status = status;
   }
 
-  const updates: Row[] = [];
-  for (const source of sourcePages.rows) {
-    if (updates.length >= limit) {
+  let sourceQuery: Query = {
+    page_size: DEFAULT_LIST_LIMIT,
+  };
+  let sourceRoute = `inventories/${id}/inventory_sources/`;
+  let sourceCount = 0;
+
+  while (sourceRoute !== undefined && updates.length < limit) {
+    const sourceListRes = yield* read(sourceRoute, sourceQuery);
+    if (sourceListRes.status !== 200) {
+      throw errorForResponse(sourceListRes, {
+        subject: `inventory ${id} sources`,
+      });
+    }
+
+    const sourcePage = readListPage(sourceListRes.body, `inventory ${id} sources`);
+    sourceCount += sourcePage.rows.length;
+
+    for (const source of sourcePage.rows) {
+      if (updates.length >= limit) {
+        break;
+      }
+      const sourceRecord = (source ?? {}) as Record<string, unknown>;
+      const sourceId = toNumber(sourceRecord.id);
+      if (sourceId === 0) {
+        continue;
+      }
+      const sourceName =
+        typeof sourceRecord.name === "string" ? sourceRecord.name : String(sourceId);
+      const remaining = Math.max(1, limit - updates.length);
+
+      const sourceUpdates = yield* readPaged(
+        `inventory_sources/${sourceId}/inventory_updates/`,
+        updatesQuery,
+        remaining,
+      );
+
+      const filtered = sourceUpdates.rows
+        .map((row) => toUpdateRow(row, sourceName, sourceId))
+        .filter((row) => status === undefined || row.status === status);
+
+      updates.push(...filtered);
+    }
+
+    if (sourcePage.next === undefined) {
       break;
     }
-    const sourceRecord = (source ?? {}) as Record<string, unknown>;
-    const sourceId = toNumber(sourceRecord.id);
-    if (sourceId === 0) {
-      continue;
-    }
-    const sourceName =
-      typeof sourceRecord.name === "string" ? sourceRecord.name : String(sourceId);
-    const remaining = Math.max(1, limit - updates.length);
 
-    const sourceUpdates = yield* readPaged(
-      `inventory_sources/${sourceId}/inventory_updates/`,
-      updatesQuery,
-      remaining,
-    );
+    sourceRoute = `inventories/${id}/inventory_sources/`;
+    sourceQuery = parseNextQuery(sourcePage.next);
+  }
 
-    const filtered = sourceUpdates.rows
-      .map((row) => toUpdateRow(row, sourceName, sourceId))
-      .filter((row) => status === undefined || row.status === status);
-
-    updates.push(...filtered);
+  if (sourceCount === 0) {
+    return listOutput({
+      label: UPDATES_SCHEMA.label,
+      rows: [],
+      count: 0,
+      empty: "0 inventory sources found, and therefore 0 inventory updates",
+      help: [
+        `Run \`awx-axi inventory sources ${id}\` to confirm what this inventory is sourced from`,
+      ],
+    });
   }
 
   return listOutput({

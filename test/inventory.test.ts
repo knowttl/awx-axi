@@ -125,6 +125,91 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.stdout).toContain("initial sync");
   });
 
+  it("inventory updates follows source pagination to find later matches", async () => {
+    const firstPageSources = {
+      status: 200,
+      body: {
+        count: 101,
+        next: "/api/v2/inventories/11/inventory_sources/?page=2&page_size=100",
+        previous: null,
+        results: Array.from({ length: 100 }, (_, index) => ({
+          id: index + 1,
+          name: `source-${index + 1}`,
+          source: "ec2",
+          status: "successful",
+        })),
+      },
+    };
+
+    const secondPageSource = {
+      status: 200,
+      body: {
+        count: 101,
+        next: null,
+        previous: "/api/v2/inventories/11/inventory_sources/?page=1&page_size=100",
+        results: [
+          {
+            id: 201,
+            name: "late source",
+            source: "manual",
+            status: "successful",
+          },
+        ],
+      },
+    };
+
+    const emptySourceUpdates = {
+      status: 200,
+      body: {
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      },
+    };
+
+    const lateUpdate = {
+      status: 200,
+      body: {
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 901,
+            name: "late sync",
+            status: "successful",
+            finished: "2026-07-29T10:30:00Z",
+            created: "2026-07-29T10:00:00Z",
+          },
+        ],
+      },
+    };
+
+    const run = await runCli(["inventory", "updates", "11"], {
+      script: [
+        firstPageSources,
+        ...Array.from({ length: 100 }, () => emptySourceUpdates),
+        secondPageSource,
+        lateUpdate,
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "GET",
+      route: "inventories/11/inventory_sources/",
+      query: { page_size: 100 },
+    });
+    expect(run.transport.requests[101]).toMatchObject({
+      method: "GET",
+      route: "inventories/11/inventory_sources/",
+      query: { page: "2", page_size: "100" },
+    });
+    expect(run.stdout).toContain("late sync");
+    expect(run.stdout).toContain("201 (late source)");
+  });
+
   it("inventory updates validates status input", async () => {
     const run = await runCli(["inventory", "updates", "11", "--status", "invalid"], {
       script: [],
