@@ -22,13 +22,13 @@ describe("setup command (design.md §13)", () => {
     const installHooks = vi.fn();
     const result = await setupCommand(["hooks"], { installHooks });
 
-    expect(installHooks).toHaveBeenCalledOnce();
     expect(result).toEqual({
       setup: {
         hooks:
           "installed session-start hooks for Claude Code, Codex, and OpenCode",
       },
     });
+    expect(installHooks).toHaveBeenCalledOnce();
   });
 
   it("throws a validation error when no subcommand is provided", async () => {

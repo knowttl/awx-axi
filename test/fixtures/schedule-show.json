@@ -1,0 +1,30 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4720-4780",
+  "$note": "Schedule detail includes timezone, recurrence, and related unified-job-template summary fields so the command can render preview and follow-up guidance safely.",
+  "status": 200,
+  "body": {
+    "id": 201,
+    "type": "normal",
+    "name": "nightly-security-scan",
+    "description": "Runs full security scan daily",
+    "enabled": true,
+    "timezone": "UTC",
+    "next_run": "2026-08-01T01:00:00Z",
+    "dtstart": "2026-07-01T01:00:00Z",
+    "dtend": "2026-07-31T01:00:00Z",
+    "rrule": "RRULE:FREQ=DAILY;INTERVAL=1",
+    "summary_fields": {
+      "unified_job_template": {
+        "id": 77,
+        "name": "Security scan template"
+      },
+      "organization": {
+        "id": 2,
+        "name": "Security"
+      }
+    },
+    "created": "2026-06-30T00:00:00Z",
+    "modified": "2026-07-20T00:00:00Z"
+  }
+}

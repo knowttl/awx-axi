@@ -1,0 +1,27 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5261-5295",
+  "$note": "The second execution environment page carries the final row for list pagination, with the same total count preserved from envelope data.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": "/api/v2/execution_environments/?page=1&page_size=2",
+    "results": [
+      {
+        "id": 13,
+        "name": "gpu-ee",
+        "type": "container",
+        "managed": false,
+        "image": "registry.example.com/ee/gpu:1.4",
+        "description": "GPU-accelerated execution image",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      }
+    ]
+  }
+}

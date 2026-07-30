@@ -1,6 +1,6 @@
 ---
 name: awx-axi
-description: "Inspect and run AWX automation from the shell - jobs, job templates, workflows, approvals, inventories, and projects. Use whenever a task involves AWX or Ansible Tower automation: checking running jobs, launching templates, approving workflow nodes, inspecting inventories, and managing automation projects."
+description: "Inspect and run AWX automation from the shell - jobs, job templates, workflows, approvals, inventories, schedules, execution environments, and projects. Use whenever a task involves AWX or Ansible Tower automation: checking running jobs, launching templates, approving workflow nodes, inspecting inventories, managing automation projects, and working with schedules and execution environments."
 user-invocable: false
 author: Kun Chen (kunchenguid)
 metadata:
@@ -22,7 +22,7 @@ Alternatively, run `awx-axi auth login` to authenticate and store a 0600 token f
 
 ## When to use
 
-Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or inspecting running jobs; launching job templates or workflow templates; monitoring job execution and streaming stdout logs; approving or denying pending workflow approval nodes; or inspecting project sync status.
+Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or inspecting running jobs; launching job templates or workflow templates; monitoring job execution and streaming stdout logs; approving or denying pending workflow approval nodes; inspecting project sync status; listing and inspecting schedules; or matching templates to execution environments.
 Use awx-axi for inventory workflows by starting with inventory listings, then drilling into groups, hosts, sources, and update history.
 
 ## Workflow
@@ -34,20 +34,24 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 5. Manage pending workflow approvals using `approval list`, `approval show <id|name>`, `approval approve <id|name>`, and `approval deny <id|name>`.
 6. Inspect project status and sync history using `project list`, `project show <id|name>`, and `project updates <id|name>`.
 7. Inspect inventories using `inventory list`, `inventory show <id|name>`, and `inventory updates <id|name>`. Use `--facts` with `inventory hosts` only when you need a fact key count.
-8. Every response ends with contextual next-step hints under `help:` - follow them.
+8. Resolve schedule and template timing using `schedule list` and `schedule show <id|name>`.
+9. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
+10. Every response ends with contextual next-step hints under `help:` - follow them.
 
 ## Commands
 
 ```
-commands[8 total]:
-  auth       login, status, logout
-  job        list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
-  template   list, show <id|name>, survey <id|name>, launch <id|name>
-  workflow   list, show <id|name>, survey <id|name>, launch <id|name>, nodes <run-id>
-  approval   list, show <id|name>, approve <id|name>, deny <id|name>
-  project    list, show <id|name>, playbooks <id|name>, updates <id|name>, sync <id|name>
-  inventory  list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list
-  setup      hooks
+commands[10 total]:
+  auth                   login, status, logout
+  job                    list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
+  template               list, show <id|name>, survey <id|name>, launch <id|name>
+  workflow               list, show <id|name>, survey <id|name>, launch <id|name>, nodes <run-id>
+  approval               list, show <id|name>, approve <id|name>, deny <id|name>
+  project                list, show <id|name>, playbooks <id|name>, updates <id|name>, sync <id|name>
+  inventory              list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list
+  schedule               list, show <id|name>
+  execution-environment  list, show <id|name>
+  setup                  hooks
 
 built-in:
   update: Upgrade awx-axi to the latest published npm version
