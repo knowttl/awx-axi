@@ -37,8 +37,8 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 8. Resolve schedule and template timing using `schedule list` and `schedule show <id|name>`.
 9. Inspect identity resources with `organization list`, `organization show <id|name>`, `credential list`, `credential show <id|name>`, `user list`, and `user show <id|name>`.
 10. Inspect ad hoc execution history using `ad-hoc list`, `ad-hoc show <id>`, `ad-hoc events <id>`, and `ad-hoc stdout <id>`.
-11. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
-12. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
+11. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
+12. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
 13. Every response ends with contextual next-step hints under `help:` - follow them.
 
 ## Commands
