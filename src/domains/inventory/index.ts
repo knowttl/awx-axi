@@ -2,8 +2,6 @@
  * The `inventory` domain: inspect inventories and constructed inventories, then
  * drill down into groups, hosts, sources, and update history.
  */
-import { AxiError } from "axi-sdk-js";
-
 import { errorForResponse, validationError } from "../../core/errors.js";
 import {
   detailOutput,
@@ -176,14 +174,6 @@ function toHostRow(raw: unknown, includeFacts: boolean): Row {
     variables: formatState(record.variables),
     facts: includeFacts ? "" : null,
   };
-}
-
-function isUnsupportedConstructedInventory(error: unknown): boolean {
-  return (
-    error instanceof AxiError &&
-    error.code === "NOT_FOUND" &&
-    error.message.includes("constructed_inventories")
-  );
 }
 
 function addHostFacts(row: Row, factsBody: unknown): Row {
@@ -576,11 +566,14 @@ function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
     query.search = input.flags.search;
   }
 
-  let paged: PagedResult;
-  try {
-    paged = yield* readPaged("constructed_inventories/", query, limit);
-  } catch (error) {
-    if (isUnsupportedConstructedInventory(error)) {
+  let rows: unknown[] = [];
+  let count: number | undefined = undefined;
+  let listRoute = "constructed_inventories/";
+  let listQuery: Query = { ...query, page_size: limit };
+
+  while (listRoute !== undefined && rows.length < limit) {
+    const listResponse = yield* read(listRoute, listQuery);
+    if (listResponse.status === 404) {
       return listOutput({
         label: CONSTRUCTED_INVENTORY_LIST_SCHEMA.label,
         rows: [],
@@ -592,14 +585,32 @@ function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
         ],
       });
     }
-    throw error;
+    if (listResponse.status !== 200) {
+      throw errorForResponse(listResponse, { subject: "constructed inventories" });
+    }
+
+    const page = readListPage(listResponse.body, "constructed inventories");
+    const listBody = (listResponse.body ?? {}) as Record<string, unknown>;
+    count ??= typeof listBody.count === "number" ? listBody.count : undefined;
+    rows = rows.concat(page.rows);
+    if (page.next === undefined || page.rows.length === 0) {
+      break;
+    }
+    const parsed = parseNextQuery(page.next);
+    listRoute = parsed.route;
+    listQuery = parsed.query;
   }
 
-  const rows = paged.rows.map(toConstructedInventoryRow);
+  const paged: PagedResult = {
+    rows: rows.slice(0, limit),
+    count,
+  };
+
+  const constructedRows = paged.rows.map(toConstructedInventoryRow);
 
   return listOutput({
     label: CONSTRUCTED_INVENTORY_LIST_SCHEMA.label,
-    rows,
+    rows: constructedRows,
     count: paged.count,
     empty: "0 constructed inventories found",
     help: [

@@ -55,7 +55,7 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 ## Commands
 
 \`\`\`
-commands[7 domains]:
+commands[8 total]:
   auth       login, status, logout
   job        list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
   template   list, show <id|name>, survey <id|name>, launch <id|name>

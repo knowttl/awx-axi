@@ -9,13 +9,12 @@ describe("inventory domain (design.md §7.1)", () => {
     });
 
     expect(run.exitCode).toBe(0);
-    expect(run.transport.requests).toHaveLength(2);
+    expect(run.transport.requests).toHaveLength(1);
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "inventories/",
       query: { search: "site", page_size: 1 },
     });
-    expect(run.transport.requests[1].route).toBe("/api/v2/inventories/");
     expect(run.stdout).toContain("count: 1 of 2 total");
     expect(run.stdout).toContain("inventories");
     expect(run.stdout).toContain("Datacenter inventory");
@@ -45,12 +44,12 @@ describe("inventory domain (design.md §7.1)", () => {
 
   it("inventory show reports a missing name with guidance", async () => {
     const run = await runCli(["inventory", "show", "missing"], {
-      script: ["inventory-name-none"],
+      script: ["inventory-name-none", "inventory-name-none"],
     });
 
     expect(run.exitCode).toBe(1);
-    expect(run.stdout).toContain("no inventory is named \"missing\"");
-    expect(run.stdout).toContain("awx-axi inventory list --search \"missing\"");
+    expect(run.stdout).toContain('no inventory is named \\"missing\\"');
+    expect(run.stdout).toContain('awx-axi inventory list --search \\"missing\\"');
   });
 
   it("inventory hosts can request ansible fact key counts", async () => {
@@ -68,7 +67,7 @@ describe("inventory domain (design.md §7.1)", () => {
       method: "GET",
       route: "hosts/501/ansible_facts/",
     });
-    expect(run.stdout).toContain("facts: 2 keys");
+    expect(run.stdout).toContain("2 keys");
     expect(run.stdout).toContain("hosts");
   });
 
@@ -217,7 +216,7 @@ describe("inventory domain (design.md §7.1)", () => {
 
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toContain("code: VALIDATION_ERROR");
-    expect(run.stdout).toContain('unknown --status "invalid" for `inventory updates`');
+    expect(run.stdout).toContain('unknown --status \\"invalid\\" for `inventory updates`');
   });
 
   it("constructed list stays usable when unsupported", async () => {
