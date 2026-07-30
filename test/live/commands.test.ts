@@ -64,6 +64,10 @@ const READ_ONLY_CASES: { name: string; command: string[]; marker: string }[] = [
 suite("live read-only smoke checks (design.md §11.3)", () => {
   for (const { name, command, marker } of READ_ONLY_CASES) {
     it(`reads ${name} without sending mutations`, async () => {
+      if (liveEnv === undefined) {
+        throw new Error("live suite is not opted-in");
+      }
+
       const run = await runLiveCli(command, { env: liveEnv });
       expect(run.exitCode).toBe(0);
       expect(run.stdout).toContain("count:");
