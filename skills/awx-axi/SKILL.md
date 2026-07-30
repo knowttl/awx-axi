@@ -1,6 +1,6 @@
 ---
 name: awx-axi
-description: "Inspect and run AWX automation from the shell - jobs, job templates, workflows, ad hoc runs, approvals, inventories, schedules, execution environments, and projects. Use whenever a task involves AWX or Ansible Tower automation: checking running jobs, launching templates, approving workflow nodes, inspecting automation projects, inspecting ad hoc command output, and matching templates to schedules and execution environments."
+description: "Inspect and run AWX automation from the shell - jobs, job templates, workflows, ad hoc runs, approvals, inventories, schedules, execution environments, projects, and identity resources. Use whenever a task involves AWX or Ansible Tower automation: checking running jobs, launching templates, approving workflow nodes, inspecting automation projects, inspecting ad hoc command output, and matching templates to schedules and execution environments."
 user-invocable: false
 author: Kun Chen (kunchenguid)
 metadata:
@@ -22,8 +22,7 @@ Alternatively, run `awx-axi auth login` to authenticate and store a 0600 token f
 
 ## When to use
 
-Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or inspecting running jobs; launching job templates or workflow templates; monitoring job execution and streaming stdout logs; approving or denying pending workflow approval nodes; inspecting project sync status; listing and inspecting schedules; or matching templates to execution environments.
-Use awx-axi to inspect historical ad hoc commands, output, and events before re-running similar tasks manually.
+Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or inspecting running jobs; launching job templates or workflow templates; monitoring job execution and streaming stdout logs; approving or denying pending workflow approval nodes; inspecting project sync status; listing and inspecting schedules; matching templates to execution environments; inspecting historical ad hoc commands, output, and events; and viewing organizations, credentials, or users.
 Use awx-axi for inventory workflows by starting with inventory listings, then drilling into groups, hosts, sources, and update history.
 
 ## Workflow
@@ -36,15 +35,16 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 6. Inspect project status and sync history using `project list`, `project show <id|name>`, and `project updates <id|name>`.
 7. Inspect inventories using `inventory list`, `inventory show <id|name>`, and `inventory updates <id|name>`. Use `--facts` with `inventory hosts` only when you need a fact key count.
 8. Resolve schedule and template timing using `schedule list` and `schedule show <id|name>`.
-9. Inspect ad hoc execution history using `ad-hoc list`, `ad-hoc show <id>`, `ad-hoc events <id>`, and `ad-hoc stdout <id>`.
-10. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
-11. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
-12. Every response ends with contextual next-step hints under `help:` - follow them.
+9. Inspect identity resources with `organization list`, `organization show <id|name>`, `credential list`, `credential show <id|name>`, `user list`, and `user show <id|name>`.
+10. Inspect ad hoc execution history using `ad-hoc list`, `ad-hoc show <id>`, `ad-hoc events <id>`, and `ad-hoc stdout <id>`.
+11. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
+12. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
+13. Every response ends with contextual next-step hints under `help:` - follow them.
 
 ## Commands
 
 ```
-commands[11 total]:
+commands[14 total]:
   auth                   login, status, logout
   job                    list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
   template               list, show <id|name>, survey <id|name>, launch <id|name>
@@ -55,6 +55,9 @@ commands[11 total]:
   inventory              list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list, constructed-show
   schedule               list, show <id|name>
   execution-environment  list, show <id|name>
+  organization           list, show <id|name>
+  credential             list, show <id|name>
+  user                   list, show <id|name>
   setup                  hooks
 
 built-in:

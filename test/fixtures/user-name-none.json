@@ -1,0 +1,12 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1884-1912",
+  "$note": "No user match for unknown username, used by NAME_NOT_FOUND assertions in resolver tests.",
+  "status": 200,
+  "body": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}

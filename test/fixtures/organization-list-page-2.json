@@ -1,0 +1,29 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/organization.py:62-68",
+  "$note": "Second organization list page carries the remaining row for pagination and keeps the server total in count.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": "/api/v2/organizations/?page=1&page_size=2",
+    "results": [
+      {
+        "id": 3,
+        "name": "Platform",
+        "description": "Core control plane organization",
+        "max_hosts": 20000,
+        "summary_fields": {
+          "related_field_counts": {
+            "inventories": 9,
+            "teams": 3,
+            "users": 5,
+            "job_templates": 9,
+            "admins": 2,
+            "projects": 11
+          }
+        }
+      }
+    ]
+  }
+}

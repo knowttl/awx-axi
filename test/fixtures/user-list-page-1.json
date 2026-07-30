@@ -1,0 +1,31 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1884-1912",
+  "$note": "User list page 1 includes two identities and exposes fields used by list output filtering and pagination counts.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": "/api/v2/users/?page=2&page_size=2",
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "username": "awx",
+        "first_name": "AWX",
+        "last_name": "User",
+        "email": "awx@example.org",
+        "is_superuser": true,
+        "is_system_auditor": false
+      },
+      {
+        "id": 12,
+        "username": "alice",
+        "first_name": "Alice",
+        "last_name": "Admin",
+        "email": "alice@example.org",
+        "is_superuser": false,
+        "is_system_auditor": true
+      }
+    ]
+  }
+}

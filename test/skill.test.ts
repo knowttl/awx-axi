@@ -51,7 +51,10 @@ describe("skill definition (design.md §13)", () => {
 
     expect(markdown).toContain("schedule list");
     expect(markdown).toContain("execution-environment list");
-    expect(markdown).toContain("commands[11 total]");
+    expect(markdown).toContain("organization list");
+    expect(markdown).toContain("credential show <id|name>");
+    expect(markdown).toContain("user show <id|name>");
+    expect(markdown).toContain("commands[14 total]");
   });
 
   it("matches the committed skills/awx-axi/SKILL.md file verbatim", () => {

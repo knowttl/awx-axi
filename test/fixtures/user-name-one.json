@@ -1,0 +1,22 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1884-1912",
+  "$note": "Single user lookup result by username for name resolution behavior in show commands.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "username": "awx",
+        "first_name": "AWX",
+        "last_name": "User",
+        "email": "awx@example.org",
+        "is_superuser": true,
+        "is_system_auditor": false
+      }
+    ]
+  }
+}

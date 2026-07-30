@@ -1,0 +1,22 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1884-1912",
+  "$note": "Second user list page returns the remaining identity row so pagination math can be asserted without truncation.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": "/api/v2/users/?page=1&page_size=2",
+    "results": [
+      {
+        "id": 13,
+        "username": "bob",
+        "first_name": "Bob",
+        "last_name": "Builder",
+        "email": "bob@example.org",
+        "is_superuser": false,
+        "is_system_auditor": false
+      }
+    ]
+  }
+}
