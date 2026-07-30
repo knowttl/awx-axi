@@ -1,0 +1,53 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/system_job_templates.rst:1-80",
+  "$note": "The system_job_templates endpoint is the read-only entry for periodic maintenance-like jobs. It is paginated and supports search, so list output can remain safe with an aggregate count and compact row fields.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 301,
+        "type": "system_job_template",
+        "name": "Cleanup stale sessions",
+        "status": "successful",
+        "description": "Reclaim expired container sessions",
+        "summary_fields": {
+          "last_job": {
+            "id": 901,
+            "status": "successful",
+            "name": "Cleanup stale sessions run"
+          },
+          "organization": {
+            "id": 7,
+            "name": "Operations"
+          }
+        },
+        "created": "2026-07-20T10:00:00Z",
+        "modified": "2026-07-28T07:00:00Z"
+      },
+      {
+        "id": 302,
+        "type": "system_job_template",
+        "name": "Reindex search indexes",
+        "status": "failed",
+        "description": "Rebuild search indexes for new fields",
+        "summary_fields": {
+          "last_job": {
+            "id": 902,
+            "status": "failed",
+            "name": "Reindex search indexes run"
+          },
+          "organization": {
+            "id": 7,
+            "name": "Operations"
+          }
+        },
+        "created": "2026-07-21T09:20:00Z",
+        "modified": null
+      }
+    ]
+  }
+}

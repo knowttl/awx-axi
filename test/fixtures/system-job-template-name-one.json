@@ -1,0 +1,24 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/system_job_templates.rst:40-90",
+  "$note": "Name lookup for resolveId uses a filtered query on system_job_templates/, which requires explicit matches so ambiguous templates stay rejected.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 301,
+        "name": "Cleanup stale sessions",
+        "type": "system_job_template",
+        "summary_fields": {
+          "organization": {
+            "id": 7,
+            "name": "Operations"
+          }
+        }
+      }
+    ]
+  }
+}

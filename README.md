@@ -99,6 +99,8 @@ All core AWX domains are available and return only one noun per operation.
 | `project` | `list`, `show`, `playbooks`, `updates`, `roles`, `sync` |
 | `inventory` | `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
 | `schedule` | `list`, `show` |
+| `system-job` | `list`, `show`, `events`, `notifications` |
+| `system-job-template` | `list`, `show`, `jobs`, `schedules` |
 | `execution-environment` | `list`, `show` |
 | `organization` | `list`, `show` |
 | `credential` | `list`, `show` |
@@ -161,6 +163,8 @@ awx-axi inventory constructed-list
 awx-axi inventory constructed-show dynamic-inventory
 awx-axi schedule list
 awx-axi execution-environment list
+awx-axi system-job list
+awx-axi system-job-template list
 ```
 
 ### TOON output behavior

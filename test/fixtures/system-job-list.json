@@ -1,0 +1,41 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/system_jobs.rst:1-80",
+  "$note": "system_jobs exposes the run history stream for system jobs and supports pagination and status filters, so list output follows the existing job list conventions.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 901,
+        "type": "system_job",
+        "name": "Cleanup stale sessions run",
+        "status": "successful",
+        "started": "2026-07-28T01:00:00Z",
+        "finished": "2026-07-28T01:02:00Z",
+        "summary_fields": {
+          "unified_job_template": {
+            "id": 301,
+            "name": "Cleanup stale sessions"
+          }
+        }
+      },
+      {
+        "id": 902,
+        "type": "system_job",
+        "name": "Reindex search indexes run",
+        "status": "failed",
+        "started": "2026-07-27T23:10:00Z",
+        "finished": "2026-07-27T23:12:00Z",
+        "summary_fields": {
+          "unified_job_template": {
+            "id": 302,
+            "name": "Reindex search indexes"
+          }
+        }
+      }
+    ]
+  }
+}

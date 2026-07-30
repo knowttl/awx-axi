@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1000-1020",
+  "$note": "resolveUnifiedJob queries unified_jobs/?id and gets the concrete type before calling system_jobs/{id}; this fixture returns a single matching system job.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 901,
+        "type": "system_job",
+        "name": "Cleanup stale sessions run",
+        "status": "successful"
+      }
+    ]
+  }
+}

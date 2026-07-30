@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/system_job_templates.rst:240-320",
+  "$note": "System job template schedules are a first-order relationship and are exposed through /system_job_templates/{id}/schedules/ in the same API pattern as workflow/job templates.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 701,
+        "name": "Nightly cleanup",
+        "enabled": true,
+        "next_run": "2026-07-30T00:00:00Z"
+      },
+      {
+        "id": 702,
+        "name": "Weekly cleanup",
+        "enabled": false,
+        "next_run": "2026-08-04T00:00:00Z"
+      }
+    ]
+  }
+}

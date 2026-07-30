@@ -22,7 +22,7 @@ describe("the CLI shell", () => {
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
     expect(stdout.text()).toContain(
-      "domains: \"job, template, workflow, organization, credential, approval, ad-hoc, project, inventory, schedule, execution-environment, user\"",
+      "domains: \"job, template, workflow, organization, system-job-template, system-job, credential, approval, ad-hoc, project, inventory, schedule, execution-environment, user\"",
     );
     expect(stdout.text()).toContain('commands: "auth, setup"');
   });
@@ -109,6 +109,14 @@ describe("the CLI shell", () => {
   });
 
   it("registers the inventory domain", () => {
+    expect(DOMAINS.map((domain) => domain.name)).toContain("system-job-template");
+    expect(DOMAINS.map((domain) => domain.name)).toContain("system-job");
     expect(DOMAINS.map((domain) => domain.name)).toContain("inventory");
+  });
+
+  it("registers the identity domains", () => {
+    expect(DOMAINS.map((domain) => domain.name)).toContain("organization");
+    expect(DOMAINS.map((domain) => domain.name)).toContain("credential");
+    expect(DOMAINS.map((domain) => domain.name)).toContain("user");
   });
 });
