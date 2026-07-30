@@ -15,6 +15,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - A subcommand declares its positional arity as `positionals` (a `PositionalSpec` of ordered argument `names` plus how many are `required`), and a domain result is either a `Renderable` or `withExitCode(renderable, code)` - the one channel for design §7.9's "exit 1 but still print the job block".
 - Tests are offline against `RecordedTransport` (domain level) or a fixture-serving `fetch` stub (`test/support/fixtures.ts`, the only way to assert `HttpTransport`'s own wire behavior). Every fixture carries `$tag`, `$source`, and `$note`; `test/fixtures.test.ts` enforces that.
 
+## External alignment and roadmap notes
+
+- This repository should treat `https://docs.ansible.com/projects/awx/en/latest/rest_api/api_ref.html` as the current AWX reference, and `https://docs.ansible.com/projects/awx/en/24.6.1/rest_api/` plus existing `docs/design.md` and `$tag` checks as the compatibility anchor for behavior currently frozen in 24.6.1.
+- Keep the read-only and non-delete contract in place by preserving `src/core/registry.ts` request kinds, `test/no-delete.test.ts`, and the captain's controller boundary.
+- Current v1 command coverage is the five domains in `src/domains/` and their `DOMAINS` registration in `src/cli.ts`, and no new command domains are to be implemented in this task.
+- Use `https://raw.githubusercontent.com/surgex-labs/awx-mcp-server/main/AWX_MCP_QUERY_REFERENCE.md` as the awx-mcp capability source, and treat sections 13, 14, 15, 16, and 17 in that file as local Ansible/workspace capabilities rather than AWX REST API resources.
+- Prioritize the API roadmap as inventories and related inventory resources, schedules, ad hoc command surface depth, organizations/teams/users and RBAC context, execution environments, notifications and activity stream, system jobs, and finally credentials.
+- Keep this AGENTS file high-level, and continue to point to authoritative files or sources rather than rewriting endpoint schemas.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.
