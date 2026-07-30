@@ -472,7 +472,8 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
   const typeFlag = typeof input.flags.type === "string" ? input.flags.type : undefined;
   const { routePrefix } = yield* resolveTypedRoute(id, typeFlag);
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -480,7 +481,7 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
         job: id,
         would_send: `POST ${routePrefix}/${id}/cancel/`,
       },
-      help: ["Re-run without --dry-run to cancel"],
+      help: ["Re-run with --confirm to cancel"],
     });
   }
 
@@ -529,7 +530,8 @@ function* relaunchPlan(input: SubcommandInput): Plan<DomainResult> {
   const failedOnly = input.flags["failed-only"] === true;
   const body = failedOnly ? { relaunch_type: "failed" } : {};
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -538,7 +540,7 @@ function* relaunchPlan(input: SubcommandInput): Plan<DomainResult> {
         failed_only: failedOnly,
         would_send: `POST ${routePrefix}/${id}/relaunch/`,
       },
-      help: ["Re-run without --dry-run to relaunch"],
+      help: ["Re-run with --confirm to relaunch"],
     });
   }
 
@@ -609,8 +611,8 @@ export const jobDomain: Domain = defineDomain({
     "  stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]",
     "  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
     "  hosts    <id>",
-    "  cancel   <id> [--dry-run]",
-    "  relaunch <id> [--failed-only] [--dry-run]",
+    "  cancel   <id> [--type <t>] [--confirm] [--dry-run]",
+    "  relaunch <id> [--failed-only] [--type <t>] [--confirm] [--dry-run]",
     "  watch    <id> [--timeout <s >] [--interval <s >]",
   ].join("\n"),
   mcpEquivalents: [
@@ -697,8 +699,9 @@ export const jobDomain: Domain = defineDomain({
     },
     {
       name: "cancel",
-      help: "awx-axi job cancel <id> [--dry-run]",
+      help: "awx-axi job cancel <id> [--type <t>] [--confirm] [--dry-run]",
       flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
         { name: "type", description: "concrete job type", takesValue: true },
       ],
@@ -709,9 +712,10 @@ export const jobDomain: Domain = defineDomain({
     },
     {
       name: "relaunch",
-      help: "awx-axi job relaunch <id> [--failed-only] [--dry-run]",
+      help: "awx-axi job relaunch <id> [--failed-only] [--type <t>] [--confirm] [--dry-run]",
       flags: [
         { name: "failed-only", description: "retry failed hosts only", takesValue: false },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
         { name: "type", description: "concrete job type", takesValue: true },
       ],

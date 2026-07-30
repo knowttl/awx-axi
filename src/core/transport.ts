@@ -43,10 +43,15 @@ export interface TextResponse {
   readonly displayLimitBytes?: number;
 }
 
+export type RiskTier = "operational" | "config" | "delete" | "security";
+
 export interface AwxTransport {
   get(route: string, query?: Query): Promise<AwxResponse>;
-  /** Refused with `READ_ONLY_VIOLATION` when the §6.5 flag is set. */
-  post(route: string, body?: unknown): Promise<AwxResponse>;
+  /** Refused with `READ_ONLY_VIOLATION` or safety gate when flags/env forbid it. */
+  post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
+  put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
+  patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
+  delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
   /** Takes the caller's row limit, not a page size; walks `next` itself. */
   getPaged(route: string, query: Query, limit: number): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
@@ -58,24 +63,68 @@ export function isReadOnly(env: Record<string, string | undefined>): boolean {
 }
 
 /**
- * The §6.5 boundary, in one place below every domain and every command.
+ * The safety boundary, in one place below every domain and every command.
  *
  * It throws before anything is issued, which is the whole guarantee: a promise
  * in a document is not an enforcement mechanism.
  */
 export function assertWritable(
-  readOnly: boolean,
+  envOrReadOnly: boolean | Record<string, string | undefined>,
   method: string,
   route: string,
+  tag?: RiskTier,
 ): void {
-  if (!readOnly) {
-    return;
+  if (typeof envOrReadOnly === "boolean") {
+    if (!envOrReadOnly) {
+      return;
+    }
+    throw new AxiError(
+      `refused ${method} ${route}: this session is read-only and nothing was sent`,
+      "READ_ONLY_VIOLATION",
+      ["Unset AWX_AXI_READ_ONLY to allow writes against this controller"],
+    );
   }
-  throw new AxiError(
-    `refused ${method} ${route}: this session is read-only and nothing was sent`,
-    "READ_ONLY_VIOLATION",
-    ["Unset AWX_AXI_READ_ONLY to allow writes against this controller"],
-  );
+
+  const env = envOrReadOnly;
+  if (isReadOnly(env)) {
+    throw new AxiError(
+      `refused ${method} ${route}: this session is read-only and nothing was sent`,
+      "READ_ONLY_VIOLATION",
+      ["Unset AWX_AXI_READ_ONLY to allow writes against this controller"],
+    );
+  }
+
+  const effectiveTag: RiskTier =
+    tag ??
+    (method === "DELETE"
+      ? "delete"
+      : method === "PUT" || method === "PATCH"
+        ? "config"
+        : "operational");
+
+  if (effectiveTag === "config" && env.AWX_AXI_ALLOW_CONFIG_WRITES !== "1") {
+    throw new AxiError(
+      `refused ${method} ${route}: configuration writes are disabled in this session`,
+      "CONFIG_WRITES_DISABLED",
+      ["Set AWX_AXI_ALLOW_CONFIG_WRITES=1 to allow configuration writes"],
+    );
+  }
+
+  if (effectiveTag === "delete" && env.AWX_AXI_ALLOW_DELETES !== "1") {
+    throw new AxiError(
+      `refused ${method} ${route}: delete operations are disabled in this session`,
+      "DELETE_WRITES_DISABLED",
+      ["Set AWX_AXI_ALLOW_DELETES=1 to allow delete operations"],
+    );
+  }
+
+  if (effectiveTag === "security" && env.AWX_AXI_ALLOW_SECURITY_WRITES !== "1") {
+    throw new AxiError(
+      `refused ${method} ${route}: security writes are disabled in this session`,
+      "SECURITY_WRITES_DISABLED",
+      ["Set AWX_AXI_ALLOW_SECURITY_WRITES=1 to allow security writes"],
+    );
+  }
 }
 
 /**
@@ -164,8 +213,9 @@ export interface HttpTransportOptions {
   readonly apiBasePath: string;
   /** The `Authorization` header value, when a credential resolved. */
   readonly authorization?: string;
-  /** The §6.5 boundary. */
+  /** The §6.5 boundary and environment context. */
   readonly readOnly: boolean;
+  readonly env?: Record<string, string | undefined>;
   readonly fetch?: FetchLike;
   readonly sleep?: (ms: number) => Promise<void>;
   /** Attempts for a retryable GET, including the first. */
@@ -204,14 +254,32 @@ export class HttpTransport implements AwxTransport {
     return response;
   }
 
+  #getEnv(): Record<string, string | undefined> | boolean {
+    return this.#options.env ?? this.#options.readOnly;
+  }
+
   /**
-   * The single mutating function in the codebase. The read-only check is its
-   * first statement so no retry path, no subcommand, and no future contributor
-   * can route around it (§6.5).
+   * Mutating HTTP verbs. Environment gates and read-only checks run first
+   * so no retry path, subcommand, or future contributor can bypass them.
    */
-  async post(route: string, body?: unknown): Promise<AwxResponse> {
-    assertWritable(this.#options.readOnly, "POST", route);
+  async post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "POST", route, tag);
     return this.#send("POST", route, {}, body);
+  }
+
+  async put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "PUT", route, tag);
+    return this.#send("PUT", route, {}, body);
+  }
+
+  async patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "PATCH", route, tag);
+    return this.#send("PATCH", route, {}, body);
+  }
+
+  async delete(route: string, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "DELETE", route, tag);
+    return this.#send("DELETE", route, {}, undefined);
   }
 
   async getPaged(
@@ -294,10 +362,11 @@ export interface RecordedExchange {
 }
 
 export interface RecordedRequest {
-  readonly method: "GET" | "POST";
+  readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   readonly route: string;
   readonly query: Query;
   readonly body?: unknown;
+  readonly tag?: RiskTier;
 }
 
 /**
@@ -309,22 +378,43 @@ export class RecordedTransport implements AwxTransport {
   readonly requests: RecordedRequest[] = [];
   readonly #script: RecordedExchange[];
   readonly #readOnly: boolean;
+  readonly #env: Record<string, string | undefined> | undefined;
 
   constructor(
     script: readonly RecordedExchange[],
-    options: { readonly readOnly?: boolean } = {},
+    options: { readonly readOnly?: boolean; readonly env?: Record<string, string | undefined> } = {},
   ) {
     this.#script = [...script];
     this.#readOnly = options.readOnly ?? false;
+    this.#env = options.env;
+  }
+
+  #getEnv(): Record<string, string | undefined> | boolean {
+    return this.#env ?? this.#readOnly;
   }
 
   async get(route: string, query: Query = {}): Promise<AwxResponse> {
     return this.#next("GET", route, query, undefined);
   }
 
-  async post(route: string, body?: unknown): Promise<AwxResponse> {
-    assertWritable(this.#readOnly, "POST", route);
-    return this.#next("POST", route, {}, body);
+  async post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "POST", route, tag);
+    return this.#next("POST", route, {}, body, tag);
+  }
+
+  async put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "PUT", route, tag);
+    return this.#next("PUT", route, {}, body, tag);
+  }
+
+  async patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "PATCH", route, tag);
+    return this.#next("PATCH", route, {}, body, tag);
+  }
+
+  async delete(route: string, tag?: RiskTier): Promise<AwxResponse> {
+    assertWritable(this.#getEnv(), "DELETE", route, tag);
+    return this.#next("DELETE", route, {}, undefined, tag);
   }
 
   async getPaged(
@@ -340,16 +430,18 @@ export class RecordedTransport implements AwxTransport {
   }
 
   #next(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     route: string,
     query: Query,
     body: unknown,
+    tag?: RiskTier,
   ): Promise<AwxResponse> {
     this.requests.push({
       method,
       route,
       query,
       ...(body === undefined ? {} : { body }),
+      ...(tag === undefined ? {} : { tag }),
     });
 
     const exchange = this.#script.shift();

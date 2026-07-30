@@ -197,7 +197,8 @@ function* approvePlan(input: SubcommandInput): Plan<DomainResult> {
     command: "approval approve",
   });
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -205,7 +206,7 @@ function* approvePlan(input: SubcommandInput): Plan<DomainResult> {
         approval: id,
         would_send: `POST workflow_approvals/${id}/approve/`,
       },
-      help: ["Re-run without --dry-run to approve"],
+      help: ["Re-run with --confirm to approve"],
     });
   }
 
@@ -256,7 +257,8 @@ function* denyPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "approval deny",
   });
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -264,7 +266,7 @@ function* denyPlan(input: SubcommandInput): Plan<DomainResult> {
         approval: id,
         would_send: `POST workflow_approvals/${id}/deny/`,
       },
-      help: ["Re-run without --dry-run to deny"],
+      help: ["Re-run with --confirm to deny"],
     });
   }
 
@@ -422,8 +424,9 @@ export const approvalDomain: Domain = defineDomain({
     },
     {
       name: "approve",
-      help: "awx-axi approval approve <id|name> [--dry-run]",
+      help: "awx-axi approval approve <id|name> [--confirm] [--dry-run]",
       flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
       ],
       positionals: { names: ["<id|name>"], required: 1 },
@@ -433,8 +436,9 @@ export const approvalDomain: Domain = defineDomain({
     },
     {
       name: "deny",
-      help: "awx-axi approval deny <id|name> [--dry-run]",
+      help: "awx-axi approval deny <id|name> [--confirm] [--dry-run]",
       flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
       ],
       positionals: { names: ["<id|name>"], required: 1 },

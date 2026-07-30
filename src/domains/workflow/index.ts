@@ -204,7 +204,8 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   if (typeof input.flags.limit === "string") launchBody.limit = input.flags.limit;
   if (typeof input.flags["scm-branch"] === "string") launchBody.scm_branch = input.flags["scm-branch"];
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -212,7 +213,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
         workflow: id,
         would_send: `POST workflow_job_templates/${id}/launch/`,
       },
-      help: ["Re-run without --dry-run to launch"],
+      help: ["Re-run with --confirm to launch"],
     });
   }
 
@@ -314,7 +315,7 @@ export const workflowDomain: Domain = defineDomain({
     "  list     [--search <s>] [--limit <n>]",
     "  show     <id|name>",
     "  survey   <id|name>",
-    "  launch   <id|name> [--extra-vars '<json>'] [--wait] [--dry-run]",
+    "  launch   <id|name> [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  nodes    <run-id>",
   ].join("\n"),
   mcpEquivalents: [
@@ -360,13 +361,14 @@ export const workflowDomain: Domain = defineDomain({
     },
     {
       name: "launch",
-      help: "awx-axi workflow launch <id|name> [--extra-vars '<json>'] [--wait] [--dry-run]",
+      help: "awx-axi workflow launch <id|name> [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
       flags: [
         { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
         { name: "limit", description: "host limit override", takesValue: true },
         { name: "scm-branch", description: "SCM branch override", takesValue: true },
         { name: "wait", description: "wait for completion", takesValue: false },
         { name: "timeout", description: "wait timeout in seconds", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
       ],
       positionals: { names: ["<id|name>"], required: 1 },

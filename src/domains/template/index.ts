@@ -353,7 +353,8 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   if (input.flags.diff === true) launchBody.diff_mode = true;
   if (credentialPasswords !== undefined) launchBody.credential_passwords = credentialPasswords;
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -361,7 +362,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
         template: id,
         would_send: `POST job_templates/${id}/launch/`,
       },
-      help: ["Re-run without --dry-run to launch"],
+      help: ["Re-run with --confirm to launch"],
     });
   }
 
@@ -437,7 +438,7 @@ export const templateDomain: Domain = defineDomain({
     "  list     [--project <p>] [--search <s>] [--limit <n>]",
     "  show     <id|name>",
     "  survey   <id|name>",
-    "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--dry-run]",
+    "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
   ].join("\n"),
   mcpEquivalents: [
     "list_job_templates",
@@ -482,7 +483,7 @@ export const templateDomain: Domain = defineDomain({
     },
     {
       name: "launch",
-      help: "awx-axi template launch <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--dry-run]",
+      help: "awx-axi template launch <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
       flags: [
         { name: "limit", description: "host limit", takesValue: true },
         { name: "tags", description: "job tags", takesValue: true },
@@ -496,6 +497,7 @@ export const templateDomain: Domain = defineDomain({
         { name: "credential-passwords-file", description: "path to credential passwords JSON file", takesValue: true },
         { name: "wait", description: "wait for completion", takesValue: false },
         { name: "timeout", description: "wait timeout in seconds", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
       ],
       positionals: { names: ["<id|name>"], required: 1 },
