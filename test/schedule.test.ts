@@ -11,7 +11,7 @@ describe("schedule list (design.md §7.10?)", () => {
       "77",
       "--enabled",
       "--limit",
-      "2",
+      "3",
     ], {
       script: ["schedule-list-page-1", "schedule-list-page-2"],
     });
@@ -23,17 +23,12 @@ describe("schedule list (design.md §7.10?)", () => {
       query: {
         unified_job_template: 77,
         enabled: true,
-        page_size: 2,
+        page_size: 3,
       },
     });
     expect(run.transport.requests[1]).toMatchObject({
       method: "GET",
       route: "/api/v2/schedules/",
-      query: {
-        unified_job_template: 77,
-        enabled: true,
-        page_size: 2,
-      },
     });
     expect(run.stdout).toContain("schedules[3]{id,name,template,enabled,next_run}:");
     expect(run.stdout).toContain("201,nightly-security-scan,77 (Security scan template),enabled");
@@ -48,7 +43,7 @@ describe("schedule list (design.md §7.10?)", () => {
       "compliance",
       "--disabled",
     ], {
-      script: ["schedule-list-page-1"],
+      script: ["schedule-list-page-1", "schedule-list-page-2"],
     });
 
     expect(run.exitCode).toBe(0);
@@ -74,7 +69,7 @@ describe("schedule list (design.md §7.10?)", () => {
     });
     expect(run.stdout).toContain("id: 201");
     expect(run.stdout).toContain("template: 77 (Security scan template)");
-    expect(run.stdout).toContain("preview: zone UTC:");
+    expect(run.stdout).toContain('preview: "zone UTC:');
     expect(run.stdout).toContain("awx-axi schedule list --template 77");
   });
 

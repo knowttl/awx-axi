@@ -15,7 +15,7 @@ describe("execution-environment list (design.md §7.10?)", () => {
         "--type",
         "container",
         "--limit",
-        "2",
+        "3",
       ],
       {
         script: [
@@ -33,7 +33,7 @@ describe("execution-environment list (design.md §7.10?)", () => {
         search: "container",
         organization: 1,
         type: "container",
-        page_size: 2,
+        page_size: 3,
       },
     });
     expect(run.transport.requests[1]?.route).toBe("/api/v2/execution_environments/");
