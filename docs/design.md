@@ -452,12 +452,13 @@ awx-axi template   <subcommand>       job templates: the launch enabler
 awx-axi workflow   <subcommand>       workflow job templates and node rollups
 awx-axi approval   <subcommand>       the workflow approval inbox
 awx-axi project    <subcommand>       projects and SCM syncs
+awx-axi inventory  <subcommand>       inventories, groups, hosts, sources, updates
 awx-axi auth       login|status|logout
-awx-axi setup      [--app claude|codex|opencode|all]
+awx-axi setup      hooks
 awx-axi update                        reserved by axi-sdk-js
 ```
 
-Seven nouns.
+Eight nouns.
 `job` carries the most weight deliberately, per §7.2.
 
 ### 7.2 `job` - one noun for everything AWX runs
@@ -1090,6 +1091,7 @@ src/
     workflow/           list, show, survey, launch, nodes
     approval/           list, show, approve, deny
     project/            list, show, playbooks, updates, sync
+    inventory/          list, show, groups, hosts, sources, updates, constructed-list
   skill/                generated SKILL.md and the --check drift guard
 test/
   fixtures/             recorded AWX 24.6.1 responses
@@ -1119,7 +1121,7 @@ The consequences that matter:
 
 - Adding a domain is one directory under `src/domains/` plus one entry in `DOMAINS`.
   No core change, no cross-domain edit.
-  Growing from v1's 5 domains toward the §14 roadmap does not touch the core.
+  Growing from v1's 6 domains toward the §14 roadmap does not touch the core.
 - Because domains return route descriptions rather than executing them, every domain is unit-testable with no
   network and no mocking framework.
 - Because error translation is centralized, a new AWX error shape is fixed once for every command.
@@ -1301,9 +1303,7 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
 
 Per AXI §7, both integration paths ship, and both are opt-in through an explicit setup command:
 
-```
-awx-axi setup --app claude|codex|opencode|all
-```
+`awx-axi setup hooks`
 
 The hook runs the home view (§8.1) at session start, so an agent opens every session already knowing what is
 running, what needs an approval decision, and what recently broke.
@@ -1326,7 +1326,7 @@ The inventory captured for this design enumerates **145 tools**; the commission 
 The design tracks the enumerated list and treats the one-tool delta as an open item for §14.2's tool to
 reconcile against the upstream repository when it is built, rather than silently picking a number.
 
-v1 implements **32 of those tools** across 5 domains:
+v1 implements **40 of those tools** across 6 domains:
 
 | awx-mcp group | Tools | v1 covers | awx-axi commands |
 | --- | --- | --- | --- |
@@ -1335,6 +1335,7 @@ v1 implements **32 of those tools** across 5 domains:
 | Workflow Templates & Nodes | 17 | 4 | `workflow list/show/survey/launch` |
 | Workflow Jobs & Approvals | 11 | 9 | `job list/show/cancel/relaunch`, `workflow nodes`, `approval list/show/approve/deny` |
 | Projects | 11 | 8 | `project list/show/sync/playbooks/updates`, `job stdout/cancel/show` |
+| Inventories | 8 | 8 | `inventory list/show/groups/hosts/sources/updates/constructed-list/constructed-show` |
 
 The unified-job collapse (§7.2) is why the Projects row reaches 8 with only 5 project commands: project-update
 list, get, cancel, and stdout are served by the `job` noun.
@@ -1342,9 +1343,9 @@ The same mechanism means `job watch`, which has no awx-mcp equivalent at all, wo
 
 ### 14.2 Tracking the rest
 
-The remaining 113 tools (145 total against v1's 32) are roadmap, not omissions, and they are tracked in code
+The remaining 105 tools (145 total against v1's 40) are roadmap, not omissions, and they are tracked in code
 rather than in prose.
-The seven groups enumerated below account for 86 of those 113; the balance is an ungrouped long tail that the
+The seven groups enumerated below account for 86 of those 105; the balance is an ungrouped long tail that the
 coverage diff reports rather than this document enumerating it.
 
 Each domain declares `mcpEquivalents`.
