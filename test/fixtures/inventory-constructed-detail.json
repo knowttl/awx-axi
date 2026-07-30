@@ -1,0 +1,22 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:120-190",
+  "$note": "Constructed inventory detail exposes source and launch fields used by the show route mapping.",
+  "status": 200,
+  "body": {
+    "id": 301,
+    "name": "Datacenter constructed",
+    "summary_fields": {
+      "organization": {
+        "id": 1,
+        "name": "Production"
+      }
+    },
+    "source": "ec2",
+    "source_vars": "{\"regions\": [\"us-east-1\"]}",
+    "verbosity": 2,
+    "update_cache_timeout": 3600,
+    "limit": 500,
+    "variables": "{\"env\": \"prod\"}"
+  }
+}

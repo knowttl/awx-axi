@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:240-300",
+  "$note": "Constructed inventory lookup by name follows the same single-result pattern as standard inventories.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 301,
+        "name": "Datacenter constructed",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Production"
+          }
+        }
+      }
+    ]
+  }
+}

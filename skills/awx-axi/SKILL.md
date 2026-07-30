@@ -1,6 +1,6 @@
 ---
 name: awx-axi
-description: "Inspect and run AWX automation from the shell - jobs, job templates, workflows, approvals, inventories, schedules, execution environments, and projects. Use whenever a task involves AWX or Ansible Tower automation: checking running jobs, launching templates, approving workflow nodes, inspecting inventories, managing automation projects, and working with schedules and execution environments."
+description: "Inspect and run AWX automation from the shell - jobs, job templates, workflows, approvals, inventories, schedules, execution environments, and projects. Use whenever a task involves AWX or Ansible Tower automation: checking running jobs, launching templates, approving workflow nodes, inspecting automation projects, and matching templates to schedules and execution environments."
 user-invocable: false
 author: Kun Chen (kunchenguid)
 metadata:
