@@ -1,0 +1,21 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/rest_api/api_ref.rst.txt:1701-1780",
+  "$note": "Ad hoc command event list endpoint for inspection and root-cause review after command execution. Includes per-host event rows and fail-state flags.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 902,
+        "event": "runner_on_ok",
+        "host_name": "web-01",
+        "task": "Gathering Facts",
+        "failed": false,
+        "changed": true
+      }
+    ]
+  }
+}

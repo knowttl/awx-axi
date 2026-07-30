@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/rest_api/api_ref.rst.txt:2100-2200",
+  "$note": "Project object roles endpoint returns read-only role metadata for project access and policy review.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 201,
+        "name": "project_admin",
+        "type": "project",
+        "description": "Can update and administer project configuration"
+      },
+      {
+        "id": 202,
+        "name": "project_execute",
+        "type": "project",
+        "description": "Can launch and execute jobs for this project"
+      }
+    ]
+  }
+}

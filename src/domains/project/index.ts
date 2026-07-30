@@ -28,11 +28,18 @@ import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const UPDATES_LIMIT = 20;
+const DEFAULT_ROLES_LIMIT = 100;
 
 const LIST_SCHEMA = {
   label: "projects",
   defaultFields: ["id", "name", "scm_type", "status", "last_job_run"],
   fieldAllowlist: ["scm_url", "scm_branch", "organization"],
+} as const;
+
+const ROLES_SCHEMA = {
+  label: "roles",
+  defaultFields: ["id", "name", "description", "type"],
+  fieldAllowlist: ["summary_fields", "created", "modified"],
 } as const;
 
 function toProjectRow(raw: unknown): Row {
@@ -49,6 +56,16 @@ function toProjectRow(raw: unknown): Row {
       typeof lastJob.id === "number"
         ? `${lastJob.id} ${lastJob.status ?? ""}`
         : null,
+  };
+}
+
+function toProjectRoleRow(raw: unknown): Row {
+  const record = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: typeof record.id === "number" ? record.id : 0,
+    name: typeof record.name === "string" ? record.name : "",
+    description: typeof record.description === "string" ? record.description : "",
+    type: typeof record.type === "string" ? record.type : "",
   };
 }
 
@@ -192,6 +209,28 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "projects/",
+    noun: "project",
+    listCommand: "project list",
+    command: "project roles",
+  });
+
+  const paged = yield* readPaged(`projects/${id}/object_roles/`, {}, DEFAULT_ROLES_LIMIT);
+  const rows = paged.rows.map(toProjectRoleRow);
+
+  return listOutput({
+    label: ROLES_SCHEMA.label,
+    rows,
+    count: paged.count,
+    empty: "0 project roles found",
+    help: [
+      `Run \`awx-axi project show ${id}\` to inspect project metadata`,
+    ],
+  });
+}
+
 function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "projects/",
@@ -299,6 +338,7 @@ export const projectDomain: Domain = defineDomain({
     "  show        <id|name>",
     "  playbooks   <id|name>",
     "  updates     <id|name> [--limit <n>]",
+    "  roles       <id|name>",
     "  sync        <id|name> [--wait] [--dry-run]",
   ].join("\n"),
   mcpEquivalents: [
@@ -306,6 +346,7 @@ export const projectDomain: Domain = defineDomain({
     "get_project",
     "get_project_playbooks",
     "list_project_updates",
+    "list_project_object_roles",
     "sync_project",
   ],
   subcommands: [
@@ -352,6 +393,15 @@ export const projectDomain: Domain = defineDomain({
       schema: { label: "updates", defaultFields: ["id", "name", "status", "finished"], fieldAllowlist: [] },
       suggestions: [],
       plan: updatesPlan,
+    },
+    {
+      name: "roles",
+      help: "awx-axi project roles <id|name>",
+      flags: [],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: ROLES_SCHEMA,
+      suggestions: [],
+      plan: rolesPlan,
     },
     {
       name: "sync",

@@ -1,0 +1,27 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/rest_api/api_ref.rst.txt:1601-1700",
+  "$note": "Detail endpoint for a single ad hoc command. The response includes timing, module, credentials, and inventory references used by the command.",
+  "status": 200,
+  "body": {
+    "id": 401,
+    "name": "Gather host facts",
+    "status": "successful",
+    "type": "run",
+    "module_name": "setup",
+    "created": "2026-07-27T12:00:00Z",
+    "started": "2026-07-27T12:00:01Z",
+    "finished": "2026-07-27T12:00:10Z",
+    "elapsed": 9,
+    "summary_fields": {
+      "inventory": {
+        "id": 5,
+        "name": "production"
+      },
+      "credential": {
+        "id": 12,
+        "name": "awx-ops"
+      }
+    }
+  }
+}
