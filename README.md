@@ -100,7 +100,7 @@ All core AWX domains are available and return only one noun per operation.
 | `inventory` | `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
 | `schedule` | `list`, `show` |
 | `system-job` | `list`, `show`, `events`, `notifications` |
-| `system-job-template` | `list`, `show`, `jobs`, `schedules` |
+| `system-job-template` | `list`, `show` |
 | `execution-environment` | `list`, `show` |
 | `organization` | `list`, `show` |
 | `credential` | `list`, `show` |
