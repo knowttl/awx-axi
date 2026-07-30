@@ -1094,7 +1094,7 @@ src/
     workflow/           list, show, survey, launch, nodes
     approval/           list, show, approve, deny
     project/            list, show, playbooks, updates, sync
-    inventory/          list, show, groups, hosts, sources, updates, constructed-list
+    inventory/          list, show, groups, hosts, sources, updates, constructed-list, constructed-show
     schedule/           list, show
     execution-environment/ list, show
   skill/                generated SKILL.md and the --check drift guard

@@ -22,6 +22,7 @@ export function createSkillMarkdown(): string {
     "  hermes:",
     `    tags: [${HERMES_TAGS.join(", ")}]`,
     `    category: ${HERMES_CATEGORY}`,
+    "---",
   ].join("\n");
 
   const body = `# awx-axi
@@ -55,7 +56,7 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 
 ## Commands
 
-```
+\`\`\`
 commands[10 total]:
   auth                   login, status, logout
   job                    list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
@@ -63,7 +64,7 @@ commands[10 total]:
   workflow               list, show <id|name>, survey <id|name>, launch <id|name>, nodes <run-id>
   approval               list, show <id|name>, approve <id|name>, deny <id|name>
   project                list, show <id|name>, playbooks <id|name>, updates <id|name>, sync <id|name>
-  inventory              list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list
+  inventory              list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list, constructed-show
   schedule               list, show <id|name>
   execution-environment  list, show <id|name>
   setup                  hooks

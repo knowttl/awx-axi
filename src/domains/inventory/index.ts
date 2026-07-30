@@ -242,18 +242,28 @@ function readListPage(body: unknown, subject: string): ListPage {
   };
 }
 
-function parseNextQuery(next: string): Query {
+type NextPage = {
+  readonly route: string;
+  readonly query: Query;
+};
+
+function parseNextQuery(next: string): NextPage {
   const divider = next.indexOf("?");
   if (divider < 0) {
-    return {};
+    return { route: next.startsWith("/") ? next.replace(/^\//, "") : next, query: {} };
   }
 
+  const dividerPath = next.indexOf("/api/v2/");
+  const route = dividerPath < 0 ? next.slice(0, divider) : next.slice(dividerPath + 7, divider);
   const query: Query = {};
   const params = new URLSearchParams(next.slice(divider + 1));
   for (const [key, value] of params) {
     query[key] = value;
   }
-  return query;
+  return {
+    route: route.replace(/^\//, ""),
+    query,
+  };
 }
 
 function assertValidStatus(raw: string | undefined): void {
@@ -524,7 +534,7 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     }
 
     sourceRoute = `inventories/${id}/inventory_sources/`;
-    sourceQuery = parseNextQuery(sourcePage.next);
+    sourceQuery = parseNextQuery(sourcePage.next).query;
   }
 
   if (sourceCount === 0) {

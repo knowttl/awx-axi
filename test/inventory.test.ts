@@ -228,4 +228,29 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.stdout).toContain("0 constructed inventories found");
     expect(run.stdout).toContain("This controller does not expose constructed inventories");
   });
+
+  it("inventory constructed-show resolves by name and renders key fields", async () => {
+    const run = await runCli(["inventory", "constructed-show", "Datacenter constructed"], {
+      script: ["inventory-constructed-name-one", "inventory-constructed-detail"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(2);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "GET",
+      route: "constructed_inventories/",
+      query: { name: "Datacenter constructed" },
+    });
+    expect(run.transport.requests[1]).toMatchObject({
+      method: "GET",
+      route: "constructed_inventories/301/",
+    });
+    expect(run.stdout).toContain("id: 301");
+    expect(run.stdout).toContain("name: Datacenter constructed");
+    expect(run.stdout).toContain("source: ec2");
+    expect(run.stdout).toContain("verbosity: 2");
+    expect(run.stdout).toContain("limit: 500");
+    expect(run.stdout).toContain("update_cache_timeout: 3600");
+    expect(run.stdout).toContain("Run `awx-axi inventory constructed-list` to inspect all constructed inventories");
+  });
 });
