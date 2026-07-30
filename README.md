@@ -7,8 +7,8 @@ The current build covers the v1 core domains: `job` (unified run surface),
 (workflow approval inbox with approve/deny), `ad-hoc` (historical command
 runs), `project` (SCM projects and syncs), `inventory` (inventories, groups,
 hosts, sources, updates, and constructed inventories), `schedule` (scheduled
-runs), `execution-environment` (runtime images), plus `awx-axi auth` and
-`awx-axi setup`.
+runs), `execution-environment` (runtime images), `organization`, `credential`,
+and `user` (identity metadata), plus `awx-axi auth` and `awx-axi setup`.
 
 ## Configuration
 
