@@ -30,6 +30,8 @@ import { projectDomain } from "./domains/project/index.js";
 import { scheduleDomain } from "./domains/schedule/index.js";
 import { templateDomain } from "./domains/template/index.js";
 import { workflowDomain } from "./domains/workflow/index.js";
+import { systemJobDomain } from "./domains/system-job/index.js";
+import { systemJobTemplateDomain } from "./domains/system-job-template/index.js";
 import { userDomain } from "./domains/user/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
@@ -46,6 +48,8 @@ export const DOMAINS: readonly Domain[] = [
   templateDomain,
   workflowDomain,
   organizationDomain,
+  systemJobTemplateDomain,
+  systemJobDomain,
   credentialDomain,
   approvalDomain,
   adHocDomain,

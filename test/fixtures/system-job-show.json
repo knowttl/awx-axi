@@ -1,0 +1,26 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/system_jobs.rst:90-160",
+  "$note": "system_jobs detail returns creator metadata and the unified_job_template summary; awx-axi maps these into a compact, deterministic detail view with launch context.",
+  "status": 200,
+  "body": {
+    "id": 901,
+    "type": "system_job",
+    "name": "Cleanup stale sessions run",
+    "status": "successful",
+    "started": "2026-07-28T01:00:00Z",
+    "finished": "2026-07-28T01:02:00Z",
+    "elapsed": 120,
+    "created": "2026-07-28T00:59:00Z",
+    "modified": "2026-07-28T01:03:00Z",
+    "summary_fields": {
+      "created_by": {
+        "username": "ops-bot"
+      },
+      "unified_job_template": {
+        "id": 301,
+        "name": "Cleanup stale sessions"
+      }
+    }
+  }
+}

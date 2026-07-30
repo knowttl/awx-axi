@@ -1,0 +1,39 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/notifications.rst:1-120",
+  "$note": "system_jobs/{id}/notifications/ carries a paginated delivery audit for each configured template and is useful for troubleshooting run-side alerting.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 5001,
+        "status": "successful",
+        "created": "2026-07-28T01:02:00Z",
+        "subject": "system job completed",
+        "errors": null,
+        "summary_fields": {
+          "notification_template": {
+            "id": 41,
+            "name": "Ops Ops"
+          }
+        }
+      },
+      {
+        "id": 5002,
+        "status": "error",
+        "created": "2026-07-27T23:13:00Z",
+        "subject": "system job failed",
+        "errors": "SMTP timeout",
+        "summary_fields": {
+          "notification_template": {
+            "id": 42,
+            "name": "Ops Alerts"
+          }
+        }
+      }
+    ]
+  }
+}

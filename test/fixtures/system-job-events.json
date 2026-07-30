@@ -1,0 +1,29 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/job_events.rst:1-80",
+  "$note": "System jobs expose job-style events in the same envelope format as other unified jobs, so awx-axi can reuse event field conventions with a compact list output.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 1201,
+        "event": "start",
+        "host_name": "controller",
+        "task": "cleanup.sessions",
+        "failed": false,
+        "changed": false
+      },
+      {
+        "id": 1202,
+        "event": "cleanup.complete",
+        "host_name": "controller",
+        "task": "cleanup.sessions",
+        "failed": false,
+        "changed": true
+      }
+    ]
+  }
+}

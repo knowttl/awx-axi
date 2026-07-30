@@ -1,0 +1,26 @@
+{
+  "$tag": "24.6.1",
+  "$source": "docs/docsite/rst/rest_api/system_job_templates.rst:100-180",
+  "$note": "Template detail includes related organization and last_job fields and can be paired with cheap related reads from /system_job_templates/{id}/jobs/ and /schedules/ for local navigation.",
+  "status": 200,
+  "body": {
+    "id": 301,
+    "type": "system_job_template",
+    "name": "Cleanup stale sessions",
+    "description": "Reclaim expired container sessions",
+    "status": "successful",
+    "created": "2026-07-20T10:00:00Z",
+    "modified": "2026-07-28T07:00:00Z",
+    "summary_fields": {
+      "organization": {
+        "id": 7,
+        "name": "Operations"
+      },
+      "last_job": {
+        "id": 901,
+        "name": "Cleanup stale sessions run",
+        "status": "successful"
+      }
+    }
+  }
+}
