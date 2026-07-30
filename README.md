@@ -4,8 +4,9 @@ AXI-standard agent-native CLI for AWX (Ansible automation platform).
 
 The current build covers the v1 core domains: `job` (unified run surface),
 `template` (launch enabler), `workflow` (workflow job templates), `approval`
-(workflow approval inbox with approve/deny), and `project` (SCM projects and
-syncs), plus `awx-axi auth`.
+(workflow approval inbox with approve/deny), `project` (SCM projects and syncs),
+and `inventory` (inventories, groups, hosts, sources, updates, and
+constructed inventories), plus `awx-axi auth` and `awx-axi setup`.
 
 ## Configuration
 

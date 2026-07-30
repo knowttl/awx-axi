@@ -1,0 +1,21 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/inventory.py:210-280",
+  "$note": "Inventory detail exposes type, kind, host/source totals, and sync flags; awx-axi maps these into the show fields.",
+  "status": 200,
+  "body": {
+    "id": 11,
+    "name": "Datacenter inventory",
+    "type": "inventory",
+    "kind": "",
+    "variables": "{\"env\": \"prod\"}",
+    "has_active_failures": false,
+    "has_inventory_sources": true,
+    "total_hosts": 2,
+    "total_groups": 1,
+    "total_inventory_sources": 1,
+    "summary_fields": {
+      "organization": { "id": 1, "name": "Production" }
+    }
+  }
+}

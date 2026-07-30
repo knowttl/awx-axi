@@ -1,0 +1,24 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/inventory.py:320-380",
+  "$note": "Inventory group rows expose inventory summary, description, and child counts for list + pagination behavior in `inventory groups`.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 101,
+        "name": "web hosts",
+        "description": "Application web servers",
+        "total_hosts": 2,
+        "total_children": 0,
+        "variables": "{\"ansible_user\": \"ec2-user\"}",
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory" }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/pagination.py:16-78",
+  "$note": "Second page for `inventory list` confirms count preservation when the requested page size is smaller than the inventory total.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": "/api/v2/inventories/?page=1&page_size=1",
+    "results": [
+      {
+        "id": 12,
+        "name": "Research inventory",
+        "kind": "constructed",
+        "type": "inventory",
+        "summary_fields": { "organization": { "id": 2, "name": "R&D" } },
+        "total_hosts": 1,
+        "total_groups": 0,
+        "total_inventory_sources": 0
+      }
+    ]
+  }
+}

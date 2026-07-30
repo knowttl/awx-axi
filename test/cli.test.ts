@@ -21,7 +21,10 @@ describe("the CLI shell", () => {
 
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
-    expect(stdout.text()).toContain("domains: \"job, template, workflow, approval, project\"");
+    expect(stdout.text()).toContain('commands: "auth, setup"');
+    expect(stdout.text()).toContain(
+      "domains: \"job, template, workflow, approval, project, inventory\"",
+    );
   });
 
   it("renders the version for --version", async () => {
@@ -98,5 +101,9 @@ describe("the CLI shell", () => {
 
   it("registers the approval domain", () => {
     expect(DOMAINS.map((domain) => domain.name)).toContain("approval");
+  });
+
+  it("registers the inventory domain", () => {
+    expect(DOMAINS.map((domain) => domain.name)).toContain("inventory");
   });
 });

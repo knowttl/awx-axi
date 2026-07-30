@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/urls.py:200-250",
+  "$note": "Some controller versions do not expose constructed inventories; `constructed_inventories/` returns 404 and awx-axi surfaces this as a non-fatal no-data result.",
+  "status": 404,
+  "body": { "detail": "No such resource" }
+}

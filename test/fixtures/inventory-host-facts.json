@@ -1,0 +1,10 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/inventory.py:470-530",
+  "$note": "Inventory host fact payload shape supports a count projection so awx-axi can show concise key density without leaking full detail.",
+  "status": 200,
+  "body": {
+    "ansible_distribution": "Debian",
+    "ansible_hostname": "web-01"
+  }
+}
