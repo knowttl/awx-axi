@@ -20,9 +20,11 @@ import {
 } from "./core/registry.js";
 import type { AwxTransport } from "./core/transport.js";
 import { approvalDomain } from "./domains/approval/index.js";
+import { executionEnvironmentDomain } from "./domains/execution-environment/index.js";
 import { jobDomain } from "./domains/job/index.js";
-import { projectDomain } from "./domains/project/index.js";
 import { inventoryDomain } from "./domains/inventory/index.js";
+import { projectDomain } from "./domains/project/index.js";
+import { scheduleDomain } from "./domains/schedule/index.js";
 import { templateDomain } from "./domains/template/index.js";
 import { workflowDomain } from "./domains/workflow/index.js";
 
@@ -42,6 +44,8 @@ export const DOMAINS: readonly Domain[] = [
   approvalDomain,
   projectDomain,
   inventoryDomain,
+  scheduleDomain,
+  executionEnvironmentDomain,
 ];
 
 export interface MainOptions {
@@ -51,7 +55,7 @@ export interface MainOptions {
   /** Injected offline by the test suite; `HttpTransport` in production. */
   readonly createTransport?: (env: Env) => AwxTransport;
   readonly createBasicAuthTransport?: (env: Env) => AwxTransport;
-  /** Injected offline so the §7.9 backoff costs no wall-clock time. */
+  /** Injected offline so `HttpTransport` in production. */
   readonly sleep?: (ms: number) => Promise<void>;
 }
 

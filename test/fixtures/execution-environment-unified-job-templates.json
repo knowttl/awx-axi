@@ -1,0 +1,35 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5600-5660",
+  "$note": "Execution environment relationship endpoint returning unified job templates, so awx-axi can show reusable template compatibility from one show call.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "Deploy web tier",
+        "type": "job_template",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      },
+      {
+        "id": 21,
+        "name": "Run security scan",
+        "type": "job_template",
+        "summary_fields": {
+          "organization": {
+            "id": 2,
+            "name": "Security"
+          }
+        }
+      }
+    ]
+  }
+}

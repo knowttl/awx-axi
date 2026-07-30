@@ -1,0 +1,41 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5200-5260",
+  "$note": "A paged execution environment list with org/type/search filters and an explicit next link so readPaged can prove pagination handling.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": "/api/v2/execution_environments/?page=2&page_size=2",
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "base-alpine",
+        "type": "container",
+        "managed": true,
+        "image": "quay.io/ansible/awx-ee:latest",
+        "description": "Base execution image",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "name": "standard-ee",
+        "type": "container",
+        "managed": true,
+        "image": "registry.example.com/ee/standard:2.0",
+        "description": "Standard controller execution image",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      }
+    ]
+  }
+}

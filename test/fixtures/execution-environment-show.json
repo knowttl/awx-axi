@@ -1,0 +1,31 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5200-5320",
+  "$note": "Execution environment detail including organization and audit summary fields so the show output can include readable relationship names and creator metadata.",
+  "status": 200,
+  "body": {
+    "id": 12,
+    "type": "container",
+    "name": "Standard controller image",
+    "managed": true,
+    "image": "registry.example.com/ee/standard:2.0",
+    "description": "Standard execution environment",
+    "organization": 1,
+    "summary_fields": {
+      "organization": {
+        "id": 1,
+        "name": "Operations"
+      },
+      "created_by": {
+        "id": 7,
+        "name": "Automation Bot"
+      },
+      "modified_by": {
+        "id": 9,
+        "name": "Infra Admin"
+      }
+    },
+    "created": "2026-06-25T00:00:00Z",
+    "modified": "2026-07-20T00:00:00Z"
+  }
+}

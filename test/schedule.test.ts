@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+
+import { runCli } from "./support/run.js";
+
+describe("schedule list (design.md §7.10?)", () => {
+  it("lists schedules with template and enabled filters across pages", async () => {
+    const run = await runCli([
+      "schedule",
+      "list",
+      "--template",
+      "77",
+      "--enabled",
+      "--limit",
+      "3",
+    ], {
+      script: ["schedule-list-page-1", "schedule-list-page-2"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "GET",
+      route: "schedules/",
+      query: {
+        unified_job_template: 77,
+        enabled: true,
+        page_size: 3,
+      },
+    });
+    expect(run.transport.requests[1]).toMatchObject({
+      method: "GET",
+      route: "/api/v2/schedules/",
+    });
+    expect(run.stdout).toContain("schedules[3]{id,name,template,enabled,next_run}:");
+    expect(run.stdout).toContain("201,nightly-security-scan,77 (Security scan template),enabled");
+    expect(run.stdout).toContain("Run `awx-axi schedule show <id|name>` to inspect schedule detail and timing");
+  });
+
+  it("supports search and disabled filters", async () => {
+    const run = await runCli([
+      "schedule",
+      "list",
+      "--search",
+      "compliance",
+      "--disabled",
+    ], {
+      script: ["schedule-list-page-1", "schedule-list-page-2"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]?.query).toMatchObject({
+      search: "compliance",
+      enabled: false,
+    });
+  });
+
+  it("shows schedule detail with preview and template resolution", async () => {
+    const run = await runCli(["schedule", "show", "Nightly security scan"], {
+      script: ["schedule-name-one", "schedule-show"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "GET",
+      route: "schedules/",
+      query: { name: "Nightly security scan" },
+    });
+    expect(run.transport.requests[1]).toMatchObject({
+      route: "schedules/201/",
+    });
+    expect(run.stdout).toContain("id: 201");
+    expect(run.stdout).toContain("template: 77 (Security scan template)");
+    expect(run.stdout).toContain('preview: "zone UTC:');
+    expect(run.stdout).toContain("awx-axi schedule list --template 77");
+  });
+
+  it("rejects a non-positive --limit", async () => {
+    const run = await runCli(["schedule", "list", "--limit", "0"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+  });
+});

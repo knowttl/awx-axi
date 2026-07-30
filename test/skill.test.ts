@@ -36,12 +36,22 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toContain("name: awx-axi");
     expect(markdown).toContain(`author: ${SKILL_AUTHOR}`);
     expect(markdown).toContain(`category: ${HERMES_CATEGORY}`);
-    expect(markdown).toContain("tags: [awx, ansible, automation, devops, jobs, workflows]");
+    expect(markdown).toContain(
+      "tags: [awx, ansible, automation, devops, jobs, workflows]",
+    );
     expect(markdown).toContain("# awx-axi");
     expect(markdown).toContain("## When to use");
     expect(markdown).toContain("## Workflow");
     expect(markdown).toContain("## Commands");
     expect(markdown).toContain("## Tips");
+  });
+
+  it("contains schedule and execution-environment usage guidance", () => {
+    const markdown = createSkillMarkdown();
+
+    expect(markdown).toContain("schedule list");
+    expect(markdown).toContain("execution-environment list");
+    expect(markdown).toContain("commands[10 total]");
   });
 
   it("matches the committed skills/awx-axi/SKILL.md file verbatim", () => {

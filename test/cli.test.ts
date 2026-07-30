@@ -21,10 +21,10 @@ describe("the CLI shell", () => {
 
     expect(stdout.text()).toContain(`description: ${DESCRIPTION}`);
     expect(stdout.text()).toContain("awx-axi <command> [args] [flags]");
-    expect(stdout.text()).toContain('commands: "auth, setup"');
     expect(stdout.text()).toContain(
-      "domains: \"job, template, workflow, approval, project, inventory\"",
+      "domains: \"job, template, workflow, approval, project, inventory, schedule, execution-environment\"",
     );
+    expect(stdout.text()).toContain('commands: "auth, setup"');
   });
 
   it("renders the version for --version", async () => {
@@ -48,8 +48,6 @@ describe("the CLI shell", () => {
           positionals: { names: [], required: 0 },
           schema: { label: "widgets", defaultFields: [], fieldAllowlist: [] },
           suggestions: [],
-          // A plan that declares no request: this domain is only ever asked
-          // for its help text.
           // eslint-disable-next-line require-yield
           plan: function* () {
             return {};
@@ -101,6 +99,10 @@ describe("the CLI shell", () => {
 
   it("registers the approval domain", () => {
     expect(DOMAINS.map((domain) => domain.name)).toContain("approval");
+    expect(DOMAINS.map((domain) => domain.name)).toContain("schedule");
+    expect(DOMAINS.map((domain) => domain.name)).toContain(
+      "execution-environment",
+    );
   });
 
   it("registers the inventory domain", () => {

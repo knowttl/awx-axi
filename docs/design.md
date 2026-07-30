@@ -14,7 +14,7 @@ Where a behavior is version-sensitive, §4 says so explicitly.
 `awx-axi` is an agent-facing CLI for operating an AWX controller from the shell, built to the AXI standard
 (the user-level `axi` skill).
 
-v1 buys depth in the three domains an operator actually touches during an incident or a release, and declines
+v1 buys depth in the five domains an operator actually touches during an incident or a release, and declines
 breadth across AWX's configuration surface.
 
 **v1 core:**
@@ -29,6 +29,10 @@ breadth across AWX's configuration surface.
    approval inbox: list, show, approve, deny.
 3. **Projects.**
    List, inspect, trigger an SCM sync, list playbooks, and list recent syncs.
+4. **Schedules.**
+   List and inspect scheduled unified-job runs.
+5. **Execution environments.**
+   List and inspect container images so template runtime is visible before launch.
 
 **Supporting reads (enablers, not a product surface of their own):**
 
@@ -41,8 +45,7 @@ There is no template create, update, delete, or copy in v1.
 
 - **No configuration management surface.**
   Inventories, hosts, groups, inventory sources, organizations, teams, users, credentials, credential types,
-  schedules, execution environments, notification templates, labels, instances, and instance groups are all
-  out.
+  notification templates, labels, instances, and instance groups are all out.
   They are recorded as roadmap in §14.
 - **No deletes, anywhere, at all.**
   Not behind a flag, not behind an environment variable.
@@ -1092,6 +1095,8 @@ src/
     approval/           list, show, approve, deny
     project/            list, show, playbooks, updates, sync
     inventory/          list, show, groups, hosts, sources, updates, constructed-list
+    schedule/           list, show
+    execution-environment/ list, show
   skill/                generated SKILL.md and the --check drift guard
 test/
   fixtures/             recorded AWX 24.6.1 responses
@@ -1121,7 +1126,7 @@ The consequences that matter:
 
 - Adding a domain is one directory under `src/domains/` plus one entry in `DOMAINS`.
   No core change, no cross-domain edit.
-  Growing from v1's 6 domains toward the §14 roadmap does not touch the core.
+  Growing from v1's 8 domains toward the §14 roadmap does not touch the core.
 - Because domains return route descriptions rather than executing them, every domain is unit-testable with no
   network and no mocking framework.
 - Because error translation is centralized, a new AWX error shape is fixed once for every command.
@@ -1303,7 +1308,9 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
 
 Per AXI §7, both integration paths ship, and both are opt-in through an explicit setup command:
 
-`awx-axi setup hooks`
+```
+awx-axi setup hooks
+```
 
 The hook runs the home view (§8.1) at session start, so an agent opens every session already knowing what is
 running, what needs an approval decision, and what recently broke.
@@ -1326,7 +1333,7 @@ The inventory captured for this design enumerates **145 tools**; the commission 
 The design tracks the enumerated list and treats the one-tool delta as an open item for §14.2's tool to
 reconcile against the upstream repository when it is built, rather than silently picking a number.
 
-v1 implements **40 of those tools** across 6 domains:
+v1 implements **45 of those tools** across 8 domains:
 
 | awx-mcp group | Tools | v1 covers | awx-axi commands |
 | --- | --- | --- | --- |
@@ -1334,6 +1341,8 @@ v1 implements **40 of those tools** across 6 domains:
 | Job Templates | 13 | 4 | `template list/show/survey/launch` |
 | Workflow Templates & Nodes | 17 | 4 | `workflow list/show/survey/launch` |
 | Workflow Jobs & Approvals | 11 | 9 | `job list/show/cancel/relaunch`, `workflow nodes`, `approval list/show/approve/deny` |
+| Schedules | 5 | 2 | `schedule list/show` |
+| Execution Environments | 3 | 3 | `execution-environment list/show` |
 | Projects | 11 | 8 | `project list/show/sync/playbooks/updates`, `job stdout/cancel/show` |
 | Inventories | 8 | 8 | `inventory list/show/groups/hosts/sources/updates/constructed-list/constructed-show` |
 
@@ -1343,9 +1352,9 @@ The same mechanism means `job watch`, which has no awx-mcp equivalent at all, wo
 
 ### 14.2 Tracking the rest
 
-The remaining 105 tools (145 total against v1's 40) are roadmap, not omissions, and they are tracked in code
+The remaining 100 tools (145 total against v1's 45) are roadmap, not omissions, and they are tracked in code
 rather than in prose.
-The seven groups enumerated below account for 86 of those 105; the balance is an ungrouped long tail that the
+The groups enumerated below account for the largest missing surfaces; the balance is an ungrouped long tail that the
 coverage diff reports rather than this document enumerating it.
 
 Each domain declares `mcpEquivalents`.
@@ -1358,14 +1367,12 @@ Roadmap order, by what unblocks the most operator work per domain added:
 
 1. **Inventories, hosts, groups** (26 tools) - read first.
    `job hosts` already answers "which host failed"; the follow-up is "what else is in that group".
-2. **Schedules** (5) - read-only first.
-   The natural question after "what ran" is "what will run".
-3. **Ad hoc commands** (3) - read now, execute only behind a §6-style gate.
-4. **Organizations, teams, RBAC** (17) - reads only; grants stay out.
-5. **Execution environments, instances, notifications, labels** (14).
-6. **System jobs and activity stream** (9+) - `job` already reads system jobs; the activity stream is the audit
+2. **Ad hoc commands** (3) - read now, execute only behind a §6-style gate.
+3. **Organizations, teams, RBAC** (17) - reads only; grants stay out.
+4. **Instances, notifications, labels**.
+5. **System jobs and activity stream** (9+) - `job` already reads system jobs; the activity stream is the audit
    surface.
-7. **Credentials and users** (12) - reads before writes, and writes only under an explicit captain decision.
+6. **Credentials and users** (12) - reads before writes, and writes only under an explicit captain decision.
 
 ### 14.3 Where awx-axi should win, and where awx-mcp will
 
@@ -1395,7 +1402,7 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
   It moves to the offline suite as a paired fixture case, and the benchmark reports it as offline evidence
   rather than quietly dropping the claim or quietly running it live.
 - **Where awx-mcp stays ahead.**
-  It has 145 tools to v1's 32, so any task touching inventories, credentials, schedules, or RBAC is out of
+  It has 145 tools to v1's 37, so any task touching inventories, credentials, or RBAC is out of
   awx-axi's reach entirely.
   It also has MCP's form-mode elicitation for sensitive input, which is a genuinely better secret channel than
   anything a CLI can offer; §6.3's gated file is a weaker substitute, and the benchmark should say so rather

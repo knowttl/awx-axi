@@ -1,0 +1,30 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4601-4635",
+  "$note": "A second schedule list page with the remaining row keeps the same route shape and proves pagination in a readPaged walk.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": "/api/v2/schedules/?page=1&page_size=2",
+    "results": [
+      {
+        "id": 203,
+        "name": "weekly-cert-rotation",
+        "type": "normal",
+        "enabled": true,
+        "next_run": "2026-08-07T03:00:00Z",
+        "summary_fields": {
+          "unified_job_template": {
+            "id": 81,
+            "name": "Certificate rotation template"
+          },
+          "organization": {
+            "id": 3,
+            "name": "Platform"
+          }
+        }
+      }
+    ]
+  }
+}

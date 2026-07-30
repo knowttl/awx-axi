@@ -1,0 +1,17 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5200-5230",
+  "$note": "A unique name filtered response for execution environment name resolution, carrying count for safe ambiguity checks.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 12,
+        "name": "Standard controller image"
+      }
+    ]
+  }
+}

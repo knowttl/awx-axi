@@ -1,0 +1,17 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4567-4590",
+  "$note": "A name filtered query for schedule show resolves exactly one schedule by unified name, with count enabling strict ambiguity handling.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 201,
+        "name": "Nightly security scan"
+      }
+    ]
+  }
+}
