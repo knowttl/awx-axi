@@ -57,6 +57,17 @@ describe("notification list", () => {
     expect(run.transport.requests).toHaveLength(0);
   });
 
+  it("rejects a non-positive --template before any read", async () => {
+    const run = await runCli(["notification", "list", "--template", "0"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("--template");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
   it("prints an explicit empty state", async () => {
     const run = await runCli(["notification", "list", "--status", "all", "--search", "none"], {
       script: ["notification-list-empty"],

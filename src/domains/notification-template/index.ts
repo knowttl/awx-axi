@@ -51,6 +51,16 @@ function safeString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function parseOrganization(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw validationError(`--organization for \`notification-template list\` must be a positive integer, got ${raw}`, [
+      "Run `awx-axi notification-template list --organization <id>`",
+    ]);
+  }
+  return value;
+}
+
 function truncateText(value: string, limit: number): string {
   if (value.length <= limit) {
     return value;
@@ -103,7 +113,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   if (typeof input.flags.organization === "string") {
-    query.organization = input.flags.organization;
+    query.organization = parseOrganization(input.flags.organization);
   }
 
   const paged = yield* readPaged("notification_templates/", query, limit);

@@ -62,6 +62,16 @@ function parsePositiveId(raw: string, command: string): number {
   return value;
 }
 
+function parseTemplateId(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw validationError(`--template for \`notification list\` must be a positive integer, got ${raw}`, [
+      "Run `awx-axi notification list --template <id>`",
+    ]);
+  }
+  return value;
+}
+
 function parseStatus(raw: string): string {
   if (raw === "all") {
     return "";
@@ -142,7 +152,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   if (typeof input.flags.template === "string") {
-    query.notification_template = input.flags.template;
+    query.notification_template = parseTemplateId(input.flags.template);
   }
 
   const paged = yield* readPaged(route, query, limit);

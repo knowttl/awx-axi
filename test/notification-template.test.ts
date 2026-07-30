@@ -32,8 +32,19 @@ describe("notification-template list", () => {
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "notification_templates/",
-      query: { organization: "1", search: "ops", page_size: 100 },
+      query: { organization: 1, search: "ops", page_size: 100 },
     });
+  });
+
+  it("rejects a non-positive --organization before any read", async () => {
+    const run = await runCli(["notification-template", "list", "--organization", "0"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("--organization");
+    expect(run.transport.requests).toHaveLength(0);
   });
 
   it("rejects a non-positive --limit before any read", async () => {
