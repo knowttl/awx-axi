@@ -1,0 +1,33 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1951-1980",
+  "$note": "Team detail fixture with complete organization reference, related resource counts, and timestamps.",
+  "status": 200,
+  "body": {
+    "id": 5,
+    "name": "Engineering",
+    "description": "Software Engineering Team",
+    "created": "2024-01-15T10:00:00.000000Z",
+    "modified": "2024-02-01T12:30:00.000000Z",
+    "summary_fields": {
+      "organization": {
+        "id": 1,
+        "name": "Operations"
+      },
+      "created_by": {
+        "id": 11,
+        "name": "awx"
+      },
+      "modified_by": {
+        "id": 12,
+        "name": "alice"
+      },
+      "related_field_counts": {
+        "users": 4,
+        "projects": 2,
+        "credentials": 1,
+        "roles": 3
+      }
+    }
+  }
+}

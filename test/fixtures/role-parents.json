@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2261-2290",
+  "$note": "Role sub-resource returning list of parent roles in the RBAC permission inheritance tree.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 2,
+        "name": "Admin",
+        "type": "organization",
+        "description": "Organization Admin Role"
+      }
+    ]
+  }
+}

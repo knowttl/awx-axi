@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2071-2100",
+  "$note": "Team sub-resource returning list of roles assigned directly to the team.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 10,
+        "name": "Admin",
+        "type": "team",
+        "description": "Can manage all aspects of the team"
+      },
+      {
+        "id": 11,
+        "name": "Member",
+        "type": "team",
+        "description": "User is a member of the team"
+      }
+    ]
+  }
+}

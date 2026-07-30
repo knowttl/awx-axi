@@ -1,0 +1,33 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2201-2230",
+  "$note": "Role list page 1 includes two RBAC role entries with resource summaries and pagination links.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": "/api/v2/roles/?page=2&page_size=2",
+    "previous": null,
+    "results": [
+      {
+        "id": 10,
+        "name": "Admin",
+        "type": "team",
+        "summary_fields": {
+          "resource_name": "Engineering",
+          "resource_type": "team",
+          "resource_id": 5
+        }
+      },
+      {
+        "id": 11,
+        "name": "Member",
+        "type": "team",
+        "summary_fields": {
+          "resource_name": "Engineering",
+          "resource_type": "team",
+          "resource_id": 5
+        }
+      }
+    ]
+  }
+}

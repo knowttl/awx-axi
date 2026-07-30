@@ -1,0 +1,24 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1913-1950",
+  "$note": "Team list page 2 completes the list query with the final team record and backward link.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": "/api/v2/teams/?page=1&page_size=2",
+    "results": [
+      {
+        "id": 7,
+        "name": "Security",
+        "description": "Information Security Team",
+        "summary_fields": {
+          "organization": {
+            "id": 2,
+            "name": "Security Org"
+          }
+        }
+      }
+    ]
+  }
+}

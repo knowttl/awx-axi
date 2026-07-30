@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2291-2320",
+  "$note": "Role sub-resource returning list of child roles in the RBAC permission inheritance tree.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "Member",
+        "type": "team",
+        "description": "User is a member of the team"
+      }
+    ]
+  }
+}
