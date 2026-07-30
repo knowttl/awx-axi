@@ -20,7 +20,8 @@
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.test.json",
     "lint": "eslint .",
-    "test": "vitest run --dir test"
+    "test": "vitest run test --exclude test/live/**",
+    "test:live": "vitest run --dir test/live"
   },
   "dependencies": {
     "@toon-format/toon": "2.3.1",
