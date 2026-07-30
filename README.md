@@ -169,7 +169,8 @@ awx-axi execution-environment list
 - `--fields` lets callers ask for additional keys when needed.
 - Pagination is surfaced with `count: N of M total`.
 - Empty and partial results use explicit language, so no follow-up query is needed to confirm emptiness.
-- Where log output is large, commands like `job stdout` and `job events` support focused reads with `--tail`, `--lines`, and file download options.
+- Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
+  `--tail` and `--lines`, and `job stdout` also supports `--download`.
 - Errors include suggestions rather than raw service payloads.
 
 ## Configuration
