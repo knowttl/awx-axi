@@ -130,6 +130,12 @@ awx-axi workflow survey workflow-template
 awx-axi workflow launch workflow-template --wait
 awx-axi workflow nodes 2048
 
+# ad-hoc commands
+awx-axi ad-hoc list --search "sudo apt"
+awx-axi ad-hoc show 401
+awx-axi ad-hoc events 401 --task "Install packages"
+awx-axi ad-hoc stdout 401 --lines 1-200
+
 # Identity, policy, and approvals
 awx-axi organization list
 awx-axi credential list --search github-token
