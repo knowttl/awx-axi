@@ -25,5 +25,5 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Keep the read-only and non-delete contract in place by preserving `src/core/registry.ts` request kinds, `test/no-delete.test.ts`, and the captain's controller boundary.
 - Current shipped coverage is all registered `DOMAINS` in `src/cli.ts`: `job`, `template`, `workflow`, `organization`, `credential`, `approval`, `ad-hoc`, `project`, `inventory`, `system-job-template`, `system-job`, `schedule`, `execution-environment`, `user`, `notification`, `notification-template`, `activity-stream`, `team`, and `role` (19 total).
 - Use `https://raw.githubusercontent.com/surgex-labs/awx-mcp-server/main/AWX_MCP_QUERY_REFERENCE.md` as the awx-mcp capability source, and treat sections 13, 14, 15, 16, and 17 in that file as local Ansible/workspace capabilities rather than AWX REST API resources.
-- Remaining roadmap priorities are: ad hoc command launch/diagnostic depth, and teams and RBAC context.
+- Remaining roadmap priorities are: ad hoc command launch/diagnostic depth.
 - Keep this AGENTS file high-level, and continue to point to authoritative files or sources rather than rewriting endpoint schemas.
