@@ -22,7 +22,7 @@ Alternatively, run `awx-axi auth login` to authenticate and store a 0600 token f
 
 ## When to use
 
-Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or inspecting running jobs; launching job templates or workflow templates; monitoring job execution and streaming stdout logs; approving or denying pending workflow approval nodes; inspecting project sync status; listing and inspecting schedules; matching templates to execution environments; inspecting historical ad hoc commands, output, and events; and viewing organizations, credentials, or users.
+Use awx-axi whenever a task touches AWX or Ansible Tower automation: listing or inspecting running jobs; launching job templates or workflow templates; monitoring job execution and streaming stdout logs; approving or denying pending workflow approval nodes; inspecting project sync status; listing and inspecting schedules; matching templates to execution environments; inspecting ad hoc command history, output, and events; and viewing organizations, credentials, or users.
 Use awx-axi for inventory workflows by starting with inventory listings, then drilling into groups, hosts, sources, and update history.
 
 ## Workflow
@@ -37,8 +37,9 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 8. Resolve schedule and template timing using `schedule list` and `schedule show <id|name>`.
 9. Inspect identity resources with `organization list`, `organization show <id|name>`, `credential list`, `credential show <id|name>`, `user list`, and `user show <id|name>`.
 10. Inspect ad hoc execution history using `ad-hoc list`, `ad-hoc show <id>`, `ad-hoc events <id>`, and `ad-hoc stdout <id>`.
-11. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
-12. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
+<<<<<<< HEAD
+11. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
+12. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
 13. Every response ends with contextual next-step hints under `help:` - follow them.
 
 ## Commands
