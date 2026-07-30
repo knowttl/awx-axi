@@ -105,6 +105,8 @@ All core AWX domains are available and return only one noun per operation.
 | `organization` | `list`, `show` |
 | `credential` | `list`, `show` |
 | `user` | `list`, `show` |
+| `team` | `list`, `show`, `users`, `projects`, `credentials`, `roles`, `object-roles`, `access-list` |
+| `role` | `list`, `show`, `parents`, `children`, `users`, `teams` |
 | `notification` | `list`, `show` |
 | `notification-template` | `list`, `show` |
 | `activity-stream` | `list`, `show` |
@@ -148,6 +150,12 @@ awx-axi approval list
 awx-axi approval approve 17
 awx-axi approval deny 18
 awx-axi user list
+awx-axi team list
+awx-axi team show Engineering
+awx-axi team users Engineering
+awx-axi role list
+awx-axi role show Admin
+awx-axi role parents Admin
 
 # Projects, inventories, and schedules
 awx-axi project list
