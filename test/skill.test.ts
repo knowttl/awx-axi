@@ -59,7 +59,7 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toMatch(/notification\s+list, show <id>/);
     expect(markdown).toMatch(/notification-template\s+list, show <id\|name>/);
     expect(markdown).toMatch(/activity-stream\s+list, show <id>/);
-    expect(markdown).toContain("commands[19 total]");
+    expect(markdown).toContain("commands[21 total]");
   });
 
   it("matches the committed skills/awx-axi/SKILL.md file verbatim", () => {

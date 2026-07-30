@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1913-1950",
+  "$note": "Filtered team lookup matching exact name returning one candidate for resolveId resolution.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 5,
+        "name": "Engineering",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      }
+    ]
+  }
+}

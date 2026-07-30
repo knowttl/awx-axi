@@ -51,7 +51,7 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 6. Inspect project status and sync history using \`project list\`, \`project show <id|name>\`, and \`project updates <id|name>\`.
 7. Inspect inventories using \`inventory list\`, \`inventory show <id|name>\`, and \`inventory updates <id|name>\`. Use \`--facts\` with \`inventory hosts\` only when you need a fact key count.
 8. Resolve schedule and template timing using \`schedule list\` and \`schedule show <id|name>\`.
-9. Inspect identity resources with \`organization list\`, \`organization show <id|name>\`, \`credential list\`, \`credential show <id|name>\`, \`user list\`, and \`user show <id|name>\`.
+9. Inspect identity resources and RBAC context with \`organization list\`, \`organization show <id|name>\`, \`credential list\`, \`credential show <id|name>\`, \`user list\`, \`user show <id|name>\`, \`team list\`, \`team show <id|name>\`, \`team users <id|name>\`, \`team roles <id|name>\`, \`role list\`, \`role show <id|name>\`, \`role parents <id|name>\`, and \`role teams <id|name>\`.
 10. Inspect ad hoc execution history using \`ad-hoc list\`, \`ad-hoc show <id>\`, \`ad-hoc events <id>\`, and \`ad-hoc stdout <id>\`.
 11. Inspect project access metadata using \`project roles <id|name>\` and then trace behavior through run-level views.
 12. Match templates to container runtimes with \`execution-environment list\` and \`execution-environment show <id|name>\`.
@@ -62,7 +62,7 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 ## Commands
 
 \`\`\`
-commands[19 total]:
+commands[21 total]:
   auth                   login, status, logout
   job                    list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
   template               list, show <id|name>, survey <id|name>, launch <id|name>
@@ -76,6 +76,8 @@ commands[19 total]:
   organization           list, show <id|name>
   credential             list, show <id|name>
   user                   list, show <id|name>
+  team                   list, show <id|name>, users <id|name>, projects <id|name>, credentials <id|name>, roles <id|name>, object-roles <id|name>, access-list <id|name>
+  role                   list, show <id|name>, parents <id|name>, children <id|name>, users <id|name>, teams <id|name>
   system-job-template    list, show <id|name>
   system-job             list, show <id>, events <id>, notifications <id>
   notification           list, show <id>

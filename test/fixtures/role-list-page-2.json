@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2201-2230",
+  "$note": "Role list page 2 completes the role list query with the final role record and backward link.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": "/api/v2/roles/?page=1&page_size=2",
+    "results": [
+      {
+        "id": 12,
+        "name": "Auditor",
+        "type": "organization",
+        "summary_fields": {
+          "resource_name": "Operations",
+          "resource_type": "organization",
+          "resource_id": 1
+        }
+      }
+    ]
+  }
+}

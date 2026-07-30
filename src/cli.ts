@@ -36,6 +36,8 @@ import { userDomain } from "./domains/user/index.js";
 import { notificationDomain } from "./domains/notification/index.js";
 import { notificationTemplateDomain } from "./domains/notification-template/index.js";
 import { activityStreamDomain } from "./domains/activity-stream/index.js";
+import { teamDomain } from "./domains/team/index.js";
+import { roleDomain } from "./domains/role/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
@@ -64,6 +66,8 @@ export const DOMAINS: readonly Domain[] = [
   notificationDomain,
   notificationTemplateDomain,
   activityStreamDomain,
+  teamDomain,
+  roleDomain,
 ];
 
 export interface MainOptions {

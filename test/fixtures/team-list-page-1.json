@@ -1,0 +1,35 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1913-1950",
+  "$note": "Team list page 1 includes two team definitions with organization summary fields and pagination links.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": "/api/v2/teams/?page=2&page_size=2",
+    "previous": null,
+    "results": [
+      {
+        "id": 5,
+        "name": "Engineering",
+        "description": "Software Engineering Team",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "name": "Operations",
+        "description": "Infrastructure Operations Team",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2131-2160",
+  "$note": "Team access list context returning users and access grants for the specified team.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "username": "awx",
+        "first_name": "AWX",
+        "last_name": "User",
+        "email": "awx@example.org"
+      },
+      {
+        "id": 12,
+        "username": "alice",
+        "first_name": "Alice",
+        "last_name": "Admin",
+        "email": "alice@example.org"
+      }
+    ]
+  }
+}

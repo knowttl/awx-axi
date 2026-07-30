@@ -1,0 +1,24 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2351-2380",
+  "$note": "Role sub-resource returning list of teams assigned directly to the role.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 5,
+        "name": "Engineering",
+        "description": "Software Engineering Team",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Operations"
+          }
+        }
+      }
+    ]
+  }
+}
