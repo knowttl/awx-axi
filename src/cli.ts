@@ -19,8 +19,10 @@ import {
   type DomainContext,
 } from "./core/registry.js";
 import type { AwxTransport } from "./core/transport.js";
+import { organizationDomain } from "./domains/organization/index.js";
 import { approvalDomain } from "./domains/approval/index.js";
 import { adHocDomain } from "./domains/ad-hoc/index.js";
+import { credentialDomain } from "./domains/credential/index.js";
 import { executionEnvironmentDomain } from "./domains/execution-environment/index.js";
 import { jobDomain } from "./domains/job/index.js";
 import { inventoryDomain } from "./domains/inventory/index.js";
@@ -28,6 +30,7 @@ import { projectDomain } from "./domains/project/index.js";
 import { scheduleDomain } from "./domains/schedule/index.js";
 import { templateDomain } from "./domains/template/index.js";
 import { workflowDomain } from "./domains/workflow/index.js";
+import { userDomain } from "./domains/user/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
@@ -42,12 +45,15 @@ export const DOMAINS: readonly Domain[] = [
   jobDomain,
   templateDomain,
   workflowDomain,
+  organizationDomain,
+  credentialDomain,
   approvalDomain,
   adHocDomain,
   projectDomain,
   inventoryDomain,
   scheduleDomain,
   executionEnvironmentDomain,
+  userDomain,
 ];
 
 export interface MainOptions {

@@ -1,0 +1,12 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/organization.py:62-68",
+  "$note": "Zero organization matches for an unknown name, used by resolveId NAME_NOT_FOUND checks.",
+  "status": 200,
+  "body": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/organization.py:68-95",
+  "$note": "Organization detail includes related summary counts and standard metadata used by the detail output.",
+  "status": 200,
+  "body": {
+    "id": 1,
+    "name": "Operations",
+    "description": "Operations and automation",
+    "max_hosts": 5000,
+    "custom_virtualenv": "/usr/bin/py3",
+    "summary_fields": {
+      "related_field_counts": {
+        "inventories": 4,
+        "teams": 2,
+        "users": 3,
+        "job_templates": 5,
+        "admins": 1,
+        "projects": 6
+      }
+    },
+    "created": "2025-01-11T10:01:00Z",
+    "modified": "2026-07-25T12:00:00Z"
+  }
+}

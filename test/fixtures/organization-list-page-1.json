@@ -1,0 +1,45 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/organization.py:62-68",
+  "$note": "AWX organization list includes summary counts and a next link so readPaged can follow page_size limits.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": "/api/v2/organizations/?page=2&page_size=2",
+    "previous": null,
+    "results": [
+      {
+        "id": 1,
+        "name": "Operations",
+        "description": "Operations and automation",
+        "max_hosts": 5000,
+        "summary_fields": {
+          "related_field_counts": {
+            "inventories": 4,
+            "teams": 2,
+            "users": 3,
+            "job_templates": 5,
+            "admins": 1,
+            "projects": 6
+          }
+        }
+      },
+      {
+        "id": 2,
+        "name": "Research",
+        "description": "Experimental environments",
+        "max_hosts": 1000,
+        "summary_fields": {
+          "related_field_counts": {
+            "inventories": 2,
+            "teams": 1,
+            "users": 4,
+            "job_templates": 1,
+            "admins": 1,
+            "projects": 2
+          }
+        }
+      }
+    ]
+  }
+}
