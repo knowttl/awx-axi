@@ -460,12 +460,14 @@ awx-axi approval   <subcommand>       the workflow approval inbox
 awx-axi ad-hoc     <subcommand>       inspect ad hoc command history
 awx-axi project    <subcommand>       projects and SCM syncs
 awx-axi inventory  <subcommand>       inventories, groups, hosts, sources, updates
+awx-axi system-job-template <subcommand>  maintenance job templates
+awx-axi system-job <subcommand>         system job runs and related details
 awx-axi auth       login|status|logout
 awx-axi setup      hooks
 awx-axi update                        reserved by axi-sdk-js
 ```
 
-Nine nouns.
+11 nouns.
 `job` carries the most weight deliberately, per §7.2.
 
 ### 7.2 `job` - one noun for everything AWX runs
@@ -1144,7 +1146,7 @@ The consequences that matter:
 
 - Adding a domain is one directory under `src/domains/` plus one entry in `DOMAINS`.
   No core change, no cross-domain edit.
-  Growing from v1's 9 domains toward the §14 roadmap does not touch the core.
+  Growing from v1's 11 domains toward the §14 roadmap does not touch the core.
 - Because domains return route descriptions rather than executing them, every domain is unit-testable with no
   network and no mocking framework.
 - Because error translation is centralized, a new AWX error shape is fixed once for every command.
@@ -1351,7 +1353,7 @@ The inventory captured for this design enumerates **145 tools**; the commission 
 The design tracks the enumerated list and treats the one-tool delta as an open item for §14.2's tool to
 reconcile against the upstream repository when it is built, rather than silently picking a number.
 
-v1 implements **50 of those tools** across 9 domains:
+v1 implements **56 of those tools** across 11 domains:
 
 | awx-mcp group | Tools | v1 covers | awx-axi commands |
 | --- | --- | --- | --- |
@@ -1364,6 +1366,7 @@ v1 implements **50 of those tools** across 9 domains:
 | Ad Hoc | 4 | 4 | `ad-hoc list/show/events/stdout` |
 | Projects | 11 | 9 | `project list/show/sync/playbooks/updates/roles`, `job stdout/cancel/show` |
 | Inventories | 8 | 8 | `inventory list/show/groups/hosts/sources/updates/constructed-list/constructed-show` |
+| System Jobs | 6 | 6 | `system-job list/show/events/notifications`, `system-job-template list/show` |
 
 The unified-job collapse (§7.2) is why the Projects row reaches 9 with only 6 project commands: project-update
 list, get, cancel, and stdout are served by the `job` noun.
@@ -1371,7 +1374,7 @@ The same mechanism means `job watch`, which has no awx-mcp equivalent at all, wo
 
 ### 14.2 Tracking the rest
 
-The remaining 95 tools (145 total against v1's 50) are roadmap, not omissions, and they are tracked in code
+The remaining 89 tools (145 total against v1's 56) are roadmap, not omissions, and they are tracked in code
 rather than in prose.
 The groups enumerated below account for the largest missing surfaces; the balance is an ungrouped long tail that the
 coverage diff reports rather than this document enumerating it.
