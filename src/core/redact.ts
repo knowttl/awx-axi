@@ -25,3 +25,42 @@ export function redact(text: string): string {
     .replace(SCM_CREDENTIAL, `$1${REDACTION}@`)
     .replace(ENCRYPTED, "$encrypted$");
 }
+
+/**
+ * Recursively redact values that look sensitive before they reach detail/list output.
+ *
+ * AWX does not redact nested payloads in every endpoint. We sanitize object
+ * values in a conservative way:
+ * - string values pass through `redact` for URLs and `$encrypted$`
+ * - keys that look secret are replaced with `***`
+ * - arrays and objects are walked recursively
+ */
+const SENSITIVE_KEY = /(password|api[-_]?key|secret|token|passphrase)/i;
+
+export function redactValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === "string") {
+    return redact(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(redactValue);
+  }
+  if (typeof value === "object") {
+    const input = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(input)) {
+      if (SENSITIVE_KEY.test(key)) {
+        output[key] = REDACTION;
+      } else {
+        output[key] = redactValue(raw);
+      }
+    }
+    return output;
+  }
+  return value;
+}

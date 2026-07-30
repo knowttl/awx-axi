@@ -1,0 +1,42 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5400-5482",
+  "$note": "Notification template detail includes sanitized configuration and recent notification links.",
+  "status": 200,
+  "body": {
+    "id": 11,
+    "name": "email-ops",
+    "notification_type": "email",
+    "created": "2026-01-02T10:00:00Z",
+    "modified": "2026-01-10T13:00:00Z",
+    "description": "Email template for operations",
+    "notification_configuration": {
+      "url": "https://api.user:token123@hooks.example.com/notify",
+      "password": "supersecret",
+      "subject": "Deployment status"
+    },
+    "messages": {
+      "started": "Deployment started",
+      "success": "Deployment success"
+    },
+    "summary_fields": {
+      "organization": {
+        "id": 1,
+        "name": "Default"
+      },
+      "recent_notifications": [
+        {
+          "id": 101,
+          "status": "successful",
+          "created": "2026-01-03T10:00:00Z"
+        },
+        {
+          "id": 102,
+          "status": "failed",
+          "created": "2026-01-04T10:00:00Z",
+          "error": "Webhook responded with $encrypted$UTF8$AES256$redacted"
+        }
+      ]
+    }
+  }
+}

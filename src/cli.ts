@@ -33,6 +33,9 @@ import { workflowDomain } from "./domains/workflow/index.js";
 import { systemJobDomain } from "./domains/system-job/index.js";
 import { systemJobTemplateDomain } from "./domains/system-job-template/index.js";
 import { userDomain } from "./domains/user/index.js";
+import { notificationDomain } from "./domains/notification/index.js";
+import { notificationTemplateDomain } from "./domains/notification-template/index.js";
+import { activityStreamDomain } from "./domains/activity-stream/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
@@ -58,6 +61,9 @@ export const DOMAINS: readonly Domain[] = [
   scheduleDomain,
   executionEnvironmentDomain,
   userDomain,
+  notificationDomain,
+  notificationTemplateDomain,
+  activityStreamDomain,
 ];
 
 export interface MainOptions {

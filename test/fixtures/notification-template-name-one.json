@@ -1,0 +1,25 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:5400-5422",
+  "$note": "Single-name match for notification template resolution via /notification_templates/.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "email-ops",
+        "notification_type": "email",
+        "created": "2026-01-02T10:00:00Z",
+        "summary_fields": {
+          "organization": {
+            "id": 1,
+            "name": "Default"
+          }
+        }
+      }
+    ]
+  }
+}

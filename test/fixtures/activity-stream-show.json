@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:4370-4406",
+  "$note": "Activity stream detail payload with change payload redaction points.",
+  "status": 200,
+  "body": {
+    "id": 9001,
+    "operation": "create",
+    "object1": "project/12",
+    "object2": "main-project",
+    "object_type": "project",
+    "object_association": "project 12",
+    "timestamp": "2026-01-08T12:00:00Z",
+    "changes": {
+      "summary": "Created by webhook",
+      "url": "https://user:secret@github.com/ansible/infra"
+    }
+  }
+}

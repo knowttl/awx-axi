@@ -105,6 +105,9 @@ All core AWX domains are available and return only one noun per operation.
 | `organization` | `list`, `show` |
 | `credential` | `list`, `show` |
 | `user` | `list`, `show` |
+| `notification` | `list`, `show` |
+| `notification-template` | `list`, `show` |
+| `activity-stream` | `list`, `show` |
 | `setup` | `hooks` |
 
 ```sh

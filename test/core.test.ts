@@ -12,7 +12,7 @@ import {
   parseFlags,
 } from "../src/core/flags.js";
 import { countLine, listOutput, rawRegion, truncate } from "../src/core/output.js";
-import { redact } from "../src/core/redact.js";
+import { redact, redactValue } from "../src/core/redact.js";
 import {
   defineDomain,
   read,
@@ -294,6 +294,33 @@ describe("redaction (design.md §6.4)", () => {
     expect(redact('"vault_password": "$encrypted$UTF8$AES256$abc123"')).toBe(
       '"vault_password": "$encrypted$"',
     );
+  });
+
+  it("recursively redacts nested payload values", () => {
+    expect(redactValue({
+      token: "abc",
+      message: "https://user:abc@hooks.example.com/one",
+      nested: {
+        user: "https://builder:token@repo.example.com/x",
+        password: "do-not-leak",
+        deep: [{ secret: "sauce" }, "https://u:p@service.example.com"],
+      },
+    })).toEqual({
+      token: "***",
+      message: "https://***@hooks.example.com/one",
+      nested: {
+        user: "https://***@repo.example.com/x",
+        password: "***",
+        deep: [{ secret: "***" }, "https://***@service.example.com"],
+      },
+    });
+  });
+
+  it("redacts key-path sensitive values in complex objects", () => {
+    expect(redactValue({ token: "abc", safe: "still visible" })).toEqual({
+      token: "***",
+      safe: "still visible",
+    });
   });
 
   it("leaves ordinary log text alone", () => {

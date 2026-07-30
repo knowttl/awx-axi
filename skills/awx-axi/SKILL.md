@@ -46,7 +46,7 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 ## Commands
 
 ```
-commands[16 total]:
+commands[19 total]:
   auth                   login, status, logout
   job                    list, show <id>, stdout <id>, events <id>, hosts <id>, relaunch <id>, cancel <id>, watch <id>
   template               list, show <id|name>, survey <id|name>, launch <id|name>
@@ -56,12 +56,15 @@ commands[16 total]:
   ad-hoc                 list, show <id>, events <id>, stdout <id>
   inventory              list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list, constructed-show
   schedule               list, show <id|name>
-  system-job-template    list, show <id|name>
-  system-job             list, show <id>, events <id>, notifications <id>
   execution-environment  list, show <id|name>
   organization           list, show <id|name>
   credential             list, show <id|name>
   user                   list, show <id|name>
+  system-job-template    list, show <id|name>
+  system-job             list, show <id>, events <id>, notifications <id>
+  notification           list, show <id>
+  notification-template  list, show <id|name>
+  activity-stream        list, show <id>
   setup                  hooks
 
 built-in:
