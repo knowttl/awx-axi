@@ -1,0 +1,24 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/inventory_source.py:120-190",
+  "$note": "Inventory sources are discoverable from an inventory id and include source/sync metadata for `inventory sources` follow-up planning.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 21,
+        "name": "Nightly EC2 sync",
+        "source": "ec2",
+        "status": "successful",
+        "source_vars": "{\"regions\": [\"us-east-1\"]}",
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory" },
+          "source_project": { "id": 4, "name": "infra-playbooks" }
+        }
+      }
+    ]
+  }
+}

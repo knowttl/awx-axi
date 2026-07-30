@@ -1,0 +1,18 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:340-390",
+  "$note": "Single-name lookup for inventories by `name` returns one row and an organization summary, which is enough to resolve user intent safely without returning all matches.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "Datacenter inventory",
+        "summary_fields": { "organization": { "id": 1, "name": "Production" } }
+      }
+    ]
+  }
+}

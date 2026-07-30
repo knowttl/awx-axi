@@ -1,0 +1,33 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/inventory.py:120-190",
+  "$note": "Inventory list returns a paginated payload with core fields and organization summary fields, which drive `inventory list` rows and follow-up resolution hints.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "Datacenter inventory",
+        "kind": "",
+        "type": "inventory",
+        "summary_fields": { "organization": { "id": 1, "name": "Production" } },
+        "total_hosts": 2,
+        "total_groups": 1,
+        "total_inventory_sources": 1
+      },
+      {
+        "id": 12,
+        "name": "Research inventory",
+        "kind": "constructed",
+        "type": "inventory",
+        "summary_fields": { "organization": { "id": 2, "name": "R&D" } },
+        "total_hosts": 1,
+        "total_groups": 0,
+        "total_inventory_sources": 0
+      }
+    ]
+  }
+}

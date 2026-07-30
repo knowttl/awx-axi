@@ -1,0 +1,12 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:340-390",
+  "$note": "Name lookup with zero matches allows `resolveId` to return a NAME_NOT_FOUND-style suggestion path with a search fallback.",
+  "status": 200,
+  "body": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}

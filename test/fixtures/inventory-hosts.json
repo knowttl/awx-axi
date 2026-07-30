@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/inventory.py:390-450",
+  "$note": "Inventory host rows include enabled and inventory summary fields; `inventory hosts --facts` follows host fact routes one row at a time.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 501,
+        "name": "web-01.example.com",
+        "description": "Primary application host",
+        "enabled": true,
+        "variables": "{\"region\": \"us-east-1\"}",
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory" }
+        }
+      }
+    ]
+  }
+}

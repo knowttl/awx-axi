@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/pagination.py:16-78",
+  "$note": "AWX paginates `inventory list` with a `next` link, so awx-axi must follow it while preserving the server total.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": "/api/v2/inventories/?page=2&page_size=1",
+    "previous": null,
+    "results": [
+      {
+        "id": 11,
+        "name": "Datacenter inventory",
+        "kind": "",
+        "type": "inventory",
+        "summary_fields": { "organization": { "id": 1, "name": "Production" } },
+        "total_hosts": 2,
+        "total_groups": 1,
+        "total_inventory_sources": 1
+      }
+    ]
+  }
+}
