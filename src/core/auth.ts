@@ -162,6 +162,7 @@ export function createTransport(env: Env): AwxTransport {
     apiBasePath: config.apiBasePath,
     authorization: `Bearer ${credential.token}`,
     readOnly: isReadOnly(env),
+    env,
   });
 }
 
@@ -188,6 +189,7 @@ export function createBasicAuthTransport(env: Env): AwxTransport {
     apiBasePath: config.apiBasePath,
     authorization: `Basic ${encoded}`,
     readOnly: isReadOnly(env),
+    env,
   });
 }
 

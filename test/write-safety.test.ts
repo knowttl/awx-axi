@@ -129,9 +129,10 @@ describe("transport write verb methods", () => {
   });
 
   it("runPlan dispatches write requests with method and tag to transport", async () => {
-    const transport = new RecordedTransport([
-      { status: 200, body: { id: 10 } },
-    ]);
+    const transport = new RecordedTransport(
+      [{ status: 200, body: { id: 10 } }],
+      { env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" } },
+    );
 
     function* testPlan() {
       return yield* write("test/path/", { key: "val" }, "PUT", "config");

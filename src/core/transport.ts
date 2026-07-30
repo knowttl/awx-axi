@@ -74,18 +74,14 @@ export function assertWritable(
   route: string,
   tag?: RiskTier,
 ): void {
-  if (typeof envOrReadOnly === "boolean") {
-    if (!envOrReadOnly) {
-      return;
-    }
-    throw new AxiError(
-      `refused ${method} ${route}: this session is read-only and nothing was sent`,
-      "READ_ONLY_VIOLATION",
-      ["Unset AWX_AXI_READ_ONLY to allow writes against this controller"],
-    );
-  }
+  const env: Record<string, string | undefined> =
+    typeof envOrReadOnly === "boolean"
+      ? {
+          ...(envOrReadOnly ? { AWX_AXI_READ_ONLY: "1" } : {}),
+          ...(typeof process !== "undefined" ? process.env : {}),
+        }
+      : envOrReadOnly;
 
-  const env = envOrReadOnly;
   if (isReadOnly(env)) {
     throw new AxiError(
       `refused ${method} ${route}: this session is read-only and nothing was sent`,
