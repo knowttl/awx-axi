@@ -56,9 +56,9 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toContain("user show <id|name>");
     expect(markdown).toContain("system-job-template show <id|name>");
     expect(markdown).toContain("system-job notifications");
-    expect(markdown).toContain("notification            list, show <id>");
-    expect(markdown).toContain("notification-template  list, show <id|name>");
-    expect(markdown).toContain("activity-stream        list, show <id>");
+    expect(markdown).toMatch(/notification\s+list, show <id>/);
+    expect(markdown).toMatch(/notification-template\s+list, show <id\|name>/);
+    expect(markdown).toMatch(/activity-stream\s+list, show <id>/);
     expect(markdown).toContain("commands[19 total]");
   });
 
