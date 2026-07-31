@@ -88,6 +88,17 @@ The `count` line is definitive.
 This is the shipped command surface.
 All core AWX domains are available and return only one noun per operation.
 
+**Every mutating subcommand refuses to mutate by default.** Without `--confirm` it prints a preview of exactly
+what it would send and changes nothing; `--dry-run` forces that preview even when `--confirm` is passed. The
+configuration-write subcommands - `create`, `edit`, `copy`, and `host-create`/`host-edit` - additionally
+require `AWX_AXI_ALLOW_CONFIG_WRITES=1` in the environment, and setting `AWX_AXI_READ_ONLY=1` refuses every
+write before anything is sent.
+
+**The mutating examples below are written without `--confirm` on purpose, so every one of them is safe to run
+and shows a preview rather than changing anything.** Adding `--confirm` to an example is what performs the
+change. Some of these actions cannot be undone - approving a workflow gate releases downstream production
+automation - so read the preview before you opt in.
+
 | Domain | Subcommands |
 | --- | --- |
 | `auth` | `login`, `status`, `logout` |
@@ -148,7 +159,7 @@ awx-axi ad-hoc list --search "sudo apt"
 awx-axi ad-hoc show 401
 awx-axi ad-hoc events 401 --task "Install packages"
 awx-axi ad-hoc stdout 401 --lines 1-200
-awx-axi ad-hoc launch Production --module-name ping --confirm
+awx-axi ad-hoc launch Production --module-name ping
 
 # Identity, policy, and approvals
 awx-axi organization list
@@ -203,7 +214,7 @@ awx-axi system-job-template list
 - Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
   `--tail` and `--lines`, and `job stdout` also supports `--download`.
 - Errors include suggestions rather than raw service payloads.
-- Mutating commands (launch, relaunch, cancel, approve, deny, sync) default to a dry run.
+- Mutating commands (launch, relaunch, cancel, approve, deny, sync, create, edit, copy) default to a dry run.
   Pass the `--confirm` flag to execute the live mutation request.
 
 ## Configuration
