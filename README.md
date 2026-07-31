@@ -187,6 +187,8 @@ awx-axi system-job-template list
 - Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
   `--tail` and `--lines`, and `job stdout` also supports `--download`.
 - Errors include suggestions rather than raw service payloads.
+- Mutating commands (launch, relaunch, cancel, approve, deny, sync) default to a dry run.
+  Pass the `--confirm` flag to execute the live mutation request.
 
 ## Configuration
 
@@ -201,6 +203,9 @@ awx-axi reads controller and session settings through environment variables.
 | `CONTROLLER_VERIFY_SSL` | Set to `false` for self-signed certificates |
 | `AWX_AXI_HOME` | Token file directory, default `~/.awx-axi` |
 | `AWX_AXI_READ_ONLY` | Set `1` to block mutating commands in non-live contexts |
+| `AWX_AXI_ALLOW_CONFIG_WRITES` | Set `1` to allow configuration writes (PUT/PATCH) |
+| `AWX_AXI_ALLOW_DELETES` | Set `1` to allow delete operations (DELETE) |
+| `AWX_AXI_ALLOW_SECURITY_WRITES` | Set `1` to allow security-sensitive writes |
 
 ## Development & Testing
 

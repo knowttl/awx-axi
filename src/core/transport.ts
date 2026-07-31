@@ -1,9 +1,8 @@
 /**
  * The transport seam (design.md §10.3).
  *
- * `post` is the only mutating method here, and that is the point: §2's
- * no-deletes property means there is no `del`, `put`, or `patch` method for any
- * command, retry path, or future contributor to call.
+ * Mutating methods (post, put, patch, delete) are supported here and guarded by
+ * safety checks at the transport seam.
  */
 import { AxiError } from "axi-sdk-js";
 

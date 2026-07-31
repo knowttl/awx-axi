@@ -88,9 +88,7 @@ export interface DomainContext {
  * A route a subcommand needs, returned as data rather than executed, which is
  * what makes a domain unit-testable with no network.
  *
- * **There is no verb field, and its absence is the design.** §2's no-deletes
- * property is expressed here in the type system rather than in review: a domain
- * cannot describe a `DELETE` because a route description cannot carry a method.
+ * Route descriptions represent read-only requests and carry no HTTP verb.
  */
 export interface RouteDescription {
   readonly path: string;
