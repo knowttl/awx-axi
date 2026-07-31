@@ -45,9 +45,11 @@ Template create, edit, and copy are accepted into v1 as configuration writes (§
 
 ## 2. Non-goals for v1
 
-- **No configuration management surface.**
-  Inventories, hosts, groups, inventory sources, organizations, teams, users, credentials, credential types,
-  notification templates, labels, instances, and instance groups are all out.
+- **A deliberately narrow configuration surface.**
+  v1 ships configuration writes only for templates, projects, workflows, schedules, inventories, and inventory
+  hosts, accepted by captain decision 2026-07-31 and specified in §6.1's tier 2.
+  Inventory groups, inventory sources, organizations, teams, users, credentials, credential types, notification
+  templates, labels, instances, and instance groups remain out.
   They are recorded as roadmap in §14.
 - **No deletes in domain subcommands.**
   No domain module in v1 exposes delete subcommands.
