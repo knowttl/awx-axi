@@ -94,6 +94,11 @@ configuration-write subcommands - `create`, `edit`, `copy`, and `host-create`/`h
 require `AWX_AXI_ALLOW_CONFIG_WRITES=1` in the environment, and setting `AWX_AXI_READ_ONLY=1` refuses every
 write before anything is sent.
 
+**The mutating examples below are written without `--confirm` on purpose, so every one of them is safe to run
+and shows a preview rather than changing anything.** Adding `--confirm` to an example is what performs the
+change. Some of these actions cannot be undone - approving a workflow gate releases downstream production
+automation - so read the preview before you opt in.
+
 | Domain | Subcommands |
 | --- | --- |
 | `auth` | `login`, `status`, `logout` |
@@ -129,24 +134,24 @@ awx-axi job show 1839
 awx-axi job stdout 1839 --tail 200
 awx-axi job events 1839 --failed
 awx-axi job hosts 1839
-awx-axi job launch deployment-template --wait --confirm
-awx-axi job relaunch 1839 --failed-only --confirm
+awx-axi job launch deployment-template --wait
+awx-axi job relaunch 1839 --failed-only
 awx-axi job watch 1839
 
 # Templates and workflows
 awx-axi template list --search deploy
 awx-axi template show deployment-template
 awx-axi template survey deployment-template
-awx-axi template launch deployment-template --wait --confirm
-awx-axi template create "Deploy Web Tier" --inventory Production --project AppRepo --confirm
-awx-axi template edit deployment-template --name "New Name" --confirm
-awx-axi template copy deployment-template --name "Copy Name" --confirm
+awx-axi template launch deployment-template --wait
+awx-axi template create "Deploy Web Tier" --inventory Production --project AppRepo
+awx-axi template edit deployment-template --name "New Name"
+awx-axi template copy deployment-template --name "Copy Name"
 awx-axi workflow list
 awx-axi workflow show workflow-template
 awx-axi workflow survey workflow-template
-awx-axi workflow launch workflow-template --wait --confirm
-awx-axi workflow create "Release Workflow" --confirm
-awx-axi workflow edit workflow-template --description "My workflow" --confirm
+awx-axi workflow launch workflow-template --wait
+awx-axi workflow create "Release Workflow"
+awx-axi workflow edit workflow-template --description "My workflow"
 awx-axi workflow nodes 2048
 
 # ad-hoc commands
@@ -160,8 +165,8 @@ awx-axi ad-hoc launch Production --module-name ping --confirm
 awx-axi organization list
 awx-axi credential list --search github-token
 awx-axi approval list
-awx-axi approval approve 17 --confirm
-awx-axi approval deny 18 --confirm
+awx-axi approval approve 17
+awx-axi approval deny 18
 awx-axi user list
 awx-axi team list
 awx-axi team show Engineering
@@ -176,9 +181,9 @@ awx-axi project show main-project
 awx-axi project playbooks main-project
 awx-axi project updates main-project
 awx-axi project roles main-project
-awx-axi project sync main-project --wait --confirm
-awx-axi project create "App Deploy" --scm-type git --scm-url https://github.com/... --confirm
-awx-axi project edit main-project --description "New Description" --confirm
+awx-axi project sync main-project --wait
+awx-axi project create "App Deploy" --scm-type git --scm-url https://github.com/...
+awx-axi project edit main-project --description "New Description"
 awx-axi inventory list
 awx-axi inventory show base-inventory
 awx-axi inventory groups base-inventory
@@ -187,14 +192,14 @@ awx-axi inventory sources base-inventory
 awx-axi inventory updates base-inventory
 awx-axi inventory constructed-list
 awx-axi inventory constructed-show dynamic-inventory
-awx-axi inventory create Production --organization Default --confirm
-awx-axi inventory edit base-inventory --description "Updated description" --confirm
-awx-axi inventory sync base-inventory --wait --confirm
-awx-axi inventory host-create web-01 --inventory Production --confirm
-awx-axi inventory host-edit web-01 --disabled --confirm
+awx-axi inventory create Production --organization Default
+awx-axi inventory edit base-inventory --description "Updated description"
+awx-axi inventory sync base-inventory --wait
+awx-axi inventory host-create web-01 --inventory Production
+awx-axi inventory host-edit web-01 --disabled
 awx-axi schedule list
-awx-axi schedule create "Nightly Sync" --rrule "DTSTART:20250101T000000Z RRULE:FREQ=DAILY" --template 12 --confirm
-awx-axi schedule edit "Nightly Sync" --disabled --confirm
+awx-axi schedule create "Nightly Sync" --rrule "DTSTART:20250101T000000Z RRULE:FREQ=DAILY" --template 12
+awx-axi schedule edit "Nightly Sync" --disabled
 awx-axi execution-environment list
 awx-axi system-job list
 awx-axi system-job-template list
@@ -209,7 +214,7 @@ awx-axi system-job-template list
 - Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
   `--tail` and `--lines`, and `job stdout` also supports `--download`.
 - Errors include suggestions rather than raw service payloads.
-- Mutating commands (launch, relaunch, cancel, approve, deny, sync) default to a dry run.
+- Mutating commands (launch, relaunch, cancel, approve, deny, sync, create, edit, copy) default to a dry run.
   Pass the `--confirm` flag to execute the live mutation request.
 
 ## Configuration
