@@ -159,6 +159,8 @@ awx-axi ad-hoc list --search "sudo apt"
 awx-axi ad-hoc show 401
 awx-axi ad-hoc events 401 --task "Install packages"
 awx-axi ad-hoc stdout 401 --lines 1-200
+# ad-hoc launch executes an operator-supplied module on every host in the inventory.
+# As written this previews only; adding --confirm runs it, and a command run cannot be undone.
 awx-axi ad-hoc launch Production --module-name ping
 
 # Identity, policy, and approvals
@@ -216,6 +218,9 @@ awx-axi system-job-template list
 - Errors include suggestions rather than raw service payloads.
 - Mutating commands (launch, relaunch, cancel, approve, deny, sync, create, edit, copy) default to a dry run.
   Pass the `--confirm` flag to execute the live mutation request.
+- `ad-hoc launch` runs an operator-supplied module on every host in the target inventory, so it is the sharpest
+  command here. It previews like the rest and needs `--confirm` to act, but no dedicated environment gate covers
+  it, and `AWX_AXI_READ_ONLY=1` is what refuses it outright.
 
 ## Configuration
 
