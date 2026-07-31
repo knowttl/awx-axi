@@ -211,7 +211,7 @@ function* surveyPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
-function parseExtraVars(raw: string | undefined): Record<string, unknown> {
+export function parseExtraVars(raw: string | undefined): Record<string, unknown> {
   if (raw === undefined) {
     return {};
   }
@@ -228,7 +228,7 @@ function parseExtraVars(raw: string | undefined): Record<string, unknown> {
   ]);
 }
 
-function readPasswordsFile(filePath: string): Record<string, unknown> {
+export function readPasswordsFile(filePath: string): Record<string, unknown> {
   let stats;
   try {
     stats = statSync(filePath);

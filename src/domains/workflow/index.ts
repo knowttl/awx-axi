@@ -7,6 +7,7 @@
  * for the full graph.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { parseExtraVars } from "../template/index.js";
 import {
   detailOutput,
   listOutput,
@@ -165,23 +166,6 @@ function* surveyPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
-function parseExtraVars(raw: string | undefined): Record<string, unknown> {
-  if (raw === undefined) {
-    return {};
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // fail
-  }
-  throw validationError("--extra-vars is neither valid JSON nor valid YAML", [
-    `Provide extra vars as a JSON object string, e.g. --extra-vars '{"env":"prod"}'`,
-  ]);
-}
-
 function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "workflow_job_templates/",
@@ -327,11 +311,8 @@ function* createWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
 
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (typeof input.flags["extra-vars"] === "string") {
-    try {
-      payload.extra_vars = JSON.parse(input.flags["extra-vars"]);
-    } catch {
-      payload.extra_vars = input.flags["extra-vars"];
-    }
+    const extraVarsObj = parseExtraVars(input.flags["extra-vars"]);
+    payload.extra_vars = JSON.stringify(extraVarsObj);
   }
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
@@ -387,11 +368,8 @@ function* editWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
   }
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (typeof input.flags["extra-vars"] === "string") {
-    try {
-      payload.extra_vars = JSON.parse(input.flags["extra-vars"]);
-    } catch {
-      payload.extra_vars = input.flags["extra-vars"];
-    }
+    const extraVarsObj = parseExtraVars(input.flags["extra-vars"]);
+    payload.extra_vars = JSON.stringify(extraVarsObj);
   }
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;

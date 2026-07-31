@@ -164,6 +164,17 @@ describe("job domain (design.md §7.2)", () => {
     expect(run.stdout).toContain("help[1]: Re-run with --confirm to launch");
   });
 
+  it("job launch refuses unprompted flags at launch preflight", async () => {
+    const run = await runCli(["job", "launch", "18", "--limit", "db-02"], {
+      script: ["launch-preflight-no-limit"],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: LAUNCH_WOULD_IGNORE_INPUT");
+    expect(run.stdout).toContain("template 18 does not accept --limit at launch");
+    expect(run.transport.requests.every((r) => r.method === "GET")).toBe(true);
+  });
+
   it("job launch executes live with --confirm", async () => {
     const run = await runCli(["job", "launch", "12", "--limit", "web-01", "--confirm"], {
       script: [

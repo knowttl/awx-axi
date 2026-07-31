@@ -707,7 +707,7 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
     const pollRes = yield* pollUntilTerminal({
       route: `inventory_updates/${updateId}/`,
       timeoutMs: timeoutSec * 1000,
-      resumeCommand: `awx-axi inventory updates ${id}`,
+      resumeCommand: `awx-axi job watch ${updateId}`,
     });
     return withExitCode(
       detailOutput({
@@ -718,7 +718,7 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
           status: pollRes.status,
           waited: `${Math.round(pollRes.waitedMs / 1000)}s`,
         },
-        help: [`Run \`awx-axi inventory updates ${id}\` for sync history`],
+        help: [`Run \`awx-axi job show ${updateId}\` for job detail`],
       }),
       succeeded(pollRes.status) ? 0 : 1,
     );
@@ -731,7 +731,7 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
       inventory_source: id,
       status: resBody.status ?? "pending",
     },
-    help: [`Run \`awx-axi inventory updates ${id}\` to monitor sync`],
+    help: [`Run \`awx-axi job watch ${updateId}\` to monitor sync`],
   });
 }
 
@@ -847,14 +847,14 @@ function* editInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
 function* createHostPlan(input: SubcommandInput): Plan<DomainResult> {
   const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
   if (name === undefined || name === "") {
-    throw validationError("`host create` needs a host name argument or --name", [
+    throw validationError("`inventory host-create` needs a host name argument or --name", [
       "Provide a name, e.g. `awx-axi inventory host-create web-01 --inventory Production`",
     ]);
   }
 
   const invArg = typeof input.flags.inventory === "string" ? input.flags.inventory : undefined;
   if (invArg === undefined || invArg === "") {
-    throw validationError("`host create` needs an --inventory id or name", [
+    throw validationError("`inventory host-create` needs an --inventory id or name", [
       "Run `awx-axi inventory list` to find an inventory",
     ]);
   }
@@ -863,7 +863,7 @@ function* createHostPlan(input: SubcommandInput): Plan<DomainResult> {
     listRoute: "inventories/",
     noun: "inventory",
     listCommand: "inventory list",
-    command: "host create",
+    command: "inventory host-create",
   });
 
   const payload: Record<string, unknown> = {
@@ -916,7 +916,7 @@ function* editHostPlan(input: SubcommandInput): Plan<DomainResult> {
     listRoute: "hosts/",
     noun: "host",
     listCommand: "inventory hosts",
-    command: "host edit",
+    command: "inventory host-edit",
   });
 
   const payload: Record<string, unknown> = {};
@@ -926,7 +926,7 @@ function* editHostPlan(input: SubcommandInput): Plan<DomainResult> {
       listRoute: "inventories/",
       noun: "inventory",
       listCommand: "inventory list",
-      command: "host edit",
+      command: "inventory host-edit",
     });
   }
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
