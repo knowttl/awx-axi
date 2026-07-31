@@ -58,7 +58,7 @@ describe("template domain (design.md §7.4, §7.5)", () => {
   });
 
   it("template launch executes POST when preflight passes", async () => {
-    const run = await runCli(["template", "launch", "12", "--limit", "web-01"], {
+    const run = await runCli(["template", "launch", "12", "--limit", "web-01", "--confirm"], {
       script: [
         "launch-preflight-accepts-limit",
         { status: 201, body: { id: 1844, status: "pending" } },
@@ -75,7 +75,7 @@ describe("template domain (design.md §7.4, §7.5)", () => {
   });
 
   it("template launch reports ignored fields warning if controller drops fields (§7.5)", async () => {
-    const run = await runCli(["template", "launch", "12"], {
+    const run = await runCli(["template", "launch", "12", "--confirm"], {
       script: [
         "launch-preflight-accepts-limit",
         "launch-201-ignored-fields",

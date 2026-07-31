@@ -19,6 +19,7 @@ import type {
   AwxTransport,
   PagedResult,
   Query,
+  RiskTier,
   TextResponse,
 } from "./transport.js";
 
@@ -87,22 +88,19 @@ export interface DomainContext {
  * A route a subcommand needs, returned as data rather than executed, which is
  * what makes a domain unit-testable with no network.
  *
- * **There is no verb field, and its absence is the design.** §2's no-deletes
- * property is expressed here in the type system rather than in review: a domain
- * cannot describe a `DELETE` because a route description cannot carry a method.
+ * Route descriptions represent read-only requests and carry no HTTP verb.
  */
 export interface RouteDescription {
   readonly path: string;
   readonly query?: Query;
 }
 
+export type HttpMutationMethod = "POST" | "PUT" | "PATCH" | "DELETE";
+
 /**
  * One request a subcommand declares, as data.
  *
- * The four request kinds are exactly the four methods on the seam plus `delay`,
- * which issues nothing. A domain cannot describe a `DELETE`, a `PUT`, or a
- * `PATCH` because this union has no member that would carry one, and `write` is
- * the only member the core routes to `post`.
+ * `write` requests support `method` ("POST" | "PUT" | "PATCH" | "DELETE") and risk tier tags.
  */
 export type AwxRequest =
   | { readonly kind: "read"; readonly route: RouteDescription }
@@ -113,7 +111,13 @@ export type AwxRequest =
       readonly limit: number;
     }
   | { readonly kind: "readText"; readonly route: RouteDescription }
-  | { readonly kind: "write"; readonly path: string; readonly body?: unknown }
+  | {
+      readonly kind: "write";
+      readonly path: string;
+      readonly method?: HttpMutationMethod;
+      readonly body?: unknown;
+      readonly tag?: RiskTier;
+    }
   | { readonly kind: "delay"; readonly ms: number };
 
 export type RequestResult =
@@ -188,16 +192,34 @@ export function* readText(path: string, query?: Query): Plan<TextResponse> {
   return result as TextResponse;
 }
 
+export interface WriteOptions {
+  readonly method?: HttpMutationMethod | undefined;
+  readonly tag?: RiskTier | undefined;
+}
+
 /**
- * Declare the one mutating request a domain may express. Refused before
- * anything is issued when the §6.5 read-only flag is set.
+ * Declare a mutating request a domain may express. Refused before
+ * anything is issued when safety gates or read-only flags forbid it.
  */
-export function* write(path: string, body?: unknown): Plan<AwxResponse> {
+export function* write(
+  path: string,
+  body?: unknown,
+  options?: WriteOptions | HttpMutationMethod,
+  tag?: RiskTier,
+): Plan<AwxResponse> {
   assertBaseRelative(path);
+  const opts: WriteOptions =
+    typeof options === "string"
+      ? { method: options, tag }
+      : { tag, ...options };
+  const method = opts.method ?? "POST";
+  const riskTag = opts.tag;
   const result = yield {
     kind: "write",
     path,
+    method,
     ...(body === undefined ? {} : { body }),
+    ...(riskTag === undefined ? {} : { tag: riskTag }),
   };
   return result as AwxResponse;
 }
@@ -241,8 +263,21 @@ async function execute(
       );
     case "readText":
       return runner.transport.getText(request.route.path, request.route.query);
-    case "write":
-      return runner.transport.post(request.path, request.body);
+    case "write": {
+      const method = request.method ?? "POST";
+      switch (method) {
+        case "POST":
+          return runner.transport.post(request.path, request.body, request.tag);
+        case "PUT":
+          return runner.transport.put(request.path, request.body, request.tag);
+        case "PATCH":
+          return runner.transport.patch(request.path, request.body, request.tag);
+        case "DELETE":
+          return runner.transport.delete(request.path, request.tag);
+        default:
+          return runner.transport.post(request.path, request.body, request.tag);
+      }
+    }
     case "delay":
       await (runner.sleep ?? realSleep)(request.ms);
       return undefined;

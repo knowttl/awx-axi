@@ -239,7 +239,8 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "project sync",
   });
 
-  if (input.flags["dry-run"] === true) {
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
     return detailOutput({
       label: "dry_run",
       fields: {
@@ -247,7 +248,7 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
         project: id,
         would_send: `POST projects/${id}/update/`,
       },
-      help: ["Re-run without --dry-run to sync"],
+      help: ["Re-run with --confirm to sync"],
     });
   }
 
@@ -339,7 +340,7 @@ export const projectDomain: Domain = defineDomain({
     "  playbooks   <id|name>",
     "  updates     <id|name> [--limit <n>]",
     "  roles       <id|name>",
-    "  sync        <id|name> [--wait] [--dry-run]",
+    "  sync        <id|name> [--wait] [--confirm] [--dry-run]",
   ].join("\n"),
   mcpEquivalents: [
     "list_projects",
@@ -405,10 +406,11 @@ export const projectDomain: Domain = defineDomain({
     },
     {
       name: "sync",
-      help: "awx-axi project sync <id|name> [--wait] [--dry-run]",
+      help: "awx-axi project sync <id|name> [--wait] [--confirm] [--dry-run]",
       flags: [
         { name: "wait", description: "wait for completion", takesValue: false },
         { name: "timeout", description: "wait timeout in seconds", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "dry run without mutating", takesValue: false },
       ],
       positionals: { names: ["<id|name>"], required: 1 },

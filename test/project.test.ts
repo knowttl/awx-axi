@@ -72,7 +72,7 @@ describe("project domain (design.md §7.8)", () => {
   });
 
   it("project sync handles 405 on non-SCM project as SYNC_UNAVAILABLE (§9.2)", async () => {
-    const run = await runCli(["project", "sync", "4"], {
+    const run = await runCli(["project", "sync", "4", "--confirm"], {
       script: ["cancel-405", "project-detail-no-scm"],
     });
 
@@ -82,7 +82,7 @@ describe("project domain (design.md §7.8)", () => {
   });
 
   it("project sync handles 405 on already syncing project as exit 0 no-op (§9.2)", async () => {
-    const run = await runCli(["project", "sync", "4"], {
+    const run = await runCli(["project", "sync", "4", "--confirm"], {
       script: ["cancel-405", "project-detail-syncing"],
     });
 

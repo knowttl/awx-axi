@@ -185,7 +185,7 @@ describe("approval approve and deny (design.md §7.7)", () => {
   });
 
   it("approval approve posts to approve endpoint", async () => {
-    const run = await runCli(["approval", "approve", "57"], {
+    const run = await runCli(["approval", "approve", "57", "--confirm"], {
       script: ["approval-approve-204"],
     });
 
@@ -199,7 +199,7 @@ describe("approval approve and deny (design.md §7.7)", () => {
   });
 
   it("approval deny posts to deny endpoint", async () => {
-    const run = await runCli(["approval", "deny", "57"], {
+    const run = await runCli(["approval", "deny", "57", "--confirm"], {
       script: ["approval-deny-204"],
     });
 

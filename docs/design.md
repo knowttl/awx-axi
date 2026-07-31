@@ -49,10 +49,10 @@ There is no template create, update, delete, or copy in v1.
   Inventories, hosts, groups, inventory sources, organizations, teams, users, credentials, credential types,
   notification templates, labels, instances, and instance groups are all out.
   They are recorded as roadmap in §14.
-- **No deletes, anywhere, at all.**
-  Not behind a flag, not behind an environment variable.
-  This is a structural property of the design: no domain module in v1 declares a `DELETE` route, so there is no
-  code path that can issue one.
+- **No deletes in domain subcommands.**
+  No domain module in v1 exposes delete subcommands.
+  The core transport and registry support `DELETE` requests.
+  These requests are gated behind `AWX_AXI_ALLOW_DELETES` and default dry-run logic.
 - **No credential or user writes.**
   awx-mcp gates these four tools behind `AWX_MCP_ENABLE_CREDENTIAL_MANAGEMENT`.
   awx-axi v1 goes further and omits them, so the gate has nothing to protect (§6).
@@ -332,15 +332,16 @@ This section is the framing that keeps them defensible.
 
 ### 6.1 The three tiers
 
-**Tier 1 - reversible operational writes. In v1, ungated.**
+**Tier 1 - reversible operational writes. Gated by default.**
 
 `job cancel`, `job relaunch`, `template launch`, `workflow launch`, `project sync`, `approval approve`,
 `approval deny`.
 
 These are the actions an operator takes during an incident.
-Each is reversible or repeatable in the ordinary course of operations: a canceled job can be relaunched, a
-launched job can be canceled, a sync can be re-run.
+Each is reversible or repeatable in the ordinary course of operations.
+A canceled job can be relaunched, a launched job can be canceled, and a sync can be re-run.
 They change no AWX configuration, so the controller's own state is the same shape afterwards.
+By default, these commands perform a dry run unless `--confirm` is explicitly passed.
 
 Approvals deserve a note: approving a workflow step is *operationally* consequential because it releases
 downstream automation, and it cannot be un-approved.
@@ -349,34 +350,38 @@ and because AWX's own permission model already gates it to users with approval r
 awx-axi's contribution is to make the decision informed rather than blind: `approval show` prints what the step
 gates and which workflow it belongs to before anyone approves it.
 
-**Tier 2 - configuration writes. Out of v1 entirely.**
+**Tier 2 - configuration writes. Gated in core transport.**
 
 Create, update, and copy of templates, projects, inventories, hosts, groups, schedules, execution
 environments, notification templates, and labels.
+The core transport supports `PUT` and `PATCH` requests.
+These requests are gated by `AWX_AXI_ALLOW_CONFIG_WRITES` in the environment.
+Specific domain subcommands for these operations remain out of v1.
 
-**Tier 3 - destructive and security-sensitive writes. Out of v1, structurally.**
+**Tier 3 - destructive and security-sensitive writes. Gated in core transport.**
 
 Every delete, every credential write, every user write, every role grant or revoke.
-No v1 domain module declares a `DELETE` route, so there is no code path to reach one.
+The core transport supports `DELETE` and security-tagged requests.
+These requests are gated by `AWX_AXI_ALLOW_DELETES` and `AWX_AXI_ALLOW_SECURITY_WRITES` respectively.
+Specific domain subcommands for these operations remain out of v1.
 
-### 6.2 Every tier-1 write is confirmable before it happens
+### 6.2 Every tier-1 write defaults to dry-run unless confirmed
 
-`--dry-run` is available on all seven tier-1 commands and prints exactly what would be sent, resolving names to
-ids, without issuing the mutation:
+Mutating commands default to a dry run unless `--confirm` is explicitly passed.
+The dry run prints exactly what would be sent, resolving names to ids, without issuing the mutation:
 
 ```
-$ awx-axi template launch "Deploy web tier" --limit db-02 --dry-run
+$ awx-axi template launch "Deploy web tier" --limit db-02
 dry_run:
   action: launch
   template: 12 (Deploy web tier)
   inventory: 3 (Production)
   limit: db-02
-  would_send: POST /api/v2/job_templates/12/launch/
-help[1]: Re-run without --dry-run to launch
+  would_send: POST job_templates/12/launch/
+help[1]: Re-run with --confirm to launch
 ```
 
-This exists because an agent that resolved the wrong template by name should discover that before starting a
-playbook, not after.
+This exists because an agent that resolved the wrong template by name should discover that before starting a playbook.
 
 ### 6.3 Credential passwords: refused by default, gated when needed
 
@@ -429,12 +434,10 @@ in this document:
 - The benchmark (§14.3) uses read-only tasks only.
 
 **A promise in a document is not an enforcement mechanism, so this is enforced at the transport seam.**
-`AWX_AXI_READ_ONLY=1` makes `AwxTransport` refuse every non-GET request before it is issued, raising a
-`READ_ONLY_VIOLATION` error naming the method and route that was attempted.
-The check sits in `HttpTransport` itself, below every domain module and every command, so no command,
-subcommand, retry path, or future contributor can route around it.
-The live harness sets the variable unconditionally rather than accepting it from the ambient environment, and
-`AWX_AXI_READ_ONLY=1` is also available to operators who simply want a safe posture.
+`AWX_AXI_READ_ONLY=1` makes `AwxTransport` refuse every non-GET request before it is issued, raising a `READ_ONLY_VIOLATION` error naming the method and route that was attempted.
+Other safety gates `AWX_AXI_ALLOW_CONFIG_WRITES`, `AWX_AXI_ALLOW_DELETES`, and `AWX_AXI_ALLOW_SECURITY_WRITES` enforce similar boundaries for configuration, delete, and security-sensitive write requests.
+The check sits in `HttpTransport` itself, below every domain module and every command, so no command, subcommand, retry path, or future contributor can route around it.
+The live harness sets the variable unconditionally rather than accepting it from the ambient environment, and `AWX_AXI_READ_ONLY=1` is also available to operators who simply want a safe posture.
 
 This mirrors awx-mcp's `AWX_MCP_READ_ONLY`, with one difference: awx-mcp's read-only mode changes which tools it
 *exposes*, while awx-axi's blocks the request at the wire, which is the stronger guarantee and the one the
@@ -1014,6 +1017,9 @@ stderr carries nothing an agent needs: progress and diagnostics only, per AXI §
 | `SERVER_BUSY` | 502, 503, or 504 after backoff exhausted | 1 |
 | `SERVER_ERROR` | 500 | 1 |
 | `READ_ONLY_VIOLATION` | A mutating request was attempted while the §6.5 read-only flag was set; the method and route are named and nothing was sent | 1 |
+| `CONFIG_WRITES_DISABLED` | A configuration write was attempted while configuration writes were disabled | 1 |
+| `DELETE_WRITES_DISABLED` | A delete operation was attempted while delete operations were disabled | 1 |
+| `SECURITY_WRITES_DISABLED` | A security write was attempted while security writes were disabled | 1 |
 | `UNKNOWN` | Anything unmapped | 1 |
 
 Two outcomes are deliberately **not** in this table, because they are exit-0 no-ops per AXI §6:
@@ -1164,18 +1170,18 @@ interface AwxResponse {
 
 interface AwxTransport {
   get(route: string, query?: Query): Promise<AwxResponse>;
-  post(route: string, body?: unknown): Promise<AwxResponse>;   // refused when readOnly
+  post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
+  put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
+  patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
+  delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
   getPaged(route: string, query: Query, limit: number): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 ```
 
-`post` is the only mutating method on the seam, because §2's no-deletes property means no `del`, `put`, or
-`patch` method exists to call.
-`HttpTransport` checks the §6.5 read-only flag inside `post` and raises `READ_ONLY_VIOLATION` before issuing
-anything.
-Putting the check here rather than in each domain is what makes it a guarantee: there is exactly one function in
-the codebase that can mutate a controller, and it is four lines long.
+Mutating methods (post, put, patch, delete) are supported on the seam, guarded by risk-based safety checks.
+`HttpTransport` checks read-only and safety gates before issuing anything.
+Putting the checks here rather than in each domain is what makes it a guarantee.
 
 `status` is on the response rather than swallowed into a thrown error precisely because §3.2 is the design's
 central argument: the status code *is* the semantics for cancel, sync, approve, and launch.

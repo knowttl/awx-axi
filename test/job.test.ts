@@ -119,7 +119,7 @@ describe("job domain (design.md §7.2)", () => {
   });
 
   it("job cancel handles 405 on terminal job as exit 0 no-op (§9.2)", async () => {
-    const run = await runCli(["job", "cancel", "1839", "--type", "job"], {
+    const run = await runCli(["job", "cancel", "1839", "--type", "job", "--confirm"], {
       script: ["cancel-405", "job-detail-terminal"],
     });
 
@@ -128,7 +128,7 @@ describe("job domain (design.md §7.2)", () => {
   });
 
   it("job relaunch launches new job run", async () => {
-    const run = await runCli(["job", "relaunch", "1839", "--type", "job"], {
+    const run = await runCli(["job", "relaunch", "1839", "--type", "job", "--confirm"], {
       script: [{ status: 201, body: { id: 1845, name: "Deploy db tier", status: "pending" } }],
     });
 
