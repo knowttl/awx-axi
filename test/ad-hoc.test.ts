@@ -92,4 +92,29 @@ describe("ad-hoc domain (design.md §7.2)", () => {
     expect(run.stdout).toContain("code: OUTPUT_TOO_LARGE");
     expect(run.stdout).toContain("display limit");
   });
+
+  it("ad-hoc launch defaults to dry run without --confirm", async () => {
+    const run = await runCli(["ad-hoc", "launch", "5", "--module-name", "ping"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("dry_run:");
+    expect(run.stdout).toContain("would_send: POST ad_hoc_commands/");
+    expect(run.stdout).toContain("help[1]: Re-run with --confirm to launch");
+  });
+
+  it("ad-hoc launch executes live mutation request when --confirm is passed", async () => {
+    const run = await runCli(["ad-hoc", "launch", "5", "--module-name", "ping", "--confirm"], {
+      script: [{ status: 201, body: { id: 402, status: "pending" } }],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("id: 402");
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "ad_hoc_commands/",
+      body: { inventory: 5, module_name: "ping", module_args: "" },
+    });
+  });
 });

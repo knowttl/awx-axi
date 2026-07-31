@@ -429,12 +429,213 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name === "") {
+    throw validationError("`template create` needs a template name argument or --name", [
+      "Provide a name, e.g. `awx-axi template create \"Deploy Web Tier\" --inventory Production --project AppRepo`",
+    ]);
+  }
+
+  const payload: Record<string, unknown> = { name };
+
+  if (typeof input.flags.inventory === "string") {
+    payload.inventory = yield* resolveId(input.flags.inventory, {
+      listRoute: "inventories/",
+      noun: "inventory",
+      listCommand: "inventory list",
+      command: "template create",
+    });
+  }
+
+  if (typeof input.flags.project === "string") {
+    payload.project = yield* resolveId(input.flags.project, {
+      listRoute: "projects/",
+      noun: "project",
+      listCommand: "project list",
+      command: "template create",
+    });
+  }
+
+  if (typeof input.flags["execution-environment"] === "string") {
+    payload.execution_environment = yield* resolveId(input.flags["execution-environment"], {
+      listRoute: "execution_environments/",
+      noun: "execution environment",
+      listCommand: "execution-environment list",
+      command: "template create",
+    });
+  }
+
+  if (typeof input.flags.playbook === "string") payload.playbook = input.flags.playbook;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags["extra-vars"] === "string") {
+    const extraVarsObj = parseExtraVars(input.flags["extra-vars"]);
+    payload.extra_vars = JSON.stringify(extraVarsObj);
+  }
+  if (typeof input.flags.limit === "string") payload.limit = input.flags.limit;
+  if (typeof input.flags.verbosity === "string") payload.verbosity = Number(input.flags.verbosity);
+  if (typeof input.flags["job-type"] === "string") payload.job_type = input.flags["job-type"];
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "job_template",
+        name,
+        would_send: "POST job_templates/",
+        payload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("job_templates/", payload, { method: "POST", tag: "config" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `template ${name}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "template",
+    fields: {
+      id,
+      name: body.name ?? name,
+    },
+    help: [`Run \`awx-axi template show ${id}\` to inspect template`],
+  });
+}
+
+function* editPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "job_templates/",
+    noun: "job template",
+    listCommand: "template list",
+    command: "template edit",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.inventory === "string") {
+    payload.inventory = yield* resolveId(input.flags.inventory, {
+      listRoute: "inventories/",
+      noun: "inventory",
+      listCommand: "inventory list",
+      command: "template edit",
+    });
+  }
+  if (typeof input.flags.project === "string") {
+    payload.project = yield* resolveId(input.flags.project, {
+      listRoute: "projects/",
+      noun: "project",
+      listCommand: "project list",
+      command: "template edit",
+    });
+  }
+  if (typeof input.flags["execution-environment"] === "string") {
+    payload.execution_environment = yield* resolveId(input.flags["execution-environment"], {
+      listRoute: "execution_environments/",
+      noun: "execution environment",
+      listCommand: "execution-environment list",
+      command: "template edit",
+    });
+  }
+  if (typeof input.flags.playbook === "string") payload.playbook = input.flags.playbook;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags["extra-vars"] === "string") {
+    const extraVarsObj = parseExtraVars(input.flags["extra-vars"]);
+    payload.extra_vars = JSON.stringify(extraVarsObj);
+  }
+  if (typeof input.flags.limit === "string") payload.limit = input.flags.limit;
+  if (typeof input.flags.verbosity === "string") payload.verbosity = Number(input.flags.verbosity);
+  if (typeof input.flags["job-type"] === "string") payload.job_type = input.flags["job-type"];
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        template: id,
+        would_send: `PATCH job_templates/${id}/`,
+        payload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`job_templates/${id}/`, payload, { method: "PATCH", tag: "config" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `template ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "template",
+    fields: {
+      id,
+      name: body.name ?? null,
+    },
+    help: [`Run \`awx-axi template show ${id}\` to inspect updated template`],
+  });
+}
+
+function* copyPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "job_templates/",
+    noun: "job template",
+    listCommand: "template list",
+    command: "template copy",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "copy",
+        template: id,
+        would_send: `POST job_templates/${id}/copy/`,
+        ...(payload.name !== undefined ? { name: payload.name } : {}),
+      },
+      help: ["Re-run with --confirm to copy"],
+    });
+  }
+
+  const res = yield* write(`job_templates/${id}/copy/`, payload, { method: "POST", tag: "config" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `template ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const newId = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "template",
+    fields: {
+      id: newId,
+      name: body.name ?? null,
+    },
+    help: [`Run \`awx-axi template show ${newId}\` to inspect copied template`],
+  });
+}
+
 export const templateDomain: Domain = defineDomain({
   name: "template",
   help: [
     "template: job templates - the launch enabler",
     "",
     "Subcommands:",
+    "  create   [<name>] [--inventory <i|name>] [--project <p|name>] [--confirm] [--dry-run]",
+    "  edit     <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  copy     <id|name> [--name <n>] [--confirm] [--dry-run]",
     "  list     [--project <p>] [--search <s>] [--limit <n>]",
     "  show     <id|name>",
     "  survey   <id|name>",
@@ -445,8 +646,68 @@ export const templateDomain: Domain = defineDomain({
     "get_job_template",
     "get_job_template_survey",
     "launch_job_template",
+    "create_job_template",
+    "update_job_template",
+    "copy_job_template",
   ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi template create [<name>] [--inventory <i|name>] [--project <p|name>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "template name", takesValue: true },
+        { name: "inventory", description: "inventory id or name", takesValue: true },
+        { name: "project", description: "project id or name", takesValue: true },
+        { name: "playbook", description: "playbook file path", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "execution-environment", description: "execution environment id or name", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "limit", description: "host limit", takesValue: true },
+        { name: "verbosity", description: "verbosity level 0-5", takesValue: true },
+        { name: "job-type", description: "run or check", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<name>"], required: 0 },
+      schema: { label: "template", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createPlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi template edit <id|name> [--name <n>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "template name", takesValue: true },
+        { name: "inventory", description: "inventory id or name", takesValue: true },
+        { name: "project", description: "project id or name", takesValue: true },
+        { name: "playbook", description: "playbook file path", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "execution-environment", description: "execution environment id or name", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "limit", description: "host limit", takesValue: true },
+        { name: "verbosity", description: "verbosity level 0-5", takesValue: true },
+        { name: "job-type", description: "run or check", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "template", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editPlan,
+    },
+    {
+      name: "copy",
+      help: "awx-axi template copy <id|name> [--name <n>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "new template name", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "template", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: copyPlan,
+    },
     {
       name: "list",
       help: "awx-axi template list [--project <p>] [--search <s>] [--limit <n>]",

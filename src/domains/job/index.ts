@@ -33,6 +33,7 @@ import {
   type SubcommandInput,
 } from "../../core/registry.js";
 import {
+  resolveId,
   resolveUnifiedJob,
 } from "../../core/resolve.js";
 
@@ -522,6 +523,91 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "job_templates/",
+    noun: "job template",
+    listCommand: "template list",
+    command: "job launch",
+  });
+
+  const preflightRes = yield* read(`job_templates/${id}/launch/`);
+  if (preflightRes.status !== 200) {
+    throw errorForResponse(preflightRes, { subject: `template ${id} launch preflight` });
+  }
+
+  const launchBody: Record<string, unknown> = {};
+  if (typeof input.flags.limit === "string") launchBody.limit = input.flags.limit;
+  if (typeof input.flags.tags === "string") launchBody.job_tags = input.flags.tags;
+  if (typeof input.flags["skip-tags"] === "string") launchBody.skip_tags = input.flags["skip-tags"];
+  if (typeof input.flags["extra-vars"] === "string") {
+    try {
+      launchBody.extra_vars = JSON.parse(input.flags["extra-vars"]);
+    } catch {
+      launchBody.extra_vars = input.flags["extra-vars"];
+    }
+  }
+  if (typeof input.flags.inventory === "string") launchBody.inventory = Number(input.flags.inventory);
+  if (typeof input.flags["scm-branch"] === "string") launchBody.scm_branch = input.flags["scm-branch"];
+  if (typeof input.flags.verbosity === "string") launchBody.verbosity = Number(input.flags.verbosity);
+  if (typeof input.flags["job-type"] === "string") launchBody.job_type = input.flags["job-type"];
+  if (input.flags.diff === true) launchBody.diff_mode = true;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "launch",
+        template: id,
+        would_send: `POST job_templates/${id}/launch/`,
+      },
+      help: ["Re-run with --confirm to launch"],
+    });
+  }
+
+  const launchRes = yield* write(`job_templates/${id}/launch/`, launchBody, { method: "POST", tag: "operational" });
+  if (launchRes.status !== 201 && launchRes.status !== 200 && launchRes.status !== 202) {
+    throw errorForResponse(launchRes, { subject: `template ${id}` });
+  }
+
+  const resBody = (launchRes.body ?? {}) as Record<string, unknown>;
+  const jobId = typeof resBody.id === "number" ? resBody.id : 0;
+  const status = typeof resBody.status === "string" ? resBody.status : "pending";
+
+  if (input.flags.wait === true && jobId > 0) {
+    const timeoutSec = typeof input.flags.timeout === "string" ? Number(input.flags.timeout) : 3600;
+    const pollRes = yield* pollUntilTerminal({
+      route: `jobs/${jobId}/`,
+      timeoutMs: timeoutSec * 1000,
+      resumeCommand: `awx-axi job watch ${jobId}`,
+    });
+    return withExitCode(
+      detailOutput({
+        label: "job",
+        fields: {
+          id: jobId,
+          name: resBody.name ?? null,
+          status: pollRes.status,
+          waited: `${Math.round(pollRes.waitedMs / 1000)}s`,
+        },
+        help: [`Run \`awx-axi job stdout ${jobId}\` for job stdout`],
+      }),
+      succeeded(pollRes.status) ? 0 : 1,
+    );
+  }
+
+  return detailOutput({
+    label: "job",
+    fields: {
+      id: jobId,
+      name: resBody.name ?? null,
+      status,
+    },
+    help: [`Run \`awx-axi job watch ${jobId}\` to follow it to completion`],
+  });
+}
+
 function* relaunchPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = parseJobId(input.args[0], "relaunch");
   const typeFlag = typeof input.flags.type === "string" ? input.flags.type : undefined;
@@ -611,6 +697,7 @@ export const jobDomain: Domain = defineDomain({
     "  stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]",
     "  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
     "  hosts    <id>",
+    "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  cancel   <id> [--type <t>] [--confirm] [--dry-run]",
     "  relaunch <id> [--failed-only] [--type <t>] [--confirm] [--dry-run]",
     "  watch    <id> [--timeout <s >] [--interval <s >]",
@@ -623,6 +710,7 @@ export const jobDomain: Domain = defineDomain({
     "get_job_host_summaries",
     "cancel_job",
     "relaunch_job",
+    "launch_job",
   ],
   subcommands: [
     {
@@ -696,6 +784,29 @@ export const jobDomain: Domain = defineDomain({
       schema: { label: "hosts", defaultFields: ["host", "ok", "changed", "failed", "unreachable"], fieldAllowlist: [] },
       suggestions: [],
       plan: hostsPlan,
+    },
+    {
+      name: "launch",
+      help: "awx-axi job launch <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
+      flags: [
+        { name: "limit", description: "host limit", takesValue: true },
+        { name: "tags", description: "job tags", takesValue: true },
+        { name: "skip-tags", description: "skip tags", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON", takesValue: true },
+        { name: "inventory", description: "inventory id", takesValue: true },
+        { name: "scm-branch", description: "SCM branch", takesValue: true },
+        { name: "verbosity", description: "verbosity level 0-5", takesValue: true },
+        { name: "job-type", description: "run or check", takesValue: true },
+        { name: "diff", description: "show diffs", takesValue: false },
+        { name: "wait", description: "wait for completion", takesValue: false },
+        { name: "timeout", description: "wait timeout in seconds", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "job", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: launchPlan,
     },
     {
       name: "cancel",

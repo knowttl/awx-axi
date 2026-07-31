@@ -54,4 +54,29 @@ describe("workflow domain (design.md §7.6)", () => {
     expect(run.stdout).toContain("nodes");
     expect(run.stdout).toContain("Deploy web tier");
   });
+
+  it("workflow create and edit support dry-run and --confirm", async () => {
+    const dryCreate = await runCli(["workflow", "create", "New Pipeline"], { script: [] });
+    expect(dryCreate.exitCode).toBe(0);
+    expect(dryCreate.stdout).toContain("dry_run:");
+    expect(dryCreate.stdout).toContain("would_send: POST workflow_job_templates/");
+
+    const liveCreate = await runCli(["workflow", "create", "New Pipeline", "--confirm"], {
+      script: [{ status: 201, body: { id: 15, name: "New Pipeline" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveCreate.exitCode).toBe(0);
+    expect(liveCreate.stdout).toContain("id: 15");
+
+    const dryEdit = await runCli(["workflow", "edit", "15", "--description", "Updated desc"], { script: [] });
+    expect(dryEdit.exitCode).toBe(0);
+    expect(dryEdit.stdout).toContain("would_send: PATCH workflow_job_templates/15/");
+
+    const liveEdit = await runCli(["workflow", "edit", "15", "--description", "Updated desc", "--confirm"], {
+      script: [{ status: 200, body: { id: 15, name: "New Pipeline" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveEdit.exitCode).toBe(0);
+    expect(liveEdit.stdout).toContain("id: 15");
+  });
 });

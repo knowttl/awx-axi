@@ -253,4 +253,78 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.stdout).toContain("update_cache_timeout: 3600");
     expect(run.stdout).toContain("Run `awx-axi inventory constructed-list` to inspect all constructed inventories");
   });
+
+  it("inventory sync defaults to dry run without --confirm", async () => {
+    const run = await runCli(["inventory", "sync", "21"], {
+      script: [],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("dry_run:");
+    expect(run.stdout).toContain("would_send: POST inventory_sources/21/update/");
+    expect(run.stdout).toContain("help[1]: Re-run with --confirm to sync");
+  });
+
+  it("inventory sync executes live with --confirm", async () => {
+    const run = await runCli(["inventory", "sync", "21", "--confirm"], {
+      script: [{ status: 202, body: { id: 301, status: "pending" } }],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("id: 301");
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "inventory_sources/21/update/",
+    });
+  });
+
+  it("inventory create and edit work with dry-run and --confirm", async () => {
+    const dry = await runCli(["inventory", "create", "Production"], { script: [] });
+    expect(dry.exitCode).toBe(0);
+    expect(dry.stdout).toContain("dry_run:");
+    expect(dry.stdout).toContain("would_send: POST inventories/");
+
+    const live = await runCli(["inventory", "create", "Production", "--confirm"], {
+      script: [{ status: 201, body: { id: 50, name: "Production" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(live.exitCode).toBe(0);
+    expect(live.stdout).toContain("id: 50");
+
+    const editDry = await runCli(["inventory", "edit", "50", "--name", "Prod-Updated"], { script: [] });
+    expect(editDry.exitCode).toBe(0);
+    expect(editDry.stdout).toContain("would_send: PATCH inventories/50/");
+
+    const editLive = await runCli(["inventory", "edit", "50", "--name", "Prod-Updated", "--confirm"], {
+      script: [{ status: 200, body: { id: 50, name: "Prod-Updated" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(editLive.exitCode).toBe(0);
+    expect(editLive.stdout).toContain("name: Prod-Updated");
+  });
+
+  it("host create and edit work with dry-run and --confirm", async () => {
+    const dry = await runCli(["inventory", "host", "create", "web-01", "--inventory", "50"], { script: [] });
+    expect(dry.exitCode).toBe(0);
+    expect(dry.stdout).toContain("dry_run:");
+    expect(dry.stdout).toContain("would_send: POST hosts/");
+
+    const live = await runCli(["inventory", "host-create", "web-01", "--inventory", "50", "--confirm"], {
+      script: [{ status: 201, body: { id: 101, name: "web-01", enabled: true } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(live.exitCode).toBe(0);
+    expect(live.stdout).toContain("id: 101");
+
+    const editDry = await runCli(["inventory", "host", "edit", "101", "--disabled"], { script: [] });
+    expect(editDry.exitCode).toBe(0);
+    expect(editDry.stdout).toContain("would_send: PATCH hosts/101/");
+
+    const editLive = await runCli(["inventory", "host-edit", "101", "--disabled", "--confirm"], {
+      script: [{ status: 200, body: { id: 101, name: "web-01", enabled: false } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(editLive.exitCode).toBe(0);
+    expect(editLive.stdout).toContain("enabled: false");
+  });
 });

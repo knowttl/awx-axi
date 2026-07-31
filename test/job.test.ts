@@ -152,4 +152,32 @@ describe("job domain (design.md §7.2)", () => {
     expect(run.stdout).toContain("status: successful");
     expect(run.stdout).toContain("elapsed: 42");
   });
+
+  it("job launch defaults to dry run without --confirm", async () => {
+    const run = await runCli(["job", "launch", "12", "--limit", "web-01"], {
+      script: ["launch-preflight-accepts-limit"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("dry_run:");
+    expect(run.stdout).toContain("would_send: POST job_templates/12/launch/");
+    expect(run.stdout).toContain("help[1]: Re-run with --confirm to launch");
+  });
+
+  it("job launch executes live with --confirm", async () => {
+    const run = await runCli(["job", "launch", "12", "--limit", "web-01", "--confirm"], {
+      script: [
+        "launch-preflight-accepts-limit",
+        { status: 201, body: { id: 1850, status: "pending", name: "Deploy web tier" } },
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("id: 1850");
+    expect(run.transport.requests[1]).toMatchObject({
+      method: "POST",
+      route: "job_templates/12/launch/",
+      body: { limit: "web-01" },
+    });
+  });
 });

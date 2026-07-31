@@ -306,12 +306,133 @@ function* nodesPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name === "") {
+    throw validationError("`workflow create` needs a workflow name argument or --name", [
+      "Provide a name, e.g. `awx-axi workflow create \"Release Workflow\"`",
+    ]);
+  }
+
+  const payload: Record<string, unknown> = { name };
+
+  if (typeof input.flags.organization === "string") {
+    payload.organization = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "workflow create",
+    });
+  }
+
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags["extra-vars"] === "string") {
+    try {
+      payload.extra_vars = JSON.parse(input.flags["extra-vars"]);
+    } catch {
+      payload.extra_vars = input.flags["extra-vars"];
+    }
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "workflow_job_template",
+        name,
+        would_send: "POST workflow_job_templates/",
+        payload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("workflow_job_templates/", payload, { method: "POST", tag: "config" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `workflow ${name}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "workflow",
+    fields: {
+      id,
+      name: body.name ?? name,
+    },
+    help: [`Run \`awx-axi workflow show ${id}\` to inspect workflow`],
+  });
+}
+
+function* editWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "workflow_job_templates/",
+    noun: "workflow job template",
+    listCommand: "workflow list",
+    command: "workflow edit",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.organization === "string") {
+    payload.organization = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "workflow edit",
+    });
+  }
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags["extra-vars"] === "string") {
+    try {
+      payload.extra_vars = JSON.parse(input.flags["extra-vars"]);
+    } catch {
+      payload.extra_vars = input.flags["extra-vars"];
+    }
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        workflow: id,
+        would_send: `PATCH workflow_job_templates/${id}/`,
+        payload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`workflow_job_templates/${id}/`, payload, { method: "PATCH", tag: "config" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `workflow ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "workflow",
+    fields: {
+      id,
+      name: body.name ?? null,
+    },
+    help: [`Run \`awx-axi workflow show ${id}\` to inspect updated workflow`],
+  });
+}
+
 export const workflowDomain: Domain = defineDomain({
   name: "workflow",
   help: [
     "workflow: workflow job templates and node rollups",
     "",
     "Subcommands:",
+    "  create   [<name>] [--organization <o>] [--confirm] [--dry-run]",
+    "  edit     <id|name> [--name <n>] [--confirm] [--dry-run]",
     "  list     [--search <s>] [--limit <n>]",
     "  show     <id|name>",
     "  survey   <id|name>",
@@ -324,8 +445,42 @@ export const workflowDomain: Domain = defineDomain({
     "get_workflow_job_template_survey",
     "launch_workflow_job_template",
     "get_workflow_job_nodes",
+    "create_workflow_job_template",
+    "update_workflow_job_template",
   ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi workflow create [<name>] [--organization <o>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "workflow template name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<name>"], required: 0 },
+      schema: { label: "workflow", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createWorkflowPlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi workflow edit <id|name> [--name <n>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "workflow template name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "workflow", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editWorkflowPlan,
+    },
     {
       name: "list",
       help: "awx-axi workflow list [--search <s>] [--limit <n>]",

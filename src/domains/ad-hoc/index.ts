@@ -5,16 +5,20 @@ import { AxiError } from "axi-sdk-js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput, rawRegion, type Row } from "../../core/output.js";
+import { pollUntilTerminal, succeeded } from "../../core/poll.js";
 import {
   defineDomain,
   read,
   readPaged,
   readText,
+  withExitCode,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
   type SubcommandInput,
 } from "../../core/registry.js";
+import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const EVENTS_LIMIT = 50;
@@ -209,6 +213,119 @@ function* stdoutPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
+  const invArg = input.args[0] ?? (typeof input.flags.inventory === "string" ? input.flags.inventory : undefined);
+  if (invArg === undefined || invArg === "") {
+    throw validationError("`ad-hoc launch` needs an inventory id or name via argument or --inventory", [
+      "Run `awx-axi inventory list` to find an inventory",
+    ]);
+  }
+
+  const inventoryId = yield* resolveId(invArg, {
+    listRoute: "inventories/",
+    noun: "inventory",
+    listCommand: "inventory list",
+    command: "ad-hoc launch",
+  });
+
+  let credentialId: number | undefined;
+  if (typeof input.flags.credential === "string") {
+    credentialId = yield* resolveId(input.flags.credential, {
+      listRoute: "credentials/",
+      noun: "credential",
+      listCommand: "credential list",
+      command: "ad-hoc launch",
+    });
+  }
+
+  const moduleName = typeof input.flags["module-name"] === "string"
+    ? input.flags["module-name"]
+    : typeof input.flags.module === "string"
+      ? input.flags.module
+      : "command";
+
+  const moduleArgs = typeof input.flags["module-args"] === "string"
+    ? input.flags["module-args"]
+    : typeof input.flags.args === "string"
+      ? input.flags.args
+      : "";
+
+  const payload: Record<string, unknown> = {
+    inventory: inventoryId,
+    module_name: moduleName,
+    module_args: moduleArgs,
+  };
+
+  if (credentialId !== undefined) payload.credential = credentialId;
+  if (typeof input.flags.limit === "string") payload.limit = input.flags.limit;
+  if (typeof input.flags.verbosity === "string") payload.verbosity = Number(input.flags.verbosity);
+  if (typeof input.flags["extra-vars"] === "string") {
+    try {
+      payload.extra_vars = JSON.parse(input.flags["extra-vars"]);
+    } catch {
+      payload.extra_vars = input.flags["extra-vars"];
+    }
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "launch",
+        inventory: inventoryId,
+        module_name: moduleName,
+        module_args: moduleArgs,
+        would_send: "POST ad_hoc_commands/",
+      },
+      help: ["Re-run with --confirm to launch"],
+    });
+  }
+
+  const launchRes = yield* write("ad_hoc_commands/", payload, { method: "POST", tag: "operational" });
+  if (launchRes.status !== 201 && launchRes.status !== 200 && launchRes.status !== 202) {
+    throw errorForResponse(launchRes, { subject: "ad-hoc command" });
+  }
+
+  const resBody = (launchRes.body ?? {}) as Record<string, unknown>;
+  const commandId = typeof resBody.id === "number" ? resBody.id : 0;
+  const status = typeof resBody.status === "string" ? resBody.status : "pending";
+
+  if (input.flags.wait === true && commandId > 0) {
+    const timeoutSec = typeof input.flags.timeout === "string" ? Number(input.flags.timeout) : 3600;
+    const pollRes = yield* pollUntilTerminal({
+      route: `ad_hoc_commands/${commandId}/`,
+      timeoutMs: timeoutSec * 1000,
+      resumeCommand: `awx-axi ad-hoc show ${commandId}`,
+    });
+    return withExitCode(
+      detailOutput({
+        label: "ad_hoc_command",
+        fields: {
+          id: commandId,
+          inventory: inventoryId,
+          module_name: moduleName,
+          status: pollRes.status,
+          waited: `${Math.round(pollRes.waitedMs / 1000)}s`,
+        },
+        help: [`Run \`awx-axi ad-hoc stdout ${commandId}\` for command stdout`],
+      }),
+      succeeded(pollRes.status) ? 0 : 1,
+    );
+  }
+
+  return detailOutput({
+    label: "ad_hoc_command",
+    fields: {
+      id: commandId,
+      inventory: inventoryId,
+      module_name: moduleName,
+      status,
+    },
+    help: [`Run \`awx-axi ad-hoc stdout ${commandId}\` for command stdout`],
+  });
+}
+
 function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = parseAdHocId(input.args[0], "events");
   const limit = positiveLimit(input.flags.limit, EVENTS_LIMIT, "events");
@@ -238,9 +355,10 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
 export const adHocDomain: Domain = defineDomain({
   name: "ad-hoc",
   help: [
-    "ad-hoc: inspect existing ad hoc command runs",
+    "ad-hoc: inspect and launch ad hoc commands",
     "",
     "Subcommands:",
+    "  launch   [<inventory>] [--module-name <m>] [--module-args <a>] [--confirm] [--dry-run]",
     "  list     [--search <s>] [--limit <n>]",
     "  show     <id>",
     "  events   <id> [--host <h>] [--task <t>] [--limit <n>]",
@@ -251,8 +369,32 @@ export const adHocDomain: Domain = defineDomain({
     "get_ad_hoc_command",
     "get_ad_hoc_command_events",
     "get_ad_hoc_command_stdout",
+    "launch_ad_hoc_command",
   ],
   subcommands: [
+    {
+      name: "launch",
+      help: "awx-axi ad-hoc launch [<inventory>] [--module-name <m>] [--module-args <a>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "inventory", description: "inventory id or name", takesValue: true },
+        { name: "module-name", description: "module name (e.g. command)", takesValue: true },
+        { name: "module", description: "alias for module-name", takesValue: true },
+        { name: "module-args", description: "module arguments", takesValue: true },
+        { name: "args", description: "alias for module-args", takesValue: true },
+        { name: "credential", description: "credential id or name", takesValue: true },
+        { name: "limit", description: "host limit", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON", takesValue: true },
+        { name: "verbosity", description: "verbosity level 0-5", takesValue: true },
+        { name: "wait", description: "wait for completion", takesValue: false },
+        { name: "timeout", description: "wait timeout in seconds", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<inventory>"], required: 0 },
+      schema: { label: "ad_hoc_command", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: launchPlan,
+    },
     {
       name: "list",
       help: "awx-axi ad-hoc list [--search <s>] [--limit <n>]",

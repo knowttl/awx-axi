@@ -7,6 +7,7 @@ import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -188,20 +189,189 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name === "") {
+    throw validationError("`schedule create` needs a schedule name argument or --name", [
+      "Provide a name, e.g. `awx-axi schedule create \"Nightly Sync\" --rrule \"DTSTART:20250101T000000Z RRULE:FREQ=DAILY\" --template 12`",
+    ]);
+  }
+
+  const payload: Record<string, unknown> = { name };
+
+  if (typeof input.flags.template === "string") {
+    payload.unified_job_template = yield* resolveId(input.flags.template, {
+      listRoute: "unified_job_templates/",
+      noun: "unified job template",
+      listCommand: "template list",
+      command: "schedule create",
+    });
+  }
+
+  if (typeof input.flags.rrule === "string") payload.rrule = input.flags.rrule;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (input.flags.enabled === true) payload.enabled = true;
+  if (input.flags.disabled === true) payload.enabled = false;
+  if (typeof input.flags["extra-vars"] === "string") {
+    try {
+      payload.extra_data = JSON.parse(input.flags["extra-vars"]);
+    } catch {
+      payload.extra_data = input.flags["extra-vars"];
+    }
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "schedule",
+        name,
+        would_send: "POST schedules/",
+        payload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("schedules/", payload, { method: "POST", tag: "config" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `schedule ${name}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "schedule",
+    fields: {
+      id,
+      name: body.name ?? name,
+      enabled: body.enabled === true ? "enabled" : "disabled",
+    },
+    help: [`Run \`awx-axi schedule show ${id}\` to inspect schedule`],
+  });
+}
+
+function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "schedules/",
+    noun: "schedule",
+    listCommand: "schedule list",
+    command: "schedule edit",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.template === "string") {
+    payload.unified_job_template = yield* resolveId(input.flags.template, {
+      listRoute: "unified_job_templates/",
+      noun: "unified job template",
+      listCommand: "template list",
+      command: "schedule edit",
+    });
+  }
+  if (typeof input.flags.rrule === "string") payload.rrule = input.flags.rrule;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (input.flags.enabled === true) payload.enabled = true;
+  if (input.flags.disabled === true) payload.enabled = false;
+  if (typeof input.flags["extra-vars"] === "string") {
+    try {
+      payload.extra_data = JSON.parse(input.flags["extra-vars"]);
+    } catch {
+      payload.extra_data = input.flags["extra-vars"];
+    }
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        schedule: id,
+        would_send: `PATCH schedules/${id}/`,
+        payload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`schedules/${id}/`, payload, { method: "PATCH", tag: "config" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `schedule ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "schedule",
+    fields: {
+      id,
+      name: body.name ?? null,
+      enabled: body.enabled === true ? "enabled" : "disabled",
+    },
+    help: [`Run \`awx-axi schedule show ${id}\` to inspect updated schedule`],
+  });
+}
+
 export const scheduleDomain: Domain = defineDomain({
   name: "schedule",
   help: [
     "schedule: scheduled unified-job runs",
     "",
     "Subcommands:",
+    "  create  [<name>] [--template <id|name>] [--rrule <rrule>] [--confirm] [--dry-run]",
+    "  edit    <id|name> [--name <n>] [--confirm] [--dry-run]",
     "  list    [--search <s>] [--template <id>] [--enabled] [--disabled] [--limit <n>]",
     "  show    <id|name>",
   ].join("\n"),
   mcpEquivalents: [
     "list_schedules",
     "get_schedule",
+    "create_schedule",
+    "update_schedule",
   ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi schedule create [<name>] [--template <id|name>] [--rrule <rrule>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "schedule name", takesValue: true },
+        { name: "template", description: "unified job template id or name", takesValue: true },
+        { name: "rrule", description: "recurrence rule string", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "enabled", description: "enable schedule", takesValue: false },
+        { name: "disabled", description: "disable schedule", takesValue: false },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<name>"], required: 0 },
+      schema: { label: "schedule", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createSchedulePlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi schedule edit <id|name> [--name <n>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "schedule name", takesValue: true },
+        { name: "template", description: "unified job template id or name", takesValue: true },
+        { name: "rrule", description: "recurrence rule string", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "enabled", description: "enable schedule", takesValue: false },
+        { name: "disabled", description: "disable schedule", takesValue: false },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "schedule", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editSchedulePlan,
+    },
     {
       name: "list",
       help: "awx-axi schedule list [--search <s>] [--template <id>] [--enabled|--disabled] [--limit <n>]",
