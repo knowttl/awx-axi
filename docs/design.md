@@ -43,7 +43,11 @@ Job templates exist in v1 only because a job cannot be launched without one.
 template management surface.
 Template create, edit, and copy are accepted into v1 as configuration writes (§6.1); template delete is not in v1.
 
-## 2. Non-goals for v1
+## 2. Scope boundaries for v1
+
+Most of this section is what v1 deliberately does not do.
+Two entries record the opposite - a capability that **is** in v1 and needs its limits stated plainly - because
+the boundary matters more than the heading's symmetry.
 
 - **A deliberately narrow configuration surface.**
   v1 ships configuration writes only for templates, projects, workflows, schedules, inventories, and inventory
