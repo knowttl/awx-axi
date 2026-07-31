@@ -43,7 +43,11 @@ Job templates exist in v1 only because a job cannot be launched without one.
 template management surface.
 Template create, edit, and copy are accepted into v1 as configuration writes (§6.1); template delete is not in v1.
 
-## 2. Non-goals for v1
+## 2. Scope boundaries for v1
+
+Most of this section is what v1 deliberately does not do.
+Two entries record the opposite - a capability that **is** in v1 and needs its limits stated plainly - because
+the boundary matters more than the heading's symmetry.
 
 - **A deliberately narrow configuration surface.**
   v1 ships configuration writes only for templates, projects, workflows, schedules, inventories, and inventory
@@ -60,10 +64,12 @@ Template create, edit, and copy are accepted into v1 as configuration writes (§
   awx-axi v1 goes further and omits them, so the gate has nothing to protect (§6).
 - **No RBAC surface.**
   Role grants and revocations are the highest-blast-radius writes in AWX and are out of v1.
-- **No ad hoc command execution.**
-  `run_ad_hoc_command` runs arbitrary modules against arbitrary hosts with no template review.
-  Reading an existing ad hoc command's result is in scope through the unified `job` noun and dedicated
-  `ad-hoc` noun; creating one is not.
+- **Ad hoc command execution is in v1, and it is the sharpest command in the tool.**
+  `ad-hoc launch` runs arbitrary modules against arbitrary hosts with no template review - with `shell` or
+  `command` it is arbitrary remote execution across every host in the chosen inventory.
+  That reasoning once made it a non-goal; it was accepted into v1 by captain decision 2026-07-31 because the
+  inbox is useless without it, and the reasoning survives here because it is why the command deserves care.
+  §7.9 documents it and §6.1 places it in a risk tier.
 - **No bulk endpoints.**
   `/api/v2/bulk/job_launch` wraps its jobs in a workflow job that a non-admin cannot see in the UI job list,
   which is a confusing enough side effect that it needs its own design pass.
@@ -336,8 +342,8 @@ This section is the framing that keeps them defensible.
 
 **Tier 1 - reversible operational writes. Gated by default.**
 
-`job cancel`, `job relaunch`, `template launch`, `workflow launch`, `project sync`, `approval approve`,
-`approval deny`.
+`job cancel`, `job relaunch`, `template launch`, `workflow launch`, `project sync`, `inventory sync`,
+`ad-hoc launch`, `approval approve`, `approval deny`.
 
 These are the actions an operator takes during an incident.
 Each is reversible or repeatable in the ordinary course of operations.
@@ -349,6 +355,16 @@ Approvals deserve a note: approving a workflow step is *operationally* consequen
 downstream automation, and it cannot be un-approved.
 It stays in tier 1 anyway, because refusing it would make the approval inbox read-only and therefore useless,
 and because AWX's own permission model already gates it to users with approval rights.
+
+`ad-hoc launch` deserves the same note, more sharply. It runs an operator-supplied module with
+operator-supplied arguments against an inventory, so unlike every other tier-1 command it is not bounded by a
+reviewed job template. Three things stand between a mistake and a fleet-wide command run, and they are all
+listed here because there is no fourth: it previews by default, it acts only when `--confirm` is passed without
+`--dry-run`, and `AWX_AXI_READ_ONLY=1` refuses it at the transport seam before anything is sent. **Unlike the
+tier-2 configuration writes, no dedicated environment variable gates it** - the write is tagged `operational`,
+so `AWX_AXI_ALLOW_CONFIG_WRITES` does not apply to it. That asymmetry is a deliberate decision of 2026-07-31,
+not an omission.
+
 awx-axi's contribution is to make the decision informed rather than blind: `approval show` prints what the step
 gates and which workflow it belongs to before anyone approves it.
 
@@ -469,7 +485,7 @@ awx-axi job        <subcommand>       the unified run surface
 awx-axi template   <subcommand>       job templates: the launch enabler
 awx-axi workflow   <subcommand>       workflow job templates and node rollups
 awx-axi approval   <subcommand>       the workflow approval inbox
-awx-axi ad-hoc     <subcommand>       inspect ad hoc command history
+awx-axi ad-hoc     <subcommand>       inspect and launch ad hoc commands
 awx-axi project    <subcommand>       projects and SCM syncs
 awx-axi inventory  <subcommand>       inventories, groups, hosts, sources, updates
 awx-axi system-job-template <subcommand>  maintenance job templates
@@ -707,17 +723,26 @@ awx-axi project sync <id|name>       [--wait] [--timeout] [--dry-run]
 The verb is `sync`, not `update`, so it cannot be read as "modify the project record".
 A sync's log is `job stdout <sync-id>` (§7.2), and its progress is `job watch <sync-id>`.
 
-### 7.9 `ad-hoc` - inspect command runs
+### 7.9 `ad-hoc` - inspect and run ad hoc commands
 
 ```
 awx-axi ad-hoc list                  [--search] [--limit]
 awx-axi ad-hoc show <id>
 awx-axi ad-hoc events <id>           [--host] [--task] [--limit]
 awx-axi ad-hoc stdout <id>           [--tail N | --lines A-B]
+awx-axi ad-hoc launch [<inventory>]  [--inventory <i|name>] [--module-name <m>] [--module-args <a>]
+                                     [--credential <c|name>] [--limit <hosts>] [--extra-vars '<json>']
+                                     [--verbosity 0-5] [--wait] [--timeout <s>] [--confirm] [--dry-run]
 ```
 
-This is a read-only inspector for ad hoc command runs, parallel to `job`, so operators can jump to command
-details without first narrowing by unified job type.
+The read subcommands are an inspector for ad hoc command runs, parallel to `job`, so operators can jump to
+command details without first narrowing by unified job type.
+`--module` and `--args` are accepted as aliases for `--module-name` and `--module-args`.
+
+`ad-hoc launch` issues `POST ad_hoc_commands/` and is the one command in v1 that executes operator-supplied
+code on managed hosts. It previews by default; it acts only when `--confirm` is passed without `--dry-run`; and
+`AWX_AXI_READ_ONLY=1` refuses it before anything is sent. **No dedicated environment gate covers it**, unlike
+the §6.1 tier-2 configuration writes - see the tier-1 discussion in §6.1 for why that asymmetry is deliberate.
 
 ### 7.10 `job watch` - bounded polling
 
@@ -1292,7 +1317,7 @@ An earlier draft of this design proposed one behind a second environment variabl
 It is removed rather than merely disabled: a gate that exists can be opened by a future contributor who has not
 read the captain's order, and the whole point of §6.5 is that the guarantee must not depend on someone
 remembering.
-The seven tier-1 write commands are therefore covered **only** by the offline suite, which is where they were
+The nine tier-1 write commands are therefore covered **only** by the offline suite, which is where they were
 already covered anyway (§11.2), and by `--dry-run` against the live instance, which issues no mutation and is a
 genuinely useful live check of name resolution and payload construction.
 
