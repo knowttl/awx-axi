@@ -213,7 +213,7 @@ export function* write(
   const opts: WriteOptions =
     typeof options === "string"
       ? { method: options, tag }
-      : options ?? { tag };
+      : { tag, ...options };
   const method = opts.method ?? "POST";
   const riskTag = opts.tag;
   const result = yield {
