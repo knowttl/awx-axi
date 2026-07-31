@@ -41,7 +41,7 @@ breadth across AWX's configuration surface.
 Job templates exist in v1 only because a job cannot be launched without one.
 `template list`, `template show`, `template launch`, and `template survey` are the launch enabler, not a job
 template management surface.
-There is no template create, update, delete, or copy in v1.
+Template create, edit, and copy are accepted into v1 as configuration writes (§6.1); template delete is not in v1.
 
 ## 2. Non-goals for v1
 
