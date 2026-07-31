@@ -327,4 +327,30 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(editLive.exitCode).toBe(0);
     expect(editLive.stdout).toContain("enabled: false");
   });
+
+  it("inventory delete and host delete work with dry-run and --confirm", async () => {
+    const invDry = await runCli(["inventory", "delete", "50"], { script: [] });
+    expect(invDry.exitCode).toBe(0);
+    expect(invDry.stdout).toContain("dry_run:");
+    expect(invDry.stdout).toContain("would_send: DELETE inventories/50/");
+
+    const invLive = await runCli(["inventory", "delete", "50", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_DELETES: "1" },
+    });
+    expect(invLive.exitCode).toBe(0);
+    expect(invLive.stdout).toContain("status: deleted");
+
+    const hostDry = await runCli(["inventory", "host", "delete", "101"], { script: [] });
+    expect(hostDry.exitCode).toBe(0);
+    expect(hostDry.stdout).toContain("dry_run:");
+    expect(hostDry.stdout).toContain("would_send: DELETE hosts/101/");
+
+    const hostLive = await runCli(["inventory", "host-delete", "101", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_DELETES: "1" },
+    });
+    expect(hostLive.exitCode).toBe(0);
+    expect(hostLive.stdout).toContain("status: deleted");
+  });
 });

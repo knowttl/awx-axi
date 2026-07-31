@@ -79,4 +79,22 @@ describe("workflow domain (design.md §7.6)", () => {
     expect(liveEdit.exitCode).toBe(0);
     expect(liveEdit.stdout).toContain("id: 15");
   });
+
+  it("workflow delete supports dry-run and --confirm", async () => {
+    const dryDelete = await runCli(["workflow", "delete", "10"], { script: [] });
+    expect(dryDelete.exitCode).toBe(0);
+    expect(dryDelete.stdout).toContain("dry_run:");
+    expect(dryDelete.stdout).toContain("would_send: DELETE workflow_job_templates/10/");
+
+    const liveDelete = await runCli(["workflow", "delete", "10", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_DELETES: "1" },
+    });
+    expect(liveDelete.exitCode).toBe(0);
+    expect(liveDelete.stdout).toContain("status: deleted");
+    expect(liveDelete.transport.requests[0]).toMatchObject({
+      method: "DELETE",
+      route: "workflow_job_templates/10/",
+    });
+  });
 });

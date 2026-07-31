@@ -403,6 +403,41 @@ function* editWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* deleteWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "workflow_job_templates/",
+    noun: "workflow",
+    listCommand: "workflow list",
+    command: "workflow delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        workflow: id,
+        would_send: `DELETE workflow_job_templates/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`workflow_job_templates/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `workflow ${id}` });
+  }
+
+  return detailOutput({
+    label: "workflow",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const workflowDomain: Domain = defineDomain({
   name: "workflow",
   help: [
@@ -411,6 +446,7 @@ export const workflowDomain: Domain = defineDomain({
     "Subcommands:",
     "  create   [<name>] [--organization <o>] [--confirm] [--dry-run]",
     "  edit     <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  delete   <id|name> [--confirm] [--dry-run]",
     "  list     [--search <s>] [--limit <n>]",
     "  show     <id|name>",
     "  survey   <id|name>",
@@ -425,6 +461,7 @@ export const workflowDomain: Domain = defineDomain({
     "get_workflow_job_nodes",
     "create_workflow_job_template",
     "update_workflow_job_template",
+    "delete_workflow_job_template",
   ],
   subcommands: [
     {
@@ -458,6 +495,18 @@ export const workflowDomain: Domain = defineDomain({
       schema: { label: "workflow", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],
       plan: editWorkflowPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi workflow delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "workflow", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteWorkflowPlan,
     },
     {
       name: "list",

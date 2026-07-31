@@ -7,6 +7,7 @@ import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -287,12 +288,193 @@ function* teamsPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* resolveUserSubject(value: string, command: string): Plan<number> {
+  if (/^\d+$/.test(value)) {
+    return Number(value);
+  }
+
+  const response = yield* read("users/", { username: value });
+  if (response.status !== 200) {
+    throw errorForResponse(response, { subject: `user "${value}"` });
+  }
+
+  const envelope = (response.body ?? {}) as { results?: unknown };
+  const matches = Array.isArray(envelope.results)
+    ? (envelope.results as Record<string, unknown>[])
+    : [];
+
+  if (matches.length === 1 && typeof matches[0]?.id === "number") {
+    return matches[0].id;
+  }
+
+  if (matches.length === 0) {
+    const iexactRes = yield* read("users/", { username__iexact: value });
+    if (iexactRes.status === 200) {
+      const iexactEnvelope = (iexactRes.body ?? {}) as { results?: unknown };
+      const iexactMatches = Array.isArray(iexactEnvelope.results)
+        ? (iexactEnvelope.results as Record<string, unknown>[])
+        : [];
+      if (iexactMatches.length === 1 && typeof iexactMatches[0]?.id === "number") {
+        return iexactMatches[0].id;
+      }
+    }
+
+    throw validationError(`no user is named "${value}"`, [
+      `Run \`awx-axi user list --search "${value}"\` to search users`,
+    ]);
+  }
+
+  throw validationError(`multiple users match "${value}"`, [
+    `Re-run with the user id, e.g. \`awx-axi ${command} --user <id>\``,
+  ]);
+}
+
+function* grantRolePlan(input: SubcommandInput): Plan<DomainResult> {
+  const roleId = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "roles/",
+    noun: "role",
+    listCommand: "role list",
+    command: "role grant",
+  });
+
+  const hasUser = typeof input.flags.user === "string";
+  const hasTeam = typeof input.flags.team === "string";
+
+  if (!hasUser && !hasTeam) {
+    throw validationError("`role grant` needs --user or --team", [
+      "Provide a user or team, e.g. `awx-axi role grant <role> --user <username>`",
+    ]);
+  }
+
+  let route: string;
+  let targetType: "user" | "team";
+  let targetId: number;
+  let payload: Record<string, unknown>;
+
+  if (hasUser) {
+    targetType = "user";
+    targetId = yield* resolveUserSubject(input.flags.user as string, "role grant");
+    route = `roles/${roleId}/users/`;
+    payload = { id: targetId };
+  } else {
+    targetType = "team";
+    targetId = yield* resolveId(input.flags.team as string, {
+      listRoute: "teams/",
+      noun: "team",
+      listCommand: "team list",
+      command: "role grant",
+    });
+    route = `roles/${roleId}/teams/`;
+    payload = { id: targetId };
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "grant",
+        role: roleId,
+        [targetType]: targetId,
+        would_send: `POST ${route}`,
+        payload,
+      },
+      help: ["Re-run with --confirm to grant role"],
+    });
+  }
+
+  const res = yield* write(route, payload, { method: "POST", tag: "security" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 201) {
+    throw errorForResponse(res, { subject: `role ${roleId}` });
+  }
+
+  return detailOutput({
+    label: "role_grant",
+    fields: {
+      role: roleId,
+      [targetType]: targetId,
+      status: "granted",
+    },
+  });
+}
+
+function* revokeRolePlan(input: SubcommandInput): Plan<DomainResult> {
+  const roleId = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "roles/",
+    noun: "role",
+    listCommand: "role list",
+    command: "role revoke",
+  });
+
+  const hasUser = typeof input.flags.user === "string";
+  const hasTeam = typeof input.flags.team === "string";
+
+  if (!hasUser && !hasTeam) {
+    throw validationError("`role revoke` needs --user or --team", [
+      "Provide a user or team, e.g. `awx-axi role revoke <role> --user <username>`",
+    ]);
+  }
+
+  let route: string;
+  let targetType: "user" | "team";
+  let targetId: number;
+  let payload: Record<string, unknown>;
+
+  if (hasUser) {
+    targetType = "user";
+    targetId = yield* resolveUserSubject(input.flags.user as string, "role revoke");
+    route = `roles/${roleId}/users/`;
+    payload = { id: targetId, disassociate: true };
+  } else {
+    targetType = "team";
+    targetId = yield* resolveId(input.flags.team as string, {
+      listRoute: "teams/",
+      noun: "team",
+      listCommand: "team list",
+      command: "role revoke",
+    });
+    route = `roles/${roleId}/teams/`;
+    payload = { id: targetId, disassociate: true };
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "revoke",
+        role: roleId,
+        [targetType]: targetId,
+        would_send: `POST ${route}`,
+        payload,
+      },
+      help: ["Re-run with --confirm to revoke role"],
+    });
+  }
+
+  const res = yield* write(route, payload, { method: "POST", tag: "security" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 201) {
+    throw errorForResponse(res, { subject: `role ${roleId}` });
+  }
+
+  return detailOutput({
+    label: "role_revoke",
+    fields: {
+      role: roleId,
+      [targetType]: targetId,
+      status: "revoked",
+    },
+  });
+}
+
 export const roleDomain: Domain = defineDomain({
   name: "role",
   help: [
     "role: AWX RBAC roles and permissions hierarchy",
     "",
     "Subcommands:",
+    "  grant     <id|name> [--user <id|username>] [--team <id|name>] [--confirm] [--dry-run]",
+    "  revoke    <id|name> [--user <id|username>] [--team <id|name>] [--confirm] [--dry-run]",
     "  list      [--search <s>] [--type <t>] [--limit <n>]",
     "  show      <id|name>",
     "  parents   <id|name> [--limit <n>]",
@@ -303,12 +485,42 @@ export const roleDomain: Domain = defineDomain({
   mcpEquivalents: [
     "list_roles",
     "get_role",
+    "grant_role",
+    "revoke_role",
     "list_role_parents",
     "list_role_children",
     "list_role_users",
     "list_role_teams",
   ],
   subcommands: [
+    {
+      name: "grant",
+      help: "awx-axi role grant <id|name> [--user <id|username>] [--team <id|name>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "user", description: "user id or username", takesValue: true },
+        { name: "team", description: "team id or name", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "role", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: grantRolePlan,
+    },
+    {
+      name: "revoke",
+      help: "awx-axi role revoke <id|name> [--user <id|username>] [--team <id|name>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "user", description: "user id or username", takesValue: true },
+        { name: "team", description: "team id or name", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "role", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: revokeRolePlan,
+    },
     {
       name: "list",
       help: "awx-axi role list [--search <s>] [--type <t>] [--limit <n>]",

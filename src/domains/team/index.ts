@@ -7,6 +7,7 @@ import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -331,12 +332,164 @@ function* accessListPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createTeamPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name =
+    input.args[0] ??
+    (typeof input.flags.name === "string" ? input.flags.name : undefined);
+
+  if (name === undefined) {
+    throw validationError("`team create` needs a team name argument or --name", [
+      "Provide a name, e.g. `awx-axi team create Engineering --organization Default`",
+    ]);
+  }
+
+  if (typeof input.flags.organization !== "string") {
+    throw validationError("`team create` needs an --organization id or name", [
+      "Provide an organization, e.g. `--organization Default`",
+    ]);
+  }
+
+  const organizationId = yield* resolveId(input.flags.organization, {
+    listRoute: "organizations/",
+    noun: "organization",
+    listCommand: "organization list",
+    command: "team create",
+  });
+
+  const payload: Record<string, unknown> = {
+    name,
+    organization: organizationId,
+  };
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "team",
+        name,
+        would_send: "POST teams/",
+        payload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("teams/", payload, { method: "POST", tag: "security" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `team ${name}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "team",
+    fields: {
+      id,
+      name: body.name ?? name,
+    },
+    help: [`Run \`awx-axi team show ${id}\` to inspect team`],
+  });
+}
+
+function* editTeamPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "teams/",
+    noun: "team",
+    listCommand: "team list",
+    command: "team edit",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.organization === "string") {
+    payload.organization = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "team edit",
+    });
+  }
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        team: id,
+        would_send: `PATCH teams/${id}/`,
+        payload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`teams/${id}/`, payload, { method: "PATCH", tag: "security" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `team ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "team",
+    fields: {
+      id,
+      name: body.name ?? null,
+    },
+    help: [`Run \`awx-axi team show ${id}\` to inspect updated team`],
+  });
+}
+
+function* deleteTeamPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "teams/",
+    noun: "team",
+    listCommand: "team list",
+    command: "team delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        team: id,
+        would_send: `DELETE teams/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`teams/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `team ${id}` });
+  }
+
+  return detailOutput({
+    label: "team",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const teamDomain: Domain = defineDomain({
   name: "team",
   help: [
     "team: AWX teams, membership, and access controls",
     "",
     "Subcommands:",
+    "  create        [<name>] --organization <id|name> [--confirm] [--dry-run]",
+    "  edit          <id|name> [--name <n>] [--organization <id|name>] [--confirm] [--dry-run]",
+    "  delete        <id|name> [--confirm] [--dry-run]",
     "  list          [--search <s>] [--organization <id>] [--limit <n>]",
     "  show          <id|name>",
     "  users         <id|name> [--limit <n>]",
@@ -349,6 +502,9 @@ export const teamDomain: Domain = defineDomain({
   mcpEquivalents: [
     "list_teams",
     "get_team",
+    "create_team",
+    "update_team",
+    "delete_team",
     "list_team_users",
     "list_team_projects",
     "list_team_credentials",
@@ -357,6 +513,48 @@ export const teamDomain: Domain = defineDomain({
     "list_team_access_list",
   ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi team create [<name>] --organization <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "team name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<name>"], required: 0 },
+      schema: { label: "team", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createTeamPlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi team edit <id|name> [--name <n>] [--organization <id|name>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "team name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "team", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editTeamPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi team delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "team", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteTeamPlan,
+    },
     {
       name: "list",
       help: "awx-axi team list [--search <s>] [--organization <id>] [--limit <n>]",

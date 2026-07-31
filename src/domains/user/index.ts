@@ -1,12 +1,15 @@
 /**
  * The `user` domain: list and inspect AWX users (design.md §14.2 roadmap).
  */
+import { readFileSync, statSync } from "node:fs";
+
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -221,17 +224,244 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function readSecretContent(filePath: string): string {
+  if (filePath === "-") {
+    return readFileSync(0, "utf8");
+  }
+  let stats;
+  try {
+    stats = statSync(filePath);
+  } catch {
+    throw validationError(`secret file "${filePath}" could not be read`);
+  }
+
+  if ((stats.mode & 0o077) !== 0) {
+    throw validationError(
+      `secret file "${filePath}" is group- or world-readable; permissions must be 0600`,
+    );
+  }
+
+  return readFileSync(filePath, "utf8");
+}
+
+function parseUserPassword(input: SubcommandInput): string | undefined {
+  if (typeof input.flags["password-file"] === "string") {
+    return readSecretContent(input.flags["password-file"]).trim();
+  }
+  return undefined;
+}
+
+function* createUserPlan(input: SubcommandInput): Plan<DomainResult> {
+  const username =
+    input.args[0] ??
+    (typeof input.flags.username === "string" ? input.flags.username : undefined);
+
+  if (username === undefined) {
+    throw validationError("`user create` needs a username argument or --username", [
+      "Provide a username, e.g. `awx-axi user create alice --password-file /path/to/pass`",
+    ]);
+  }
+
+  const password = parseUserPassword(input);
+
+  const payload: Record<string, unknown> = { username };
+  if (password !== undefined) payload.password = password;
+  if (typeof input.flags["first-name"] === "string") payload.first_name = input.flags["first-name"];
+  if (typeof input.flags["last-name"] === "string") payload.last_name = input.flags["last-name"];
+  if (typeof input.flags.email === "string") payload.email = input.flags.email;
+  if (input.flags["is-superuser"] === true) payload.is_superuser = true;
+  if (input.flags["is-system-auditor"] === true) payload.is_system_auditor = true;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    const dryPayload = { ...payload };
+    if (dryPayload.password !== undefined) {
+      dryPayload.password = "[redacted]";
+    }
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "user",
+        username,
+        would_send: "POST users/",
+        payload: dryPayload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("users/", payload, { method: "POST", tag: "security" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `user ${username}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "user",
+    fields: {
+      id,
+      username: body.username ?? username,
+    },
+    help: [`Run \`awx-axi user show ${id}\` to inspect user`],
+  });
+}
+
+function* editUserPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveUserId(input.args[0] ?? "");
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.username === "string") payload.username = input.flags.username;
+  if (typeof input.flags["first-name"] === "string") payload.first_name = input.flags["first-name"];
+  if (typeof input.flags["last-name"] === "string") payload.last_name = input.flags["last-name"];
+  if (typeof input.flags.email === "string") payload.email = input.flags.email;
+  if (input.flags["is-superuser"] === true) payload.is_superuser = true;
+  if (input.flags["no-superuser"] === true) payload.is_superuser = false;
+  if (input.flags["is-system-auditor"] === true) payload.is_system_auditor = true;
+  if (input.flags["no-system-auditor"] === true) payload.is_system_auditor = false;
+
+  const password = parseUserPassword(input);
+  if (password !== undefined) payload.password = password;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    const dryPayload = { ...payload };
+    if (dryPayload.password !== undefined) {
+      dryPayload.password = "[redacted]";
+    }
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        user: id,
+        would_send: `PATCH users/${id}/`,
+        payload: dryPayload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`users/${id}/`, payload, { method: "PATCH", tag: "security" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `user ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "user",
+    fields: {
+      id,
+      username: body.username ?? null,
+    },
+    help: [`Run \`awx-axi user show ${id}\` to inspect updated user`],
+  });
+}
+
+function* deleteUserPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveUserId(input.args[0] ?? "");
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        user: id,
+        would_send: `DELETE users/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`users/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `user ${id}` });
+  }
+
+  return detailOutput({
+    label: "user",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const userDomain: Domain = defineDomain({
   name: "user",
   help: [
     "user: AWX users and identity metadata",
     "",
     "Subcommands:",
-    "  list  [--search <s>] [--limit <n>]",
-    "  show  <id|name>",
+    "  create  [<username>] [--password-file <p>] [--confirm] [--dry-run]",
+    "  edit    <id|name> [--username <u>] [--password-file <p>] [--confirm] [--dry-run]",
+    "  delete  <id|name> [--confirm] [--dry-run]",
+    "  list    [--search <s>] [--limit <n>]",
+    "  show    <id|name>",
   ].join("\n"),
-  mcpEquivalents: ["list_users", "get_user"],
+  mcpEquivalents: [
+    "list_users",
+    "get_user",
+    "create_user",
+    "update_user",
+    "delete_user",
+  ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi user create [<username>] [--password-file <p>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "username", description: "username", takesValue: true },
+        { name: "password-file", description: "password file path (or - for stdin)", takesValue: true },
+        { name: "first-name", description: "first name", takesValue: true },
+        { name: "last-name", description: "last name", takesValue: true },
+        { name: "email", description: "email address", takesValue: true },
+        { name: "is-superuser", description: "make superuser", takesValue: false },
+        { name: "is-system-auditor", description: "make system auditor", takesValue: false },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<username>"], required: 0 },
+      schema: { label: "user", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createUserPlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi user edit <id|name> [--username <u>] [--password-file <p>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "username", description: "username", takesValue: true },
+        { name: "password-file", description: "password file path (or - for stdin)", takesValue: true },
+        { name: "first-name", description: "first name", takesValue: true },
+        { name: "last-name", description: "last name", takesValue: true },
+        { name: "email", description: "email address", takesValue: true },
+        { name: "is-superuser", description: "make superuser", takesValue: false },
+        { name: "no-superuser", description: "remove superuser", takesValue: false },
+        { name: "is-system-auditor", description: "make system auditor", takesValue: false },
+        { name: "no-system-auditor", description: "remove system auditor", takesValue: false },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "user", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editUserPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi user delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "user", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteUserPlan,
+    },
     {
       name: "list",
       help: "awx-axi user list [--search <s>] [--limit <n>]",

@@ -54,4 +54,40 @@ describe("user domain (design.md §identity)", () => {
     expect(run.stdout).toContain("code: NAME_NOT_FOUND");
     expect(run.transport.requests).toHaveLength(2);
   });
+
+  it("user create, edit, delete support dry-run and --confirm", async () => {
+    const dryCreate = await runCli(["user", "create", "alice", "--first-name", "Alice"], { script: [] });
+    expect(dryCreate.exitCode).toBe(0);
+    expect(dryCreate.stdout).toContain("dry_run:");
+    expect(dryCreate.stdout).toContain("would_send: POST users/");
+
+    const liveCreate = await runCli(["user", "create", "alice", "--first-name", "Alice", "--confirm"], {
+      script: [{ status: 201, body: { id: 12, username: "alice" } }],
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+    });
+    expect(liveCreate.exitCode).toBe(0);
+    expect(liveCreate.stdout).toContain("id: 12");
+
+    const dryEdit = await runCli(["user", "edit", "12", "--last-name", "Smith"], { script: [] });
+    expect(dryEdit.exitCode).toBe(0);
+    expect(dryEdit.stdout).toContain("would_send: PATCH users/12/");
+
+    const liveEdit = await runCli(["user", "edit", "12", "--last-name", "Smith", "--confirm"], {
+      script: [{ status: 200, body: { id: 12, username: "alice" } }],
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+    });
+    expect(liveEdit.exitCode).toBe(0);
+    expect(liveEdit.stdout).toContain("id: 12");
+
+    const dryDelete = await runCli(["user", "delete", "12"], { script: [] });
+    expect(dryDelete.exitCode).toBe(0);
+    expect(dryDelete.stdout).toContain("would_send: DELETE users/12/");
+
+    const liveDelete = await runCli(["user", "delete", "12", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_DELETES: "1" },
+    });
+    expect(liveDelete.exitCode).toBe(0);
+    expect(liveDelete.stdout).toContain("status: deleted");
+  });
 });

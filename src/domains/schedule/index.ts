@@ -316,6 +316,41 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* deleteSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "schedules/",
+    noun: "schedule",
+    listCommand: "schedule list",
+    command: "schedule delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        schedule: id,
+        would_send: `DELETE schedules/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`schedules/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `schedule ${id}` });
+  }
+
+  return detailOutput({
+    label: "schedule",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const scheduleDomain: Domain = defineDomain({
   name: "schedule",
   help: [
@@ -324,6 +359,7 @@ export const scheduleDomain: Domain = defineDomain({
     "Subcommands:",
     "  create  [<name>] [--template <id|name>] [--rrule <rrule>] [--confirm] [--dry-run]",
     "  edit    <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  delete  <id|name> [--confirm] [--dry-run]",
     "  list    [--search <s>] [--template <id>] [--enabled] [--disabled] [--limit <n>]",
     "  show    <id|name>",
   ].join("\n"),
@@ -332,6 +368,7 @@ export const scheduleDomain: Domain = defineDomain({
     "get_schedule",
     "create_schedule",
     "update_schedule",
+    "delete_schedule",
   ],
   subcommands: [
     {
@@ -371,6 +408,18 @@ export const scheduleDomain: Domain = defineDomain({
       schema: { label: "schedule", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],
       plan: editSchedulePlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi schedule delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "schedule", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteSchedulePlan,
     },
     {
       name: "list",

@@ -1,12 +1,15 @@
 /**
  * The `credential` domain: list and inspect AWX credentials (design.md v1 roadmap).
  */
+import { readFileSync, statSync } from "node:fs";
+
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -143,17 +146,298 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function readSecretContent(filePath: string): string {
+  if (filePath === "-") {
+    return readFileSync(0, "utf8");
+  }
+  let stats;
+  try {
+    stats = statSync(filePath);
+  } catch {
+    throw validationError(`secret file "${filePath}" could not be read`);
+  }
+
+  if ((stats.mode & 0o077) !== 0) {
+    throw validationError(
+      `secret file "${filePath}" is group- or world-readable; permissions must be 0600`,
+    );
+  }
+
+  return readFileSync(filePath, "utf8");
+}
+
+function parseInputs(input: SubcommandInput): Record<string, unknown> {
+  if (typeof input.flags["inputs-file"] !== "string") {
+    return {};
+  }
+  const content = readSecretContent(input.flags["inputs-file"]);
+
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fail
+  }
+  throw validationError("credential inputs must be a JSON object");
+}
+
+function* createCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name =
+    input.args[0] ??
+    (typeof input.flags.name === "string" ? input.flags.name : undefined);
+
+  if (name === undefined) {
+    throw validationError(
+      "`credential create` needs a credential name argument or --name",
+      [
+        "Provide a name, e.g. `awx-axi credential create \"Production AWS\" --credential-type Amazon`",
+      ],
+    );
+  }
+
+  if (typeof input.flags["credential-type"] !== "string") {
+    throw validationError(
+      "`credential create` needs a --credential-type id or name",
+      ["Provide a credential type, e.g. `--credential-type \"Amazon Web Services\"`"],
+    );
+  }
+
+  const credentialTypeId = yield* resolveId(input.flags["credential-type"], {
+    listRoute: "credential_types/",
+    noun: "credential type",
+    listCommand: "credential list",
+    command: "credential create",
+  });
+
+  let organizationId: number | undefined;
+  if (typeof input.flags.organization === "string") {
+    organizationId = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "credential create",
+    });
+  }
+
+  const inputs = parseInputs(input);
+
+  const payload: Record<string, unknown> = {
+    name,
+    credential_type: credentialTypeId,
+    inputs,
+  };
+  if (organizationId !== undefined) payload.organization = organizationId;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    const dryPayload = {
+      ...payload,
+      inputs: Object.fromEntries(Object.keys(inputs).map((k) => [k, "[redacted]"])),
+    };
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "credential",
+        name,
+        would_send: "POST credentials/",
+        payload: dryPayload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("credentials/", payload, { method: "POST", tag: "security" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `credential ${name}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "credential",
+    fields: {
+      id,
+      name: body.name ?? name,
+    },
+    help: [`Run \`awx-axi credential show ${id}\` to inspect credential`],
+  });
+}
+
+function* editCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "credentials/",
+    noun: "credential",
+    listCommand: "credential list",
+    command: "credential edit",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.organization === "string") {
+    payload.organization = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "credential edit",
+    });
+  }
+  if (typeof input.flags["credential-type"] === "string") {
+    payload.credential_type = yield* resolveId(input.flags["credential-type"], {
+      listRoute: "credential_types/",
+      noun: "credential type",
+      listCommand: "credential list",
+      command: "credential edit",
+    });
+  }
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+
+  const hasInputs = typeof input.flags["inputs-file"] === "string";
+  if (hasInputs) {
+    payload.inputs = parseInputs(input);
+  }
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    const dryPayload = { ...payload };
+    if (typeof dryPayload.inputs === "object" && dryPayload.inputs !== null) {
+      dryPayload.inputs = Object.fromEntries(
+        Object.keys(dryPayload.inputs as Record<string, unknown>).map((k) => [k, "[redacted]"]),
+      );
+    }
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        credential: id,
+        would_send: `PATCH credentials/${id}/`,
+        payload: dryPayload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`credentials/${id}/`, payload, { method: "PATCH", tag: "security" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `credential ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "credential",
+    fields: {
+      id,
+      name: body.name ?? null,
+    },
+    help: [`Run \`awx-axi credential show ${id}\` to inspect updated credential`],
+  });
+}
+
+function* deleteCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "credentials/",
+    noun: "credential",
+    listCommand: "credential list",
+    command: "credential delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        credential: id,
+        would_send: `DELETE credentials/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`credentials/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `credential ${id}` });
+  }
+
+  return detailOutput({
+    label: "credential",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const credentialDomain: Domain = defineDomain({
   name: "credential",
   help: [
     "credential: AWX credentials and their metadata",
     "",
     "Subcommands:",
-    "  list  [--search <s>] [--organization <id>] [--limit <n>]",
-    "  show  <id|name>",
+    "  create  [<name>] --credential-type <id|name> [--inputs-file <path>] [--confirm] [--dry-run]",
+    "  edit    <id|name> [--name <n>] [--inputs-file <path>] [--confirm] [--dry-run]",
+    "  delete  <id|name> [--confirm] [--dry-run]",
+    "  list    [--search <s>] [--organization <id>] [--limit <n>]",
+    "  show    <id|name>",
   ].join("\n"),
-  mcpEquivalents: ["list_credentials"],
+  mcpEquivalents: [
+    "list_credentials",
+    "create_credential",
+    "update_credential",
+    "delete_credential",
+  ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi credential create [<name>] --credential-type <id|name> [--inputs-file <path>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "credential name", takesValue: true },
+        { name: "credential-type", description: "credential type id or name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "inputs-file", description: "JSON file path (or - for stdin)", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<name>"], required: 0 },
+      schema: { label: "credential", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createCredentialPlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi credential edit <id|name> [--name <n>] [--inputs-file <path>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "credential name", takesValue: true },
+        { name: "credential-type", description: "credential type id or name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "inputs-file", description: "JSON file path (or - for stdin)", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "credential", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editCredentialPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi credential delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "credential", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteCredentialPlan,
+    },
     {
       name: "list",
       help: "awx-axi credential list [--search <s>] [--organization <id>] [--limit <n>]",
