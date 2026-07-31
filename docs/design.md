@@ -485,7 +485,7 @@ awx-axi job        <subcommand>       the unified run surface
 awx-axi template   <subcommand>       job templates: the launch enabler
 awx-axi workflow   <subcommand>       workflow job templates and node rollups
 awx-axi approval   <subcommand>       the workflow approval inbox
-awx-axi ad-hoc     <subcommand>       inspect ad hoc command history
+awx-axi ad-hoc     <subcommand>       inspect and launch ad hoc commands
 awx-axi project    <subcommand>       projects and SCM syncs
 awx-axi inventory  <subcommand>       inventories, groups, hosts, sources, updates
 awx-axi system-job-template <subcommand>  maintenance job templates
@@ -1317,7 +1317,7 @@ An earlier draft of this design proposed one behind a second environment variabl
 It is removed rather than merely disabled: a gate that exists can be opened by a future contributor who has not
 read the captain's order, and the whole point of §6.5 is that the guarantee must not depend on someone
 remembering.
-The seven tier-1 write commands are therefore covered **only** by the offline suite, which is where they were
+The nine tier-1 write commands are therefore covered **only** by the offline suite, which is where they were
 already covered anyway (§11.2), and by `--dry-run` against the live instance, which issues no mutation and is a
 genuinely useful live check of name resolution and payload construction.
 
