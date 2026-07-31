@@ -356,7 +356,14 @@ Create, update, and copy of templates, projects, inventories, hosts, groups, sch
 environments, notification templates, and labels.
 The core transport supports `PUT` and `PATCH` requests.
 These requests are gated by `AWX_AXI_ALLOW_CONFIG_WRITES` in the environment.
-Specific domain subcommands for these operations remain out of v1.
+
+Domain subcommands for this tier **are** part of v1, accepted by captain decision 2026-07-31:
+`template create|edit|copy`, `project create|edit`, `inventory create|edit|host-create|host-edit`,
+`workflow create|edit`, and `schedule create|edit`.
+They carry the same safety contract as tier 1 - each refuses to mutate by default and prints the §6.2 preview
+instead, and each mutates only when `--confirm` is passed on that invocation - and they additionally require
+`AWX_AXI_ALLOW_CONFIG_WRITES=1`, so the whole tier stays off unless it is deliberately enabled.
+`AWX_AXI_READ_ONLY=1` still refuses every one of them at the transport seam before anything is sent (§6.5).
 
 **Tier 3 - destructive and security-sensitive writes. Gated in core transport.**
 
@@ -650,8 +657,8 @@ for the full graph with the success, failure, and always edges.
 ```
 awx-axi approval list                [--all] [--limit]
 awx-axi approval show <id>
-awx-axi approval approve <id>        [--dry-run]
-awx-axi approval deny <id>           [--dry-run]
+awx-axi approval approve <id>        [--confirm] [--dry-run]
+awx-axi approval deny <id>           [--confirm] [--dry-run]
 ```
 
 Approvals are promoted to a top-level noun rather than living under `workflow` because they are the one thing in
@@ -674,8 +681,12 @@ approval:
   blocks[2]{node,template}:
     9,Deploy web tier
     10,Smoke test
-help[2]: Run `awx-axi approval approve 57` to release the 2 downstream steps,Run `awx-axi approval deny 57` to fail the workflow at this step
+help[2]: Run `awx-axi approval approve 57` to preview releasing the 2 downstream steps,Run `awx-axi approval deny 57` to preview failing the workflow at this step
 ```
+
+Both suggestions name the bare command deliberately: it prints the §6.2 preview rather than deciding the gate,
+and the preview's own suggestion is to re-run with `--confirm`. Approving is irreversible, so the informed path
+is preview first and opt in second.
 
 `blocks` comes from the workflow job's node list, and it is the difference between an informed approval and a
 blind one.
