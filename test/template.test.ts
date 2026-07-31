@@ -86,4 +86,33 @@ describe("template domain (design.md §7.4, §7.5)", () => {
     expect(run.stdout).toContain("warning:");
     expect(run.stdout).toContain("fields were ignored by the controller");
   });
+
+  it("template create, edit, copy support dry-run and --confirm", async () => {
+    const dryCreate = await runCli(["template", "create", "New Template"], { script: [] });
+    expect(dryCreate.exitCode).toBe(0);
+    expect(dryCreate.stdout).toContain("dry_run:");
+    expect(dryCreate.stdout).toContain("would_send: POST job_templates/");
+
+    const liveCreate = await runCli(["template", "create", "New Template", "--confirm"], {
+      script: [{ status: 201, body: { id: 25, name: "New Template" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveCreate.exitCode).toBe(0);
+    expect(liveCreate.stdout).toContain("id: 25");
+
+    const dryEdit = await runCli(["template", "edit", "25", "--description", "Updated desc"], { script: [] });
+    expect(dryEdit.exitCode).toBe(0);
+    expect(dryEdit.stdout).toContain("would_send: PATCH job_templates/25/");
+
+    const dryCopy = await runCli(["template", "copy", "25", "--name", "Copied Template"], { script: [] });
+    expect(dryCopy.exitCode).toBe(0);
+    expect(dryCopy.stdout).toContain("would_send: POST job_templates/25/copy/");
+
+    const liveCopy = await runCli(["template", "copy", "25", "--name", "Copied Template", "--confirm"], {
+      script: [{ status: 201, body: { id: 26, name: "Copied Template" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveCopy.exitCode).toBe(0);
+    expect(liveCopy.stdout).toContain("id: 26");
+  });
 });

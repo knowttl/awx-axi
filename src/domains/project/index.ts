@@ -1,7 +1,6 @@
 /**
  * The `project` domain: projects and SCM syncs (design.md §7.8).
  *
- * The verb is `sync`, not `update`, so it cannot be read as "modify the project record".
  * A sync's log is `job stdout <sync-id>`, and its progress is `job watch <sync-id>`.
  */
 import { AxiError } from "axi-sdk-js";
@@ -329,12 +328,143 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createProjectPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name === "") {
+    throw validationError("`project create` needs a project name argument or --name", [
+      "Provide a name, e.g. `awx-axi project create \"App Deploy\" --scm-type git --scm-url https://github.com/...`",
+    ]);
+  }
+
+  const payload: Record<string, unknown> = { name };
+
+  if (typeof input.flags.organization === "string") {
+    payload.organization = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "project create",
+    });
+  }
+
+  if (typeof input.flags.credential === "string") {
+    payload.credential = yield* resolveId(input.flags.credential, {
+      listRoute: "credentials/",
+      noun: "credential",
+      listCommand: "credential list",
+      command: "project create",
+    });
+  }
+
+  if (typeof input.flags["scm-type"] === "string") payload.scm_type = input.flags["scm-type"];
+  if (typeof input.flags["scm-url"] === "string") payload.scm_url = input.flags["scm-url"];
+  if (typeof input.flags["scm-branch"] === "string") payload.scm_branch = input.flags["scm-branch"];
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "create",
+        type: "project",
+        name,
+        would_send: "POST projects/",
+        payload,
+      },
+      help: ["Re-run with --confirm to create"],
+    });
+  }
+
+  const res = yield* write("projects/", payload, { method: "POST", tag: "config" });
+  if (res.status !== 201 && res.status !== 200) {
+    throw errorForResponse(res, { subject: `project ${name}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+
+  return detailOutput({
+    label: "project",
+    fields: {
+      id,
+      name: body.name ?? name,
+      scm_type: body.scm_type ?? null,
+    },
+    help: [`Run \`awx-axi project show ${id}\` to inspect project`],
+  });
+}
+
+function* editProjectPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "projects/",
+    noun: "project",
+    listCommand: "project list",
+    command: "project edit",
+  });
+
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.organization === "string") {
+    payload.organization = yield* resolveId(input.flags.organization, {
+      listRoute: "organizations/",
+      noun: "organization",
+      listCommand: "organization list",
+      command: "project edit",
+    });
+  }
+  if (typeof input.flags.credential === "string") {
+    payload.credential = yield* resolveId(input.flags.credential, {
+      listRoute: "credentials/",
+      noun: "credential",
+      listCommand: "credential list",
+      command: "project edit",
+    });
+  }
+  if (typeof input.flags["scm-type"] === "string") payload.scm_type = input.flags["scm-type"];
+  if (typeof input.flags["scm-url"] === "string") payload.scm_url = input.flags["scm-url"];
+  if (typeof input.flags["scm-branch"] === "string") payload.scm_branch = input.flags["scm-branch"];
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "edit",
+        project: id,
+        would_send: `PATCH projects/${id}/`,
+        payload,
+      },
+      help: ["Re-run with --confirm to edit"],
+    });
+  }
+
+  const res = yield* write(`projects/${id}/`, payload, { method: "PATCH", tag: "config" });
+  if (res.status !== 200) {
+    throw errorForResponse(res, { subject: `project ${id}` });
+  }
+
+  const body = (res.body ?? {}) as Record<string, unknown>;
+
+  return detailOutput({
+    label: "project",
+    fields: {
+      id,
+      name: body.name ?? null,
+    },
+    help: [`Run \`awx-axi project show ${id}\` to inspect updated project`],
+  });
+}
+
 export const projectDomain: Domain = defineDomain({
   name: "project",
   help: [
     "project: projects and SCM syncs",
     "",
     "Subcommands:",
+    "  create      [<name>] [--scm-type <t>] [--scm-url <u>] [--confirm] [--dry-run]",
+    "  edit        <id|name> [--name <n>] [--confirm] [--dry-run]",
     "  list        [--search <s>] [--limit <n>]",
     "  show        <id|name>",
     "  playbooks   <id|name>",
@@ -349,8 +479,48 @@ export const projectDomain: Domain = defineDomain({
     "list_project_updates",
     "list_project_object_roles",
     "sync_project",
+    "create_project",
+    "update_project",
   ],
   subcommands: [
+    {
+      name: "create",
+      help: "awx-axi project create [<name>] [--scm-type <t>] [--scm-url <u>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "project name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "scm-type", description: "SCM type (e.g. git, svn)", takesValue: true },
+        { name: "scm-url", description: "SCM URL", takesValue: true },
+        { name: "scm-branch", description: "SCM branch", takesValue: true },
+        { name: "credential", description: "SCM credential id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<name>"], required: 0 },
+      schema: { label: "project", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: createProjectPlan,
+    },
+    {
+      name: "edit",
+      help: "awx-axi project edit <id|name> [--name <n>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "project name", takesValue: true },
+        { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "scm-type", description: "SCM type (e.g. git, svn)", takesValue: true },
+        { name: "scm-url", description: "SCM URL", takesValue: true },
+        { name: "scm-branch", description: "SCM branch", takesValue: true },
+        { name: "credential", description: "SCM credential id or name", takesValue: true },
+        { name: "description", description: "description", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "project", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: editProjectPlan,
+    },
     {
       name: "list",
       help: "awx-axi project list [--search <s>] [--limit <n>]",

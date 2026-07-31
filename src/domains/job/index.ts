@@ -3,12 +3,13 @@
  *
  * Playbook jobs, workflow jobs, project updates, inventory updates, ad hoc
  * commands, and system jobs are subclasses of unified jobs in AWX. This domain
- * exposes them under one noun: list, show, stdout, events, hosts, cancel,
+ * exposes them under one noun: list, show, stdout, events, hosts, launch, cancel,
  * relaunch, and watch.
  */
 import { AxiError } from "axi-sdk-js";
 
-import { errorForResponse, validationError } from "../../core/errors.js";
+import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
+import { parseExtraVars, readPasswordsFile } from "../template/index.js";
 import {
   detailOutput,
   listOutput,
@@ -33,6 +34,7 @@ import {
   type SubcommandInput,
 } from "../../core/registry.js";
 import {
+  resolveId,
   resolveUnifiedJob,
 } from "../../core/resolve.js";
 
@@ -522,6 +524,163 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "job_templates/",
+    noun: "job template",
+    listCommand: "template list",
+    command: "job launch",
+  });
+
+  const preflightRes = yield* read(`job_templates/${id}/launch/`);
+  if (preflightRes.status !== 200) {
+    throw errorForResponse(preflightRes, { subject: `template ${id} launch preflight` });
+  }
+
+  const preflight = (preflightRes.body ?? {}) as Record<string, unknown>;
+  const ignoredFlags: { flag: string; reason: string }[] = [];
+
+  const checkFlag = (flagName: string, promptKey: string) => {
+    if (input.flags[flagName] !== undefined && preflight[promptKey] !== true) {
+      ignoredFlags.push({
+        flag: `--${flagName}`,
+        reason: `${promptKey} is disabled on this template`,
+      });
+    }
+  };
+
+  checkFlag("limit", "ask_limit_on_launch");
+  checkFlag("tags", "ask_tags_on_launch");
+  checkFlag("skip-tags", "ask_skip_tags_on_launch");
+  checkFlag("extra-vars", "ask_variables_on_launch");
+  checkFlag("inventory", "ask_inventory_on_launch");
+  checkFlag("scm-branch", "ask_scm_branch_on_launch");
+  checkFlag("verbosity", "ask_verbosity_on_launch");
+  checkFlag("job-type", "ask_job_type_on_launch");
+  checkFlag("diff", "ask_diff_mode_on_launch");
+
+  if (ignoredFlags.length > 0) {
+    throw new AwxAxiError(
+      `template ${id} does not accept ${ignoredFlags.map((i) => i.flag).join(", ")} at launch; input would be ignored`,
+      "LAUNCH_WOULD_IGNORE_INPUT",
+      [
+        `Run \`awx-axi job launch ${id}\` to launch without ignored flags`,
+        `Run \`awx-axi template show ${id}\` to see which flags this template accepts`,
+      ],
+      { ignored: ignoredFlags },
+    );
+  }
+
+  const passwordsNeeded = preflight.passwords_needed_to_start;
+  let credentialPasswords: Record<string, unknown> | undefined;
+
+  if (Array.isArray(passwordsNeeded) && passwordsNeeded.length > 0) {
+    const allowPasswords = input.context.env.AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS === "1";
+    const passFile = typeof input.flags["credential-passwords-file"] === "string"
+      ? input.flags["credential-passwords-file"]
+      : undefined;
+
+    if (!allowPasswords || passFile === undefined) {
+      throw new AxiError(
+        `template ${id} requires credential passwords at launch (${passwordsNeeded.join(", ")})`,
+        "LAUNCH_INPUT_REQUIRED",
+        [
+          "Set AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1 and provide --credential-passwords-file <path>",
+        ],
+      );
+    }
+    credentialPasswords = readPasswordsFile(passFile);
+  }
+
+  const varsNeeded = preflight.variables_needed_to_start;
+  const extraVarsObj = parseExtraVars(
+    typeof input.flags["extra-vars"] === "string" ? input.flags["extra-vars"] : undefined,
+  );
+
+  if (Array.isArray(varsNeeded) && varsNeeded.length > 0) {
+    const missing = varsNeeded.filter((v) => typeof v === "string" && !(v in extraVarsObj));
+    if (missing.length > 0) {
+      throw new AxiError(
+        `template ${id} requires survey variables at launch: ${missing.join(", ")}`,
+        "LAUNCH_INPUT_REQUIRED",
+        [
+          `Run \`awx-axi template survey ${id}\` to see required survey questions`,
+          `Re-run with --extra-vars '{"${missing[0]}":"<value>"}'`,
+        ],
+      );
+    }
+  }
+
+  const launchBody: Record<string, unknown> = {};
+  if (typeof input.flags.limit === "string") launchBody.limit = input.flags.limit;
+  if (typeof input.flags.tags === "string") launchBody.job_tags = input.flags.tags;
+  if (typeof input.flags["skip-tags"] === "string") launchBody.skip_tags = input.flags["skip-tags"];
+  if (typeof input.flags["extra-vars"] === "string") launchBody.extra_vars = JSON.stringify(extraVarsObj);
+  if (typeof input.flags.inventory === "string") launchBody.inventory = Number(input.flags.inventory);
+  if (typeof input.flags["scm-branch"] === "string") launchBody.scm_branch = input.flags["scm-branch"];
+  if (typeof input.flags.verbosity === "string") launchBody.verbosity = Number(input.flags.verbosity);
+  if (typeof input.flags["job-type"] === "string") launchBody.job_type = input.flags["job-type"];
+  if (input.flags.diff === true) launchBody.diff_mode = true;
+  if (credentialPasswords !== undefined) launchBody.credential_passwords = credentialPasswords;
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "launch",
+        template: id,
+        would_send: `POST job_templates/${id}/launch/`,
+      },
+      help: ["Re-run with --confirm to launch"],
+    });
+  }
+
+  const launchRes = yield* write(`job_templates/${id}/launch/`, launchBody, { method: "POST", tag: "operational" });
+  if (launchRes.status !== 201 && launchRes.status !== 200 && launchRes.status !== 202) {
+    throw errorForResponse(launchRes, {
+      subject: `template ${id}`,
+      codes: { 400: "LAUNCH_REJECTED" },
+    });
+  }
+
+  const resBody = (launchRes.body ?? {}) as Record<string, unknown>;
+  const jobId = typeof resBody.id === "number" ? resBody.id : 0;
+  const status = typeof resBody.status === "string" ? resBody.status : "pending";
+
+  if (input.flags.wait === true && jobId > 0) {
+    const timeoutSec = typeof input.flags.timeout === "string" ? Number(input.flags.timeout) : 3600;
+    const pollRes = yield* pollUntilTerminal({
+      route: `jobs/${jobId}/`,
+      timeoutMs: timeoutSec * 1000,
+      resumeCommand: `awx-axi job watch ${jobId}`,
+    });
+    return withExitCode(
+      detailOutput({
+        label: "job",
+        fields: {
+          id: jobId,
+          name: resBody.name ?? null,
+          status: pollRes.status,
+          waited: `${Math.round(pollRes.waitedMs / 1000)}s`,
+        },
+        help: [`Run \`awx-axi job stdout ${jobId}\` for job stdout`],
+      }),
+      succeeded(pollRes.status) ? 0 : 1,
+    );
+  }
+
+  return detailOutput({
+    label: "job",
+    fields: {
+      id: jobId,
+      name: resBody.name ?? null,
+      status,
+    },
+    help: [`Run \`awx-axi job watch ${jobId}\` to follow it to completion`],
+  });
+}
+
 function* relaunchPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = parseJobId(input.args[0], "relaunch");
   const typeFlag = typeof input.flags.type === "string" ? input.flags.type : undefined;
@@ -611,6 +770,7 @@ export const jobDomain: Domain = defineDomain({
     "  stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]",
     "  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
     "  hosts    <id>",
+    "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  cancel   <id> [--type <t>] [--confirm] [--dry-run]",
     "  relaunch <id> [--failed-only] [--type <t>] [--confirm] [--dry-run]",
     "  watch    <id> [--timeout <s >] [--interval <s >]",
@@ -623,6 +783,7 @@ export const jobDomain: Domain = defineDomain({
     "get_job_host_summaries",
     "cancel_job",
     "relaunch_job",
+    "launch_job",
   ],
   subcommands: [
     {
@@ -696,6 +857,30 @@ export const jobDomain: Domain = defineDomain({
       schema: { label: "hosts", defaultFields: ["host", "ok", "changed", "failed", "unreachable"], fieldAllowlist: [] },
       suggestions: [],
       plan: hostsPlan,
+    },
+    {
+      name: "launch",
+      help: "awx-axi job launch <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
+      flags: [
+        { name: "limit", description: "host limit", takesValue: true },
+        { name: "tags", description: "job tags", takesValue: true },
+        { name: "skip-tags", description: "skip tags", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON", takesValue: true },
+        { name: "inventory", description: "inventory id", takesValue: true },
+        { name: "scm-branch", description: "SCM branch", takesValue: true },
+        { name: "verbosity", description: "verbosity level 0-5", takesValue: true },
+        { name: "job-type", description: "run or check", takesValue: true },
+        { name: "diff", description: "show diffs", takesValue: false },
+        { name: "credential-passwords-file", description: "path to credential passwords JSON file", takesValue: true },
+        { name: "wait", description: "wait for completion", takesValue: false },
+        { name: "timeout", description: "wait timeout in seconds", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "job", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: launchPlan,
     },
     {
       name: "cancel",

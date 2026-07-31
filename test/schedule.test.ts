@@ -81,4 +81,29 @@ describe("schedule list (design.md §7.10?)", () => {
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toContain("code: VALIDATION_ERROR");
   });
+
+  it("schedule create and edit support dry-run and --confirm", async () => {
+    const dryCreate = await runCli(["schedule", "create", "Nightly Backup", "--template", "12"], { script: [] });
+    expect(dryCreate.exitCode).toBe(0);
+    expect(dryCreate.stdout).toContain("dry_run:");
+    expect(dryCreate.stdout).toContain("would_send: POST schedules/");
+
+    const liveCreate = await runCli(["schedule", "create", "Nightly Backup", "--template", "12", "--confirm"], {
+      script: [{ status: 201, body: { id: 30, name: "Nightly Backup", enabled: true } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveCreate.exitCode).toBe(0);
+    expect(liveCreate.stdout).toContain("id: 30");
+
+    const dryEdit = await runCli(["schedule", "edit", "30", "--disabled"], { script: [] });
+    expect(dryEdit.exitCode).toBe(0);
+    expect(dryEdit.stdout).toContain("would_send: PATCH schedules/30/");
+
+    const liveEdit = await runCli(["schedule", "edit", "30", "--disabled", "--confirm"], {
+      script: [{ status: 200, body: { id: 30, name: "Nightly Backup", enabled: false } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveEdit.exitCode).toBe(0);
+    expect(liveEdit.stdout).toContain("id: 30");
+  });
 });

@@ -89,4 +89,29 @@ describe("project domain (design.md §7.8)", () => {
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("sync already running for project 4");
   });
+
+  it("project create and edit support dry-run and --confirm", async () => {
+    const dryCreate = await runCli(["project", "create", "New Project", "--scm-type", "git"], { script: [] });
+    expect(dryCreate.exitCode).toBe(0);
+    expect(dryCreate.stdout).toContain("dry_run:");
+    expect(dryCreate.stdout).toContain("would_send: POST projects/");
+
+    const liveCreate = await runCli(["project", "create", "New Project", "--scm-type", "git", "--confirm"], {
+      script: [{ status: 201, body: { id: 8, name: "New Project", scm_type: "git" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveCreate.exitCode).toBe(0);
+    expect(liveCreate.stdout).toContain("id: 8");
+
+    const dryEdit = await runCli(["project", "edit", "8", "--scm-branch", "main"], { script: [] });
+    expect(dryEdit.exitCode).toBe(0);
+    expect(dryEdit.stdout).toContain("would_send: PATCH projects/8/");
+
+    const liveEdit = await runCli(["project", "edit", "8", "--scm-branch", "main", "--confirm"], {
+      script: [{ status: 200, body: { id: 8, name: "New Project" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+    expect(liveEdit.exitCode).toBe(0);
+    expect(liveEdit.stdout).toContain("id: 8");
+  });
 });
