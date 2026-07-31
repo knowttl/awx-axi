@@ -1,5 +1,5 @@
 /**
- * The `ad-hoc` domain: inspect ad hoc command runs (design.md §7.2).
+ * The `ad-hoc` domain: inspect and launch ad hoc command runs (design.md §7.2).
  */
 import { AxiError } from "axi-sdk-js";
 

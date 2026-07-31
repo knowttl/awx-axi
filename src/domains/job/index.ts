@@ -3,7 +3,7 @@
  *
  * Playbook jobs, workflow jobs, project updates, inventory updates, ad hoc
  * commands, and system jobs are subclasses of unified jobs in AWX. This domain
- * exposes them under one noun: list, show, stdout, events, hosts, cancel,
+ * exposes them under one noun: list, show, stdout, events, hosts, launch, cancel,
  * relaunch, and watch.
  */
 import { AxiError } from "axi-sdk-js";

@@ -1,7 +1,6 @@
 /**
  * The `project` domain: projects and SCM syncs (design.md §7.8).
  *
- * The verb is `sync`, not `update`, so it cannot be read as "modify the project record".
  * A sync's log is `job stdout <sync-id>`, and its progress is `job watch <sync-id>`.
  */
 import { AxiError } from "axi-sdk-js";

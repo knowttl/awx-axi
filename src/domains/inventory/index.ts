@@ -1,6 +1,6 @@
 /**
- * The `inventory` domain: inspect inventories and constructed inventories, then
- * drill down into groups, hosts, sources, and update history.
+ * The `inventory` domain: manage and inspect inventories, constructed inventories,
+ * hosts, groups, sources, and update history.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
 import {

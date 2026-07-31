@@ -1,9 +1,5 @@
 /**
- * The `template` domain: job templates - the launch enabler (design.md §7.4).
- *
- * Job templates exist in v1 only because a job cannot be launched without one.
- * `template list`, `template show`, `template survey`, and `template launch`
- * are the launch enabler.
+ * The `template` domain: manage and launch job templates (design.md §7.4).
  */
 import { statSync, readFileSync } from "node:fs";
 
