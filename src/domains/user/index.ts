@@ -1,5 +1,5 @@
 /**
- * The `user` domain: list and inspect AWX users (design.md §14.2 roadmap).
+ * The `user` domain: list, show, create, edit, and delete AWX users.
  */
 import { readFileSync, statSync } from "node:fs";
 

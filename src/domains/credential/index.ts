@@ -1,5 +1,5 @@
 /**
- * The `credential` domain: list and inspect AWX credentials (design.md v1 roadmap).
+ * The `credential` domain: list, show, create, edit, and delete AWX credentials.
  */
 import { readFileSync, statSync } from "node:fs";
 

@@ -1,5 +1,5 @@
 /**
- * The `role` domain: list and inspect AWX RBAC roles, hierarchy, and subject assignments.
+ * The `role` domain: list, show, grant, and revoke AWX RBAC roles, hierarchy, and subject assignments.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";

@@ -1,5 +1,5 @@
 /**
- * The `team` domain: list and inspect AWX teams, membership, and access controls.
+ * The `team` domain: list, show, create, edit, and delete AWX teams, membership, and access controls.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
