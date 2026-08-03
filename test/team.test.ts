@@ -173,4 +173,40 @@ describe("team domain (design.md §rbac)", () => {
     expect(run.stdout).toContain("access_list[2]{id,username,first_name,last_name,email}:");
     expect(run.stdout).toContain("awx");
   });
+
+  it("team create, edit, delete support dry-run and --confirm", async () => {
+    const dryCreate = await runCli(["team", "create", "DevOps", "--organization", "1"], { script: [] });
+    expect(dryCreate.exitCode).toBe(0);
+    expect(dryCreate.stdout).toContain("dry_run:");
+    expect(dryCreate.stdout).toContain("would_send: POST teams/");
+
+    const liveCreate = await runCli(["team", "create", "DevOps", "--organization", "1", "--confirm"], {
+      script: [{ status: 201, body: { id: 6, name: "DevOps" } }],
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+    });
+    expect(liveCreate.exitCode).toBe(0);
+    expect(liveCreate.stdout).toContain("id: 6");
+
+    const dryEdit = await runCli(["team", "edit", "6", "--description", "Updated desc"], { script: [] });
+    expect(dryEdit.exitCode).toBe(0);
+    expect(dryEdit.stdout).toContain("would_send: PATCH teams/6/");
+
+    const liveEdit = await runCli(["team", "edit", "6", "--description", "Updated desc", "--confirm"], {
+      script: [{ status: 200, body: { id: 6, name: "DevOps" } }],
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+    });
+    expect(liveEdit.exitCode).toBe(0);
+    expect(liveEdit.stdout).toContain("id: 6");
+
+    const dryDelete = await runCli(["team", "delete", "6"], { script: [] });
+    expect(dryDelete.exitCode).toBe(0);
+    expect(dryDelete.stdout).toContain("would_send: DELETE teams/6/");
+
+    const liveDelete = await runCli(["team", "delete", "6", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_DELETES: "1" },
+    });
+    expect(liveDelete.exitCode).toBe(0);
+    expect(liveDelete.stdout).toContain("status: deleted");
+  });
 });

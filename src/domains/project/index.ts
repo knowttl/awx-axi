@@ -457,6 +457,41 @@ function* editProjectPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* deleteProjectPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "projects/",
+    noun: "project",
+    listCommand: "project list",
+    command: "project delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        project: id,
+        would_send: `DELETE projects/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`projects/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `project ${id}` });
+  }
+
+  return detailOutput({
+    label: "project",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const projectDomain: Domain = defineDomain({
   name: "project",
   help: [
@@ -465,6 +500,7 @@ export const projectDomain: Domain = defineDomain({
     "Subcommands:",
     "  create      [<name>] [--scm-type <t>] [--scm-url <u>] [--confirm] [--dry-run]",
     "  edit        <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  delete      <id|name> [--confirm] [--dry-run]",
     "  list        [--search <s>] [--limit <n>]",
     "  show        <id|name>",
     "  playbooks   <id|name>",
@@ -481,6 +517,7 @@ export const projectDomain: Domain = defineDomain({
     "sync_project",
     "create_project",
     "update_project",
+    "delete_project",
   ],
   subcommands: [
     {
@@ -520,6 +557,18 @@ export const projectDomain: Domain = defineDomain({
       schema: { label: "project", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],
       plan: editProjectPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi project delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "project", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteProjectPlan,
     },
     {
       name: "list",

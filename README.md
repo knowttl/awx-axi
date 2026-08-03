@@ -90,9 +90,9 @@ All core AWX domains are available and return only one noun per operation.
 
 **Every mutating subcommand refuses to mutate by default.** Without `--confirm` it prints a preview of exactly
 what it would send and changes nothing; `--dry-run` forces that preview even when `--confirm` is passed. The
-configuration-write subcommands - `create`, `edit`, `copy`, and `host-create`/`host-edit` - additionally
-require `AWX_AXI_ALLOW_CONFIG_WRITES=1` in the environment, and setting `AWX_AXI_READ_ONLY=1` refuses every
-write before anything is sent.
+configuration-write subcommands require `AWX_AXI_ALLOW_CONFIG_WRITES=1`, delete subcommands require
+`AWX_AXI_ALLOW_DELETES=1`, and security-sensitive subcommands require `AWX_AXI_ALLOW_SECURITY_WRITES=1` in the
+environment. Setting `AWX_AXI_READ_ONLY=1` refuses every write before anything is sent.
 
 **The mutating examples below are written without `--confirm` on purpose, so every one of them is safe to run
 and shows a preview rather than changing anything.** Adding `--confirm` to an example is what performs the
@@ -103,21 +103,21 @@ automation - so read the preview before you opt in.
 | --- | --- |
 | `auth` | `login`, `status`, `logout` |
 | `job` | `list`, `show`, `stdout`, `events`, `hosts`, `launch`, `cancel`, `relaunch`, `watch` |
-| `template` | `create`, `edit`, `copy`, `list`, `show`, `survey`, `launch` |
-| `workflow` | `create`, `edit`, `list`, `show`, `survey`, `launch`, `nodes` |
+| `template` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `survey`, `launch` |
+| `workflow` | `create`, `edit`, `delete`, `list`, `show`, `survey`, `launch`, `nodes` |
 | `approval` | `list`, `show`, `approve`, `deny` |
 | `ad-hoc` | `launch`, `list`, `show`, `events`, `stdout` |
-| `project` | `create`, `edit`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync` |
-| `inventory` | `create`, `edit`, `sync`, `host-create`, `host-edit`, `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
-| `schedule` | `create`, `edit`, `list`, `show` |
+| `project` | `create`, `edit`, `delete`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync` |
+| `inventory` | `create`, `edit`, `delete`, `sync`, `host-create`, `host-edit`, `host-delete`, `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
+| `schedule` | `create`, `edit`, `delete`, `list`, `show` |
 | `system-job` | `list`, `show`, `events`, `notifications` |
 | `system-job-template` | `list`, `show` |
 | `execution-environment` | `list`, `show` |
 | `organization` | `list`, `show` |
-| `credential` | `list`, `show` |
-| `user` | `list`, `show` |
-| `team` | `list`, `show`, `users`, `projects`, `credentials`, `roles`, `object-roles`, `access-list` |
-| `role` | `list`, `show`, `parents`, `children`, `users`, `teams` |
+| `credential` | `create`, `edit`, `delete`, `list`, `show` |
+| `user` | `create`, `edit`, `delete`, `list`, `show` |
+| `team` | `create`, `edit`, `delete`, `list`, `show`, `users`, `projects`, `credentials`, `roles`, `object-roles`, `access-list` |
+| `role` | `grant`, `revoke`, `list`, `show`, `parents`, `children`, `users`, `teams` |
 | `notification` | `list`, `show` |
 | `notification-template` | `list`, `show` |
 | `activity-stream` | `list`, `show` |
@@ -166,15 +166,26 @@ awx-axi ad-hoc launch Production --module-name ping
 # Identity, policy, and approvals
 awx-axi organization list
 awx-axi credential list --search github-token
+awx-axi credential create "AWS Credential" --credential-type "Amazon Web Services"
+awx-axi credential edit "AWS Credential" --description "Updated key"
+awx-axi credential delete "AWS Credential"
 awx-axi approval list
 awx-axi approval approve 17
 awx-axi approval deny 18
 awx-axi user list
+awx-axi user create alice --password-file /path/to/pass
+awx-axi user edit alice --email alice@example.com
+awx-axi user delete alice
 awx-axi team list
 awx-axi team show Engineering
+awx-axi team create Engineering --organization Default
+awx-axi team edit Engineering --description "Dev Team"
+awx-axi team delete Engineering
 awx-axi team users Engineering
 awx-axi role list
 awx-axi role show Admin
+awx-axi role grant Admin --user alice
+awx-axi role revoke Admin --user alice
 awx-axi role parents Admin
 
 # Projects, inventories, and schedules
@@ -216,7 +227,7 @@ awx-axi system-job-template list
 - Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
   `--tail` and `--lines`, and `job stdout` also supports `--download`.
 - Errors include suggestions rather than raw service payloads.
-- Mutating commands (launch, relaunch, cancel, approve, deny, sync, create, edit, copy) default to a dry run.
+- Mutating commands (launch, relaunch, cancel, approve, deny, sync, create, edit, copy, delete, host-create, host-edit, host-delete, grant, revoke) default to a dry run.
   Pass the `--confirm` flag to execute the live mutation request.
 - `ad-hoc launch` runs an operator-supplied module on every host in the target inventory, so it is the sharpest
   command here. It previews like the rest and needs `--confirm` to act, but no dedicated environment gate covers

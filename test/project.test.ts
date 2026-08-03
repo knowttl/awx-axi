@@ -114,4 +114,22 @@ describe("project domain (design.md §7.8)", () => {
     expect(liveEdit.exitCode).toBe(0);
     expect(liveEdit.stdout).toContain("id: 8");
   });
+
+  it("project delete supports dry-run and --confirm", async () => {
+    const dryDelete = await runCli(["project", "delete", "4"], { script: [] });
+    expect(dryDelete.exitCode).toBe(0);
+    expect(dryDelete.stdout).toContain("dry_run:");
+    expect(dryDelete.stdout).toContain("would_send: DELETE projects/4/");
+
+    const liveDelete = await runCli(["project", "delete", "4", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_DELETES: "1" },
+    });
+    expect(liveDelete.exitCode).toBe(0);
+    expect(liveDelete.stdout).toContain("status: deleted");
+    expect(liveDelete.transport.requests[0]).toMatchObject({
+      method: "DELETE",
+      route: "projects/4/",
+    });
+  });
 });

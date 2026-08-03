@@ -623,6 +623,41 @@ function* copyPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "job_templates/",
+    noun: "job template",
+    listCommand: "template list",
+    command: "template delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        template: id,
+        would_send: `DELETE job_templates/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`job_templates/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `template ${id}` });
+  }
+
+  return detailOutput({
+    label: "template",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 export const templateDomain: Domain = defineDomain({
   name: "template",
   help: [
@@ -631,6 +666,7 @@ export const templateDomain: Domain = defineDomain({
     "Subcommands:",
     "  create   [<name>] [--inventory <i|name>] [--project <p|name>] [--confirm] [--dry-run]",
     "  edit     <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  delete   <id|name> [--confirm] [--dry-run]",
     "  copy     <id|name> [--name <n>] [--confirm] [--dry-run]",
     "  list     [--project <p>] [--search <s>] [--limit <n>]",
     "  show     <id|name>",
@@ -644,6 +680,7 @@ export const templateDomain: Domain = defineDomain({
     "launch_job_template",
     "create_job_template",
     "update_job_template",
+    "delete_job_template",
     "copy_job_template",
   ],
   subcommands: [
@@ -690,6 +727,18 @@ export const templateDomain: Domain = defineDomain({
       schema: { label: "template", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],
       plan: editPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi template delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "template", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deletePlan,
     },
     {
       name: "copy",

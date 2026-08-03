@@ -134,4 +134,30 @@ describe("role domain (design.md §rbac)", () => {
     expect(run.stdout).toContain("teams[1]{id,name,organization,description}:");
     expect(run.stdout).toContain("Engineering");
   });
+
+  it("role grant and revoke support dry-run and --confirm", async () => {
+    const dryGrant = await runCli(["role", "grant", "10", "--user", "11"], { script: [] });
+    expect(dryGrant.exitCode).toBe(0);
+    expect(dryGrant.stdout).toContain("dry_run:");
+    expect(dryGrant.stdout).toContain("would_send: POST roles/10/users/");
+
+    const liveGrant = await runCli(["role", "grant", "10", "--user", "11", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+    });
+    expect(liveGrant.exitCode).toBe(0);
+    expect(liveGrant.stdout).toContain("status: granted");
+
+    const dryRevoke = await runCli(["role", "revoke", "10", "--team", "5"], { script: [] });
+    expect(dryRevoke.exitCode).toBe(0);
+    expect(dryRevoke.stdout).toContain("dry_run:");
+    expect(dryRevoke.stdout).toContain("would_send: POST roles/10/teams/");
+
+    const liveRevoke = await runCli(["role", "revoke", "10", "--team", "5", "--confirm"], {
+      script: [{ status: 204 }],
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+    });
+    expect(liveRevoke.exitCode).toBe(0);
+    expect(liveRevoke.stdout).toContain("status: revoked");
+  });
 });

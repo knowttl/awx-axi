@@ -29,13 +29,13 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 
 1. Run `npx -y awx-axi` with no arguments for a dashboard of current controller status.
 2. Check authentication status with `npx -y awx-axi auth status` or log in using `npx -y awx-axi auth login`.
-3. Find, launch, and manage job templates or workflow templates using `template list`, `template show <id|name>`, `template launch <id|name>`, `template create`, `template edit`, `template copy`, `workflow list`, `workflow show <id|name>`, `workflow launch <id|name>`, `workflow create`, and `workflow edit`.
+3. Find, launch, and manage job templates or workflow templates using `template list`, `template show <id|name>`, `template launch <id|name>`, `template create`, `template edit`, `template copy`, `template delete`, `workflow list`, `workflow show <id|name>`, `workflow launch <id|name>`, `workflow create`, `workflow edit`, and `workflow delete`.
 4. Monitor jobs and stream stdout using `job list`, `job show <id>`, `job watch <id>`, `job stdout <id>`, and `job events <id>`.
 5. Manage pending workflow approvals using `approval list`, `approval show <id|name>`, `approval approve <id|name>`, and `approval deny <id|name>`.
-6. Inspect project status and sync history, and manage projects using `project list`, `project show <id|name>`, `project updates <id|name>`, `project create`, and `project edit`.
-7. Inspect and manage inventories using `inventory list`, `inventory show <id|name>`, `inventory updates <id|name>`, `inventory create`, `inventory edit`, `inventory sync`, `inventory host-create`, and `inventory host-edit`. Use `--facts` with `inventory hosts` only when you need a fact key count.
-8. Resolve schedule and template timing, and manage schedules using `schedule list`, `schedule show <id|name>`, `schedule create`, and `schedule edit`.
-9. Inspect identity resources and RBAC context with `organization list`, `organization show <id|name>`, `credential list`, `credential show <id|name>`, `user list`, `user show <id|name>`, `team list`, `team show <id|name>`, `team users <id|name>`, `team roles <id|name>`, `role list`, `role show <id|name>`, `role parents <id|name>`, and `role teams <id|name>`.
+6. Inspect project status and sync history, and manage projects using `project list`, `project show <id|name>`, `project updates <id|name>`, `project create`, `project edit`, and `project delete`.
+7. Inspect and manage inventories using `inventory list`, `inventory show <id|name>`, `inventory updates <id|name>`, `inventory create`, `inventory edit`, `inventory delete`, `inventory sync`, `inventory host-create`, `inventory host-edit`, and `inventory host-delete`. Use `--facts` with `inventory hosts` only when you need a fact key count.
+8. Resolve schedule and template timing, and manage schedules using `schedule list`, `schedule show <id|name>`, `schedule create`, `schedule edit`, and `schedule delete`.
+9. Manage identity resources and RBAC context with `organization list`, `organization show <id|name>`, `credential list`, `credential show <id|name>`, `credential create`, `credential edit`, `credential delete`, `user list`, `user show <id|name>`, `user create`, `user edit`, `user delete`, `team list`, `team show <id|name>`, `team create`, `team edit`, `team delete`, `team users <id|name>`, `team roles <id|name>`, `role list`, `role show <id|name>`, `role grant`, `role revoke`, `role parents <id|name>`, and `role teams <id|name>`.
 10. Inspect ad hoc execution history and launch ad hoc commands using `ad-hoc list`, `ad-hoc show <id>`, `ad-hoc events <id>`, `ad-hoc stdout <id>`, and `ad-hoc launch`.
 11. Inspect project access metadata using `project roles <id|name>` and then trace behavior through run-level views.
 12. Match templates to container runtimes with `execution-environment list` and `execution-environment show <id|name>`.
@@ -49,19 +49,19 @@ Use awx-axi for inventory workflows by starting with inventory listings, then dr
 commands[21 total]:
   auth                   login, status, logout
   job                    list, show <id>, stdout <id>, events <id>, hosts <id>, launch <id|name>, relaunch <id>, cancel <id>, watch <id>
-  template               create [<name>], edit <id|name>, copy <id|name>, list, show <id|name>, survey <id|name>, launch <id|name>
-  workflow               create [<name>], edit <id|name>, list, show <id|name>, survey <id|name>, launch <id|name>, nodes <run-id>
+  template               create [<name>], edit <id|name>, copy <id|name>, delete <id|name>, list, show <id|name>, survey <id|name>, launch <id|name>
+  workflow               create [<name>], edit <id|name>, delete <id|name>, list, show <id|name>, survey <id|name>, launch <id|name>, nodes <run-id>
   approval               list, show <id|name>, approve <id|name>, deny <id|name>
-  project                create [<name>], edit <id|name>, list, show <id|name>, playbooks <id|name>, updates <id|name>, roles <id|name>, sync <id|name>
+  project                create [<name>], edit <id|name>, delete <id|name>, list, show <id|name>, playbooks <id|name>, updates <id|name>, roles <id|name>, sync <id|name>
   ad-hoc                 launch [<inventory>], list, show <id>, events <id>, stdout <id>
-  inventory              create [<name>], edit <id|name>, sync <id|name>, host-create [<name>], host-edit <id|name>, list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list, constructed-show
-  schedule               create [<name>], edit <id|name>, list, show <id|name>
+  inventory              create [<name>], edit <id|name>, delete <id|name>, sync <id|name>, host-create [<name>], host-edit <id|name>, host-delete <id|name>, list, show <id|name>, groups <id|name>, hosts <id|name>, sources <id|name>, updates <id|name>, constructed-list, constructed-show
+  schedule               create [<name>], edit <id|name>, delete <id|name>, list, show <id|name>
   execution-environment  list, show <id|name>
   organization           list, show <id|name>
-  credential             list, show <id|name>
-  user                   list, show <id|name>
-  team                   list, show <id|name>, users <id|name>, projects <id|name>, credentials <id|name>, roles <id|name>, object-roles <id|name>, access-list <id|name>
-  role                   list, show <id|name>, parents <id|name>, children <id|name>, users <id|name>, teams <id|name>
+  credential             create [<name>], edit <id|name>, delete <id|name>, list, show <id|name>
+  user                   create [<username>], edit <id|name>, delete <id|name>, list, show <id|name>
+  team                   create [<name>], edit <id|name>, delete <id|name>, list, show <id|name>, users <id|name>, projects <id|name>, credentials <id|name>, roles <id|name>, object-roles <id|name>, access-list <id|name>
+  role                   grant <id|name>, revoke <id|name>, list, show <id|name>, parents <id|name>, children <id|name>, users <id|name>, teams <id|name>
   system-job-template    list, show <id|name>
   system-job             list, show <id>, events <id>, notifications <id>
   notification           list, show <id>

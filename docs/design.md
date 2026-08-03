@@ -41,7 +41,7 @@ breadth across AWX's configuration surface.
 Job templates exist in v1 only because a job cannot be launched without one.
 `template list`, `template show`, `template launch`, and `template survey` are the launch enabler, not a job
 template management surface.
-Template create, edit, and copy are accepted into v1 as configuration writes (§6.1); template delete is not in v1.
+Template create, edit, copy, and delete are accepted into v1 (§6.1).
 
 ## 2. Scope boundaries for v1
 
@@ -49,21 +49,17 @@ Most of this section is what v1 deliberately does not do.
 Two entries record the opposite - a capability that **is** in v1 and needs its limits stated plainly - because
 the boundary matters more than the heading's symmetry.
 
-- **A deliberately narrow configuration surface.**
-  v1 ships configuration writes only for templates, projects, workflows, schedules, inventories, and inventory
-  hosts, accepted by captain decision 2026-07-31 and specified in §6.1's tier 2.
-  Inventory groups, inventory sources, organizations, teams, users, credentials, credential types, notification
-  templates, labels, instances, and instance groups remain out.
-  They are recorded as roadmap in §14.
-- **No deletes in domain subcommands.**
-  No domain module in v1 exposes delete subcommands.
-  The core transport and registry support `DELETE` requests.
-  These requests are gated behind `AWX_AXI_ALLOW_DELETES` and default dry-run logic.
-- **No credential or user writes.**
-  awx-mcp gates these four tools behind `AWX_MCP_ENABLE_CREDENTIAL_MANAGEMENT`.
-  awx-axi v1 goes further and omits them, so the gate has nothing to protect (§6).
-- **No RBAC surface.**
-  Role grants and revocations are the highest-blast-radius writes in AWX and are out of v1.
+- **A deliberately narrow configuration and mutation surface.**
+  v1 ships configuration writes (§6.1 tier 2) for templates, projects, workflows, schedules, inventories, and inventory
+  hosts, plus Tier 3 mutations (§6.1 tier 3) for credential management, user management, team management, role grant/revoke,
+  and resource deletes across templates, workflows, projects, inventories, schedules, credentials, users, and teams.
+  Inventory groups, inventory sources, organizations, credential types, notification templates, labels, instances, and
+  instance groups remain out of write subcommands and are recorded as roadmap in §14.
+- **Deletes in domain subcommands are gated behind dry-run and AWX_AXI_ALLOW_DELETES.**
+  Domain modules expose delete subcommands for credentials, hosts, inventories, projects, roles, schedules, teams, templates, users, and workflows.
+  These requests default to dry-run previews and require `--confirm` plus `AWX_AXI_ALLOW_DELETES=1`.
+- **Credential, user, team, and RBAC role writes are gated behind AWX_AXI_ALLOW_SECURITY_WRITES.**
+  Credential create/edit/delete, user create/edit/delete, team create/edit/delete, and role grant/revoke subcommands default to dry-run previews and require `--confirm` plus `AWX_AXI_ALLOW_SECURITY_WRITES=1`.
 - **Ad hoc command execution is in v1, and it is the sharpest command in the tool.**
   `ad-hoc launch` runs arbitrary modules against arbitrary hosts with no template review - with `shell` or
   `command` it is arbitrary remote execution across every host in the chosen inventory.
@@ -388,7 +384,10 @@ instead, and each mutates only when `--confirm` is passed on that invocation - a
 Every delete, every credential write, every user write, every role grant or revoke.
 The core transport supports `DELETE` and security-tagged requests.
 These requests are gated by `AWX_AXI_ALLOW_DELETES` and `AWX_AXI_ALLOW_SECURITY_WRITES` respectively.
-Specific domain subcommands for these operations remain out of v1.
+Domain subcommands for this tier are part of v1: `credential create|edit|delete`, `user create|edit|delete`,
+`team create|edit|delete`, `role grant|revoke`, `inventory delete|host-delete`, `project delete`,
+`schedule delete`, `template delete`, and `workflow delete`.
+They carry the same mandatory default dry-run safety contract - refusing to mutate unless `--confirm` is passed - and additionally require `AWX_AXI_ALLOW_DELETES=1` (for deletes) or `AWX_AXI_ALLOW_SECURITY_WRITES=1` (for security writes).
 
 ### 6.2 Every tier-1 write defaults to dry-run unless confirmed
 

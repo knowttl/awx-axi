@@ -966,6 +966,76 @@ function* editHostPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* deleteInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "inventories/",
+    noun: "inventory",
+    listCommand: "inventory list",
+    command: "inventory delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        inventory: id,
+        would_send: `DELETE inventories/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`inventories/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `inventory ${id}` });
+  }
+
+  return detailOutput({
+    label: "inventory",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
+function* deleteHostPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "hosts/",
+    noun: "host",
+    listCommand: "inventory hosts",
+    command: "inventory host-delete",
+  });
+
+  const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
+  if (!isLive) {
+    return detailOutput({
+      label: "dry_run",
+      fields: {
+        action: "delete",
+        host: id,
+        would_send: `DELETE hosts/${id}/`,
+      },
+      help: ["Re-run with --confirm to delete"],
+    });
+  }
+
+  const res = yield* write(`hosts/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (res.status !== 204 && res.status !== 200 && res.status !== 202) {
+    throw errorForResponse(res, { subject: `host ${id}` });
+  }
+
+  return detailOutput({
+    label: "host",
+    fields: {
+      id,
+      status: "deleted",
+    },
+  });
+}
+
 const baseInventoryDomain: Domain = defineDomain({
   name: "inventory",
   help: [
@@ -974,9 +1044,11 @@ const baseInventoryDomain: Domain = defineDomain({
     "Subcommands:",
     "  create               [<name>] [--organization <o>] [--confirm] [--dry-run]",
     "  edit                 <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  delete               <id|name> [--confirm] [--dry-run]",
     "  sync                 <id|name> [--wait] [--confirm] [--dry-run]",
     "  host-create          [<name>] --inventory <i|name> [--confirm] [--dry-run]",
     "  host-edit            <id|name> [--confirm] [--dry-run]",
+    "  host-delete          <id|name> [--confirm] [--dry-run]",
     "  list                 [--search <s>] [--limit <n>]",
     "  show                 <id|name>",
     "  groups               <id|name> [--search <s>] [--limit <n>]",
@@ -991,9 +1063,11 @@ const baseInventoryDomain: Domain = defineDomain({
     "get_inventory",
     "create_inventory",
     "update_inventory",
+    "delete_inventory",
     "sync_inventory_source",
     "create_host",
     "update_host",
+    "delete_host",
     "list_inventory_groups",
     "list_inventory_hosts",
     "list_inventory_sources",
@@ -1033,6 +1107,18 @@ const baseInventoryDomain: Domain = defineDomain({
       schema: { label: "inventory", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],
       plan: editInventoryPlan,
+    },
+    {
+      name: "delete",
+      help: "awx-axi inventory delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "inventory", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteInventoryPlan,
     },
     {
       name: "sync",
@@ -1083,6 +1169,18 @@ const baseInventoryDomain: Domain = defineDomain({
       schema: { label: "host", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],
       plan: editHostPlan,
+    },
+    {
+      name: "host-delete",
+      help: "awx-axi inventory host-delete <id|name> [--confirm] [--dry-run]",
+      flags: [
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "dry run without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "host", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: deleteHostPlan,
     },
     {
       name: "list",
@@ -1191,7 +1289,7 @@ const baseInventoryDomain: Domain = defineDomain({
 export const inventoryDomain: Domain = {
   ...baseInventoryDomain,
   async run(args, context) {
-    if (args[0] === "host" && (args[1] === "create" || args[1] === "edit")) {
+    if (args[0] === "host" && (args[1] === "create" || args[1] === "edit" || args[1] === "delete")) {
       return baseInventoryDomain.run([`host-${args[1]}`, ...args.slice(2)], context);
     }
     return baseInventoryDomain.run(args, context);
