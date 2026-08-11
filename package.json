@@ -4,8 +4,12 @@
   "description": "Inspect and run AWX automation from the shell",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/knowttl/awx-axi.git"
+  },
   "bin": {
-    "awx-axi": "./dist/bin/awx-axi.js"
+    "awx-axi": "dist/bin/awx-axi.js"
   },
   "main": "./dist/cli.js",
   "files": [
