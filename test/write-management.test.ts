@@ -56,6 +56,7 @@ describe("write-management coverage", () => {
       script: [{ status: 202, body: { notification: 99 } }],
     });
     expect(test.transport.requests[0]).toMatchObject({ method: "POST", route: "notification_templates/7/test/", tag: "operational" });
+    expect(test.stdout).toContain("pending");
   });
 
   it("launches system job templates and cancels system jobs", async () => {
@@ -67,6 +68,7 @@ describe("write-management coverage", () => {
       script: [{ status: 200, body: { count: 1, results: [{ id: 44, type: "system_job" }] } }, { status: 202 }],
     });
     expect(cancel.transport.requests[1]).toMatchObject({ method: "POST", route: "system_jobs/44/cancel/", tag: "operational" });
+    expect(cancel.stdout).toContain("cancel_requested");
   });
 
   it("manages inventory groups, sources, and bulk hosts", async () => {
@@ -198,6 +200,48 @@ describe("write-management coverage", () => {
     }
   });
 
+  it("security-gates secret-bearing notification writes and sensitive copies", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "awx-axi-security-"));
+    const configurationFile = join(directory, "configuration.json");
+    const messagesFile = join(directory, "messages.json");
+    writeFileSync(configurationFile, JSON.stringify({ token: "secret" }));
+    writeFileSync(messagesFile, JSON.stringify({ started: { body: "secret" } }));
+    chmodSync(configurationFile, 0o600);
+    chmodSync(messagesFile, 0o600);
+    try {
+      const create = await runCli([
+        "notification-template", "create", "hook", "--organization", "1", "--notification-type", "webhook",
+        "--configuration-file", configurationFile, "--confirm",
+      ], {
+        env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+        script: [{ status: 201, body: { id: 7, name: "hook" } }],
+      });
+      expect(create.transport.requests[0]).toMatchObject({ tag: "security" });
+
+      const edit = await runCli([
+        "notification-template", "edit", "7", "--messages-file", messagesFile, "--confirm",
+      ], {
+        env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+        script: [{ status: 200, body: { id: 7, name: "hook" } }],
+      });
+      expect(edit.transport.requests[0]).toMatchObject({ tag: "security" });
+
+      for (const [domain, route] of [
+        ["notification-template", "notification_templates/7/copy/"],
+        ["execution-environment", "execution_environments/7/copy/"],
+        ["project", "projects/7/copy/"],
+      ] as const) {
+        const copy = await runCli([domain, "copy", "7", "--confirm"], {
+          env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" },
+          script: [{ status: 201, body: { id: 8, name: "copy" } }],
+        });
+        expect(copy.transport.requests[0]).toMatchObject({ method: "POST", route, tag: "security" });
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("security-gates credential-bearing execution environments", async () => {
     const run = await runCli([
       "execution-environment", "edit", "4", "--credential", "5", "--confirm",
@@ -236,21 +280,6 @@ describe("write-management coverage", () => {
         tag: testCase.tag,
       });
     }
-  });
-
-  it("deletes verified system job records", async () => {
-    const run = await runCli(["system-job", "delete", "44", "--confirm"], {
-      env: { AWX_AXI_ALLOW_DELETES: "1" },
-      script: [
-        { status: 200, body: { count: 1, results: [{ id: 44, type: "system_job" }] } },
-        { status: 204 },
-      ],
-    });
-    expect(run.transport.requests[1]).toMatchObject({
-      method: "DELETE",
-      route: "system_jobs/44/",
-      tag: "delete",
-    });
   });
 
   it("manages team users and workflow template parity", async () => {
@@ -329,6 +358,9 @@ describe("write-management coverage", () => {
       ["organization", "create", "bad", "--max-hosts", "many"],
       ["workflow", "node-edit", "4", "--verbosity", "6"],
       ["workflow", "node-add-approval", "4", "--name", "approve", "--timeout", "later"],
+      ["workflow", "node-delete", "1e3"],
+      ["workflow", "node-delete", "0x10"],
+      ["workflow", "node-delete", " 4"],
     ]) {
       const run = await runCli(argv);
       expect(run.exitCode).toBe(2);

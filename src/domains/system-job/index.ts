@@ -166,15 +166,9 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(response, { subject: `system job ${id}` });
   }
   if (response.status !== 202 && response.status !== 200) throw errorForResponse(response, { subject: `system job ${id}` });
-  return detailOutput({ label: "system_job", fields: { id, status: "canceled" }, help: [`Run \`awx-axi system-job show ${id}\` for details`] });
-}
-
-function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
-  const id = yield* resolveSystemJobId(input.args[0], "delete");
-  if (!isLive(input.flags)) return dryRun("delete", "system_job", { system_job: id }, `DELETE system_jobs/${id}/`);
-  const response = yield* write(`system_jobs/${id}/`, undefined, { method: "DELETE", tag: "delete" });
-  if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `system job ${id}` });
-  return detailOutput({ label: "system_job", fields: { id, status: "deleted" } });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  const status = typeof body.status === "string" ? body.status : "cancel_requested";
+  return detailOutput({ label: "system_job", fields: { id, status }, help: [`Run \`awx-axi system-job show ${id}\` for details`] });
 }
 
 function* showPlan(input: SubcommandInput): Plan<DomainResult> {
@@ -289,9 +283,8 @@ export const systemJobDomain: Domain = defineDomain({
     "",
     "Subcommands:",
     "  cancel          <id> [--confirm] [--dry-run]",
-    "  delete          <id> [--confirm] [--dry-run]",
     "  list            [--search <s>] [--template <id>] [--status <s>] [--limit <n>]",
-    "  System jobs are generated records: create/edit are not exposed by AWX; cancel and delete are the only writes.",
+    "  System jobs are generated records: create/edit/delete are not exposed; cancel is the only write.",
     "  show            <id>",
     "  events          <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
     "  notifications   <id> [--limit <n>]",
@@ -306,10 +299,6 @@ export const systemJobDomain: Domain = defineDomain({
     {
       name: "cancel", help: "awx-axi system-job cancel <id> [--confirm] [--dry-run]",
       flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id>"], required: 1 }, schema: { label: "system_job", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: cancelPlan,
-    },
-    {
-      name: "delete", help: "awx-axi system-job delete <id> [--confirm] [--dry-run]",
-      flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id>"], required: 1 }, schema: { label: "system_job", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: deletePlan,
     },
     {
       name: "list",

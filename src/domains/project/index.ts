@@ -462,7 +462,7 @@ function* copyProjectPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", { listRoute: "projects/", noun: "project", listCommand: "project list", command: "project copy" });
   const payload: Record<string, unknown> = {}; if (typeof input.flags.name === "string") payload.name = input.flags.name;
   if (!isLive(input.flags)) return dryRun("copy", "project", { project: id }, `POST projects/${id}/copy/`, payload);
-  const response = yield* write(`projects/${id}/copy/`, payload, { method: "POST", tag: "config" });
+  const response = yield* write(`projects/${id}/copy/`, payload, { method: "POST", tag: "security" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `project ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>; const copyId = typeof body.id === "number" ? body.id : 0;
   return detailOutput({ label: "project", fields: { id: copyId, name: body.name ?? null }, help: [`Run \`awx-axi project show ${copyId}\` to inspect copy`] });

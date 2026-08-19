@@ -174,7 +174,10 @@ function* createPlan(input: SubcommandInput): Plan<DomainResult> {
     notification_configuration: REDACTION,
     ...(messages === undefined ? {} : { messages: REDACTION }),
   });
-  const response = yield* write("notification_templates/", payload, { method: "POST", tag: "config" });
+  const hasSecretInput = typeof input.flags["configuration-file"] === "string"
+    || typeof input.flags["config-file"] === "string"
+    || typeof input.flags["messages-file"] === "string";
+  const response = yield* write("notification_templates/", payload, { method: "POST", tag: hasSecretInput ? "security" : "config" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `notification template ${name}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   const id = typeof body.id === "number" ? body.id : 0;
@@ -196,7 +199,8 @@ function* editPlan(input: SubcommandInput): Plan<DomainResult> {
     ...(messages === undefined ? {} : { messages: REDACTION }),
   };
   if (!isLive(input.flags)) return dryRun("edit", "notification_template", { notification_template: id }, `PATCH notification_templates/${id}/`, preview);
-  const response = yield* write(`notification_templates/${id}/`, payload, { method: "PATCH", tag: "config" });
+  const hasSecretInput = payload.notification_configuration !== undefined || messages !== undefined;
+  const response = yield* write(`notification_templates/${id}/`, payload, { method: "PATCH", tag: hasSecretInput ? "security" : "config" });
   if (response.status !== 200) throw errorForResponse(response, { subject: `notification template ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   return detailOutput({ label: "notification_template", fields: { id, name: body.name ?? null }, help: [`Run \`awx-axi notification-template show ${id}\` to inspect updated template`] });
@@ -216,14 +220,15 @@ function* testPlan(input: SubcommandInput): Plan<DomainResult> {
   const response = yield* write(`notification_templates/${id}/test/`, undefined, { method: "POST", tag: "operational" });
   if (response.status !== 202 && response.status !== 200 && response.status !== 201) throw errorForResponse(response, { subject: `notification template ${id} test` });
   const body = (response.body ?? {}) as Record<string, unknown>;
-  return detailOutput({ label: "notification_test", fields: { notification_template: id, notification: body.notification ?? null, status: "sent" } });
+  const status = typeof body.status === "string" ? body.status : "pending";
+  return detailOutput({ label: "notification_test", fields: { notification_template: id, notification: body.notification ?? null, status } });
 }
 
 function* copyPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", { listRoute: "notification_templates/", noun: "notification template", listCommand: "notification-template list", command: "notification-template copy" });
   const payload: Record<string, unknown> = {}; if (typeof input.flags.name === "string") payload.name = input.flags.name;
   if (!isLive(input.flags)) return dryRun("copy", "notification_template", { notification_template: id }, `POST notification_templates/${id}/copy/`, payload);
-  const response = yield* write(`notification_templates/${id}/copy/`, payload, { method: "POST", tag: "config" });
+  const response = yield* write(`notification_templates/${id}/copy/`, payload, { method: "POST", tag: "security" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `notification template ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>; const copyId = typeof body.id === "number" ? body.id : 0;
   return detailOutput({ label: "notification_template", fields: { id: copyId, name: body.name ?? null }, help: [`Run \`awx-axi notification-template show ${copyId}\` to inspect copy`] });

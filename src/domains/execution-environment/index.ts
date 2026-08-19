@@ -167,7 +167,7 @@ function* copyPlan(input: SubcommandInput): Plan<DomainResult> {
   const payload: Record<string, unknown> = {};
   if (typeof input.flags.name === "string") payload.name = input.flags.name;
   if (!isLive(input.flags)) return dryRun("copy", "execution_environment", { execution_environment: id }, `POST execution_environments/${id}/copy/`, payload);
-  const response = yield* write(`execution_environments/${id}/copy/`, payload, { method: "POST", tag: "config" });
+  const response = yield* write(`execution_environments/${id}/copy/`, payload, { method: "POST", tag: "security" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `execution environment ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   const copyId = typeof body.id === "number" ? body.id : 0;

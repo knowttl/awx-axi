@@ -45,7 +45,8 @@ export function parseInteger(
 ): number {
   const value = Number(raw);
   if (
-    !Number.isInteger(value) ||
+    !/^-?(?:0|[1-9]\d*)$/.test(raw) ||
+    !Number.isSafeInteger(value) ||
     value < minimum ||
     (maximum !== undefined && value > maximum)
   ) {
