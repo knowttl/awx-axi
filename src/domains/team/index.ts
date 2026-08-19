@@ -551,7 +551,7 @@ export const teamDomain: Domain = defineDomain({
     "  show          <id|name>",
     "  users         <id|name> [--limit <n>]",
     "  user-add|user-remove <id|name> --user <id|name> [--confirm] [--dry-run]",
-    "  projects      <id|name> [--limit <n>]", 
+    "  projects      <id|name> [--limit <n>]",
     "  credentials   <id|name> [--limit <n>]",
     "  roles         <id|name> [--limit <n>]",
     "  object-roles  <id|name> [--limit <n>]",

@@ -55,7 +55,7 @@ Do not use write commands against a controller that has been designated read-onl
 ## Commands
 
 commands[21 total]:
-`job`: list, show, stdout, events, hosts, cancel, relaunch, watch.
+`job`: list, show, stdout, events, hosts, launch, cancel, relaunch, watch.
 `template`: create, edit, copy, delete, list, show, object-roles, survey, launch, credential-add/remove, instance-group-add/remove, label-add/remove, notification-add/remove.
 `workflow`: create, edit, copy, delete, list, show, object-roles, survey, launch, nodes, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
 `approval`: list, show, approve, deny.
