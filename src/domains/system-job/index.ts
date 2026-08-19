@@ -2,11 +2,13 @@
  * The `system-job` domain: read-only access to system job runs.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -150,6 +152,31 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveSystemJobId(input.args[0], "cancel");
+  if (!isLive(input.flags)) return dryRun("cancel", "system_job", { system_job: id }, `POST system_jobs/${id}/cancel/`);
+  const response = yield* write(`system_jobs/${id}/cancel/`, undefined, { method: "POST", tag: "operational" });
+  if (response.status === 405) {
+    const detail = yield* read(`system_jobs/${id}/`);
+    if (detail.status === 200) {
+      const body = (detail.body ?? {}) as Record<string, unknown>;
+      const status = typeof body.status === "string" ? body.status : "unknown";
+      if (!["new", "pending", "waiting", "running"].includes(status)) return detailOutput({ label: "system_job", fields: { id, status, message: "already finished, nothing to cancel (no-op)" }, help: [`Run \`awx-axi system-job show ${id}\` for details`] });
+    }
+    throw errorForResponse(response, { subject: `system job ${id}` });
+  }
+  if (response.status !== 202 && response.status !== 200) throw errorForResponse(response, { subject: `system job ${id}` });
+  return detailOutput({ label: "system_job", fields: { id, status: "canceled" }, help: [`Run \`awx-axi system-job show ${id}\` for details`] });
+}
+
+function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveSystemJobId(input.args[0], "delete");
+  if (!isLive(input.flags)) return dryRun("delete", "system_job", { system_job: id }, `DELETE system_jobs/${id}/`);
+  const response = yield* write(`system_jobs/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `system job ${id}` });
+  return detailOutput({ label: "system_job", fields: { id, status: "deleted" } });
+}
+
 function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveSystemJobId(input.args[0], "show");
   const detail = yield* read(`system_jobs/${id}/`);
@@ -261,7 +288,10 @@ export const systemJobDomain: Domain = defineDomain({
     "system-job: inspect system-run job history",
     "",
     "Subcommands:",
+    "  cancel          <id> [--confirm] [--dry-run]",
+    "  delete          <id> [--confirm] [--dry-run]",
     "  list            [--search <s>] [--template <id>] [--status <s>] [--limit <n>]",
+    "  System jobs are generated records: create/edit are not exposed by AWX; cancel and delete are the only writes.",
     "  show            <id>",
     "  events          <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
     "  notifications   <id> [--limit <n>]",
@@ -273,6 +303,14 @@ export const systemJobDomain: Domain = defineDomain({
     "get_system_job_notifications",
   ],
   subcommands: [
+    {
+      name: "cancel", help: "awx-axi system-job cancel <id> [--confirm] [--dry-run]",
+      flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id>"], required: 1 }, schema: { label: "system_job", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: cancelPlan,
+    },
+    {
+      name: "delete", help: "awx-axi system-job delete <id> [--confirm] [--dry-run]",
+      flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id>"], required: 1 }, schema: { label: "system_job", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: deletePlan,
+    },
     {
       name: "list",
       help:

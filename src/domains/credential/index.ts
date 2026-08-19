@@ -4,6 +4,7 @@
 import { readFileSync, statSync } from "node:fs";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -338,6 +339,16 @@ function* editCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* copyCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "credential copy" });
+  const payload: Record<string, unknown> = {}; if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (!isLive(input.flags)) return dryRun("copy", "credential", { credential: id }, `POST credentials/${id}/copy/`, payload);
+  const response = yield* write(`credentials/${id}/copy/`, payload, { method: "POST", tag: "security" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `credential ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>; const copyId = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "credential", fields: { id: copyId, name: body.name ?? null }, help: [`Run \`awx-axi credential show ${copyId}\` to inspect copy`] });
+}
+
 function* deleteCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "credentials/",
@@ -382,6 +393,7 @@ export const credentialDomain: Domain = defineDomain({
     "  create  [<name>] --credential-type <id|name> [--inputs-file <path>] [--confirm] [--dry-run]",
     "  edit    <id|name> [--name <n>] [--inputs-file <path>] [--confirm] [--dry-run]",
     "  delete  <id|name> [--confirm] [--dry-run]",
+    "  copy    <id|name> [--name <name>] [--confirm] [--dry-run]",
     "  list    [--search <s>] [--organization <id>] [--limit <n>]",
     "  show    <id|name>",
   ].join("\n"),
@@ -392,6 +404,9 @@ export const credentialDomain: Domain = defineDomain({
     "delete_credential",
   ],
   subcommands: [
+    {
+      name: "copy", help: "awx-axi credential copy <id|name> [--name <name>] [--confirm] [--dry-run]", flags: [{ name: "name", description: "copy name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "credential", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: copyCredentialPlan,
+    },
     {
       name: "create",
       help: "awx-axi credential create [<name>] --credential-type <id|name> [--inputs-file <path>] [--confirm] [--dry-run]",

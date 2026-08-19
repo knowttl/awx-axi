@@ -2,6 +2,8 @@
  * The `team` domain: list, show, create, edit, and delete AWX teams, membership, and access controls.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { readFileSync, statSync } from "node:fs";
+import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -332,6 +334,28 @@ function* accessListPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function teamInputs(input: SubcommandInput): Record<string, unknown> {
+  if (typeof input.flags["inputs-file"] !== "string") return {};
+  const path = input.flags["inputs-file"];
+  try { if ((statSync(path).mode & 0o077) !== 0) throw validationError("team credential inputs file must have 0600 permissions"); } catch (error) { if (error instanceof Error && error.message.includes("permissions")) throw error; throw validationError("team credential inputs file could not be read"); }
+  try { const parsed: unknown = JSON.parse(readFileSync(path, "utf8")); if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>; } catch { /* translated below */ }
+  throw validationError("team credential inputs file must contain a JSON object");
+}
+
+function* createTeamCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
+  const team = yield* resolveId(input.args[0] ?? "", { listRoute: "teams/", noun: "team", listCommand: "team list", command: "team credential-create" });
+  const name = typeof input.flags.name === "string" ? input.flags.name : undefined;
+  if (name === undefined) throw validationError("`team credential-create` needs --name");
+  if (typeof input.flags["credential-type"] !== "string") throw validationError("`team credential-create` needs --credential-type");
+  const credentialType = yield* resolveId(input.flags["credential-type"], { listRoute: "credential_types/", noun: "credential type", listCommand: "credential list", command: "team credential-create" });
+  const inputs = teamInputs(input); const payload = { name, credential_type: credentialType, inputs };
+  if (!isLive(input.flags)) return dryRun("create", "team_credential", { team, name }, `POST teams/${team}/credentials/`, { ...payload, inputs: Object.fromEntries(Object.keys(inputs).map((key) => [key, "[redacted]"])) });
+  const response = yield* write(`teams/${team}/credentials/`, payload, { method: "POST", tag: "security" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `team ${team} credential` });
+  const body = (response.body ?? {}) as Record<string, unknown>; const id = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "credential", fields: { id, name: body.name ?? name, team }, help: [`Run \`awx-axi credential show ${id}\` to inspect credential`] });
+}
+
 function* createTeamPlan(input: SubcommandInput): Plan<DomainResult> {
   const name =
     input.args[0] ??
@@ -498,6 +522,8 @@ export const teamDomain: Domain = defineDomain({
     "  roles         <id|name> [--limit <n>]",
     "  object-roles  <id|name> [--limit <n>]",
     "  access-list   <id|name> [--limit <n>]",
+    "  credential-create <id|name> --name <name> --credential-type <id|name>",
+    "  Team users and projects are read-only sublists in AWX; manage access with RBAC roles.",
   ].join("\n"),
   mcpEquivalents: [
     "list_teams",
@@ -513,6 +539,10 @@ export const teamDomain: Domain = defineDomain({
     "list_team_access_list",
   ],
   subcommands: [
+    {
+      name: "credential-create", help: "awx-axi team credential-create <id|name> --name <name> --credential-type <id|name> [--inputs-file <path>] [--confirm] [--dry-run]",
+      flags: [{ name: "name", description: "credential name", takesValue: true }, { name: "credential-type", description: "credential type id or name", takesValue: true }, { name: "inputs-file", description: "0600 JSON inputs file", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "credential", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: createTeamCredentialPlan,
+    },
     {
       name: "create",
       help: "awx-axi team create [<name>] --organization <id|name> [--confirm] [--dry-run]",

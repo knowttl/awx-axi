@@ -6,6 +6,7 @@
 import { AxiError } from "axi-sdk-js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive } from "../../core/mutations.js";
 import {
   detailOutput,
   listOutput,
@@ -457,6 +458,30 @@ function* editProjectPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* copyProjectPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "projects/", noun: "project", listCommand: "project list", command: "project copy" });
+  const payload: Record<string, unknown> = {}; if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (!isLive(input.flags)) return dryRun("copy", "project", { project: id }, `POST projects/${id}/copy/`, payload);
+  const response = yield* write(`projects/${id}/copy/`, payload, { method: "POST", tag: "config" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `project ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>; const copyId = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "project", fields: { id: copyId, name: body.name ?? null }, help: [`Run \`awx-axi project show ${copyId}\` to inspect copy`] });
+}
+
+function notificationAssociationPlan(remove: boolean) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const project = yield* resolveId(input.args[0] ?? "", { listRoute: "projects/", noun: "project", listCommand: "project list", command: `project notification-${remove ? "remove" : "add"}` });
+    const event = input.flags.event; if (typeof event !== "string" || !["started", "success", "error"].includes(event)) throw validationError("--event must be started, success, or error");
+    if (typeof input.flags["notification-template"] !== "string") throw validationError("notification association needs --notification-template");
+    const template = yield* resolveId(input.flags["notification-template"], { listRoute: "notification_templates/", noun: "notification template", listCommand: "notification-template list", command: "project notification" });
+    const path = `projects/${project}/notification_templates_${event}/`; const payload = remove ? { id: template, disassociate: true } : { id: template };
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { project, notification_template: template, event }, `POST ${path}`, payload);
+    const response = yield* write(path, payload, { method: "POST", tag: "config" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `project ${project} notifications` });
+    return detailOutput({ label: "project_notification", fields: { project, notification_template: template, event, status: remove ? "removed" : "added" } });
+  };
+}
+
 function* deleteProjectPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "projects/",
@@ -507,6 +532,8 @@ export const projectDomain: Domain = defineDomain({
     "  updates     <id|name> [--limit <n>]",
     "  roles       <id|name>",
     "  sync        <id|name> [--wait] [--confirm] [--dry-run]",
+    "  copy        <id|name> [--name <name>] [--confirm] [--dry-run]",
+    "  notification-add|notification-remove <id|name> --event <event> --notification-template <id|name>",
   ].join("\n"),
   mcpEquivalents: [
     "list_projects",
@@ -520,6 +547,10 @@ export const projectDomain: Domain = defineDomain({
     "delete_project",
   ],
   subcommands: [
+    {
+      name: "copy", help: "awx-axi project copy <id|name> [--name <name>] [--confirm] [--dry-run]", flags: [{ name: "name", description: "copy name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "project", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: copyProjectPlan,
+    },
+    ...(["notification-add", "notification-remove"] as const).map((name) => ({ name, help: `awx-axi project ${name} <id|name> --event <event> --notification-template <id|name> [--confirm] [--dry-run]`, flags: [{ name: "event", description: "started, success, or error", takesValue: true }, { name: "notification-template", description: "notification template id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "project_notification", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: notificationAssociationPlan(name.endsWith("remove")) })),
     {
       name: "create",
       help: "awx-axi project create [<name>] [--scm-type <t>] [--scm-url <u>] [--confirm] [--dry-run]",

@@ -3,6 +3,8 @@
  * hosts, groups, sources, and update history.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive, parseJsonObject } from "../../core/mutations.js";
+import { readFileSync } from "node:fs";
 import {
   detailOutput,
   listOutput,
@@ -1001,6 +1003,158 @@ function* deleteInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createGroupPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name.length === 0) throw validationError("`inventory group-create` needs a group name argument or --name");
+  if (typeof input.flags.inventory !== "string") throw validationError("`inventory group-create` needs --inventory id or name");
+  const inventory = yield* resolveId(input.flags.inventory, { listRoute: "inventories/", noun: "inventory", listCommand: "inventory list", command: "inventory group-create" });
+  const payload: Record<string, unknown> = { name };
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags.variables === "string") payload.variables = input.flags.variables;
+  if (!isLive(input.flags)) return dryRun("create", "group", { name, inventory }, `POST inventories/${inventory}/groups/`, payload);
+  const response = yield* write(`inventories/${inventory}/groups/`, payload, { method: "POST", tag: "config" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `group ${name}` });
+  const body = (response.body ?? {}) as Record<string, unknown>; const id = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "group", fields: { id, name: body.name ?? name, inventory }, help: [`Run \`awx-axi inventory groups ${inventory}\` to inspect groups`] });
+}
+
+function* editGroupPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "groups/", noun: "group", listCommand: "inventory groups", command: "inventory group-edit" });
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags.variables === "string") payload.variables = input.flags.variables;
+  if (!isLive(input.flags)) return dryRun("edit", "group", { group: id }, `PATCH groups/${id}/`, payload);
+  const response = yield* write(`groups/${id}/`, payload, { method: "PATCH", tag: "config" });
+  if (response.status !== 200) throw errorForResponse(response, { subject: `group ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  return detailOutput({ label: "group", fields: { id, name: body.name ?? null }, help: [`Run \`awx-axi inventory groups <inventory>\` to inspect groups`] });
+}
+
+function* deleteGroupPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "groups/", noun: "group", listCommand: "inventory groups", command: "inventory group-delete" });
+  if (!isLive(input.flags)) return dryRun("delete", "group", { group: id }, `DELETE groups/${id}/`);
+  const response = yield* write(`groups/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `group ${id}` });
+  return detailOutput({ label: "group", fields: { id, status: "deleted" } });
+}
+
+function associationPlan(kind: "host" | "child", remove: boolean) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const group = yield* resolveId(input.args[0] ?? "", { listRoute: "groups/", noun: "group", listCommand: "inventory groups", command: `inventory group-${remove ? "remove" : "add"}-${kind}` });
+    const flag = kind === "host" ? "host" : "child";
+    const listRoute = kind === "host" ? "hosts/" : "groups/";
+    const noun = kind === "host" ? "host" : "group";
+    const raw = input.flags[flag];
+    if (typeof raw !== "string") throw validationError(`inventory group-${remove ? "remove" : "add"}-${kind} needs --${flag}`);
+    const target = yield* resolveId(raw, { listRoute, noun, listCommand: kind === "host" ? "inventory hosts" : "inventory groups", command: `inventory group-${remove ? "remove" : "add"}-${kind}` });
+    const path = `groups/${group}/${kind === "host" ? "hosts" : "children"}/`;
+    const payload = remove ? { id: target, disassociate: true } : { id: target };
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", noun, { group, [flag]: target }, `POST ${path}`, payload);
+    const response = yield* write(path, payload, { method: "POST", tag: "config" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `group ${group}` });
+    return detailOutput({ label: "group_association", fields: { group, [flag]: target, status: remove ? "removed" : "added" } });
+  };
+}
+
+function* createSourcePlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name.length === 0) throw validationError("`inventory source-create` needs a source name argument or --name");
+  if (typeof input.flags.inventory !== "string") throw validationError("`inventory source-create` needs --inventory id or name");
+  if (typeof input.flags.source !== "string") throw validationError("`inventory source-create` needs --source");
+  const payload: Record<string, unknown> = { name, source: input.flags.source, inventory: yield* resolveId(input.flags.inventory, { listRoute: "inventories/", noun: "inventory", listCommand: "inventory list", command: "inventory source-create" }) };
+  if (typeof input.flags["source-project"] === "string") payload.source_project = yield* resolveId(input.flags["source-project"], { listRoute: "projects/", noun: "project", listCommand: "project list", command: "inventory source-create" });
+  if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "inventory source-create" });
+  if (typeof input.flags["source-vars"] === "string") payload.source_vars = parseJsonObject(input.flags["source-vars"], "--source-vars");
+  if (input.flags["update-on-launch"] === true) payload.update_on_launch = true;
+  if (!isLive(input.flags)) return dryRun("create", "inventory_source", { name }, "POST inventory_sources/", payload);
+  const response = yield* write("inventory_sources/", payload, { method: "POST", tag: "config" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `inventory source ${name}` });
+  const body = (response.body ?? {}) as Record<string, unknown>; const id = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "inventory_source", fields: { id, name: body.name ?? name }, help: [`Run \`awx-axi inventory sources <inventory>\` to inspect source`] });
+}
+
+function* editSourcePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "inventory_sources/", noun: "inventory source", listCommand: "inventory sources", command: "inventory source-edit" });
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.source === "string") payload.source = input.flags.source;
+  if (typeof input.flags.inventory === "string") payload.inventory = yield* resolveId(input.flags.inventory, { listRoute: "inventories/", noun: "inventory", listCommand: "inventory list", command: "inventory source-edit" });
+  if (typeof input.flags["source-project"] === "string") payload.source_project = yield* resolveId(input.flags["source-project"], { listRoute: "projects/", noun: "project", listCommand: "project list", command: "inventory source-edit" });
+  if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "inventory source-edit" });
+  if (typeof input.flags["source-vars"] === "string") payload.source_vars = parseJsonObject(input.flags["source-vars"], "--source-vars");
+  if (input.flags["update-on-launch"] === true) payload.update_on_launch = true;
+  if (input.flags["no-update-on-launch"] === true) payload.update_on_launch = false;
+  if (!isLive(input.flags)) return dryRun("edit", "inventory_source", { inventory_source: id }, `PATCH inventory_sources/${id}/`, payload);
+  const response = yield* write(`inventory_sources/${id}/`, payload, { method: "PATCH", tag: "config" });
+  if (response.status !== 200) throw errorForResponse(response, { subject: `inventory source ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  return detailOutput({ label: "inventory_source", fields: { id, name: body.name ?? null }, help: [`Run \`awx-axi inventory sources <inventory>\` to inspect source`] });
+}
+
+function* deleteSourcePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "inventory_sources/", noun: "inventory source", listCommand: "inventory sources", command: "inventory source-delete" });
+  if (!isLive(input.flags)) return dryRun("delete", "inventory_source", { inventory_source: id }, `DELETE inventory_sources/${id}/`);
+  const response = yield* write(`inventory_sources/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `inventory source ${id}` });
+  return detailOutput({ label: "inventory_source", fields: { id, status: "deleted" } });
+}
+
+function sourceCredentialPlan(remove: boolean): (input: SubcommandInput) => Plan<DomainResult> {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const source = yield* resolveId(input.args[0] ?? "", { listRoute: "inventory_sources/", noun: "inventory source", listCommand: "inventory sources", command: `inventory source-credential-${remove ? "remove" : "add"}` });
+    if (typeof input.flags.credential !== "string") throw validationError("inventory source credential association needs --credential");
+    const credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "inventory source-credential" });
+    const path = `inventory_sources/${source}/credentials/`; const payload = remove ? { id: credential, disassociate: true } : { id: credential };
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "credential", { inventory_source: source, credential }, `POST ${path}`, payload);
+    const response = yield* write(path, payload, { method: "POST", tag: "security" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `inventory source ${source}` });
+    return detailOutput({ label: "inventory_source_credential", fields: { inventory_source: source, credential, status: remove ? "removed" : "added" } });
+  };
+}
+
+function sourceNotificationPlan(remove: boolean) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const source = yield* resolveId(input.args[0] ?? "", { listRoute: "inventory_sources/", noun: "inventory source", listCommand: "inventory sources", command: `inventory source-notification-${remove ? "remove" : "add"}` });
+    const event = input.flags.event; if (typeof event !== "string" || !["started", "success", "error"].includes(event)) throw validationError("--event must be started, success, or error");
+    if (typeof input.flags["notification-template"] !== "string") throw validationError("source notification association needs --notification-template");
+    const template = yield* resolveId(input.flags["notification-template"], { listRoute: "notification_templates/", noun: "notification template", listCommand: "notification-template list", command: "inventory source notification" });
+    const path = `inventory_sources/${source}/notification_templates_${event}/`; const payload = remove ? { id: template, disassociate: true } : { id: template };
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { inventory_source: source, notification_template: template, event }, `POST ${path}`, payload);
+    const response = yield* write(path, payload, { method: "POST", tag: "config" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `inventory source ${source} notifications` });
+    return detailOutput({ label: "inventory_source_notification", fields: { inventory_source: source, notification_template: template, event, status: remove ? "removed" : "added" } });
+  };
+}
+
+function readHostsFile(path: string): unknown[] {
+  try { const parsed: unknown = JSON.parse(readFileSync(path, "utf8")); if (Array.isArray(parsed)) return parsed; } catch { /* translated below */ }
+  throw validationError("--hosts-file must contain a JSON array of host objects or ids");
+}
+
+function* bulkHostCreatePlan(input: SubcommandInput): Plan<DomainResult> {
+  if (typeof input.flags.inventory !== "string" || typeof input.flags["hosts-file"] !== "string") throw validationError("`inventory host-bulk-create` needs --inventory and --hosts-file");
+  const inventory = yield* resolveId(input.flags.inventory, { listRoute: "inventories/", noun: "inventory", listCommand: "inventory list", command: "inventory host-bulk-create" });
+  const hosts = readHostsFile(input.flags["hosts-file"]);
+  const payload = { inventory, hosts };
+  if (!isLive(input.flags)) return dryRun("create", "hosts", { inventory, count: hosts.length }, "POST bulk/host_create/", payload);
+  const response = yield* write("bulk/host_create/", payload, { method: "POST", tag: "config" });
+  if (response.status !== 200 && response.status !== 201) throw errorForResponse(response, { subject: `bulk hosts in inventory ${inventory}` });
+  return detailOutput({ label: "hosts", fields: { inventory, count: hosts.length, status: "created" } });
+}
+
+function* bulkHostDeletePlan(input: SubcommandInput): Plan<DomainResult> {
+  if (typeof input.flags["hosts-file"] !== "string") throw validationError("`inventory host-bulk-delete` needs --hosts-file");
+  const hosts = readHostsFile(input.flags["hosts-file"]);
+  const ids = hosts.map((host) => typeof host === "number" ? host : Number(host));
+  if (ids.some((id) => !Number.isInteger(id) || id < 1)) throw validationError("bulk host delete file must contain numeric host ids");
+  const payload = { hosts: ids };
+  if (!isLive(input.flags)) return dryRun("delete", "hosts", { count: ids.length }, "POST bulk/host_delete/", payload);
+  const response = yield* write("bulk/host_delete/", payload, { method: "POST", tag: "delete" });
+  if (response.status !== 200 && response.status !== 204) throw errorForResponse(response, { subject: "bulk hosts" });
+  return detailOutput({ label: "hosts", fields: { count: ids.length, status: "deleted" } });
+}
+
 function* deleteHostPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "hosts/",
@@ -1049,6 +1203,11 @@ const baseInventoryDomain: Domain = defineDomain({
     "  host-create          [<name>] --inventory <i|name> [--confirm] [--dry-run]",
     "  host-edit            <id|name> [--confirm] [--dry-run]",
     "  host-delete          <id|name> [--confirm] [--dry-run]",
+    "  host-bulk-create     --inventory <i|name> --hosts-file <path> [--confirm] [--dry-run]",
+    "  host-bulk-delete     --hosts-file <path> [--confirm] [--dry-run]",
+    "  group-create|group-edit|group-delete",
+    "  group-add-host|group-remove-host|group-add-child|group-remove-child",
+    "  source-create|source-edit|source-delete|source-credential-add|source-credential-remove",
     "  list                 [--search <s>] [--limit <n>]",
     "  show                 <id|name>",
     "  groups               <id|name> [--search <s>] [--limit <n>]",
@@ -1076,6 +1235,43 @@ const baseInventoryDomain: Domain = defineDomain({
     "get_constructed_inventory",
   ],
   subcommands: [
+    {
+      name: "host-bulk-create", help: "awx-axi inventory host-bulk-create --inventory <i|name> --hosts-file <path> [--confirm] [--dry-run]",
+      flags: [{ name: "inventory", description: "inventory id or name", takesValue: true }, { name: "hosts-file", description: "JSON host array file", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: [], required: 0 }, schema: { label: "hosts", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: bulkHostCreatePlan,
+    },
+    {
+      name: "host-bulk-delete", help: "awx-axi inventory host-bulk-delete --hosts-file <path> [--confirm] [--dry-run]",
+      flags: [{ name: "hosts-file", description: "JSON host id array file", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: [], required: 0 }, schema: { label: "hosts", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: bulkHostDeletePlan,
+    },
+    {
+      name: "group-create", help: "awx-axi inventory group-create [<name>] --inventory <i|name> [--confirm] [--dry-run]",
+      flags: [{ name: "name", description: "group name", takesValue: true }, { name: "inventory", description: "inventory id or name", takesValue: true }, { name: "description", description: "description", takesValue: true }, { name: "variables", description: "group variables", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<name>"], required: 0 }, schema: { label: "group", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: createGroupPlan,
+    },
+    {
+      name: "group-edit", help: "awx-axi inventory group-edit <id|name> [--confirm] [--dry-run]",
+      flags: [{ name: "name", description: "group name", takesValue: true }, { name: "description", description: "description", takesValue: true }, { name: "variables", description: "group variables", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "group", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: editGroupPlan,
+    },
+    {
+      name: "group-delete", help: "awx-axi inventory group-delete <id|name> [--confirm] [--dry-run]",
+      flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "group", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: deleteGroupPlan,
+    },
+    ...(["group-add-host", "group-remove-host", "group-add-child", "group-remove-child"] as const).map((name) => {
+      const child = name.endsWith("child"); const remove = name.includes("remove");
+      return { name, help: `awx-axi inventory ${name} <group> --${child ? "child" : "host"} <id|name> [--confirm] [--dry-run]`, flags: [{ name: child ? "child" : "host", description: child ? "child group id or name" : "host id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "group_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(child ? "child" : "host", remove) };
+    }),
+    {
+      name: "source-create", help: "awx-axi inventory source-create [<name>] --inventory <i|name> --source <type> [--confirm] [--dry-run]",
+      flags: [{ name: "name", description: "source name", takesValue: true }, { name: "inventory", description: "inventory id or name", takesValue: true }, { name: "source", description: "source type", takesValue: true }, { name: "source-project", description: "source project id or name", takesValue: true }, { name: "credential", description: "credential id or name", takesValue: true }, { name: "source-vars", description: "source variables JSON", takesValue: true }, { name: "update-on-launch", description: "update on launch", takesValue: false }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<name>"], required: 0 }, schema: { label: "inventory_source", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: createSourcePlan,
+    },
+    {
+      name: "source-edit", help: "awx-axi inventory source-edit <id|name> [--confirm] [--dry-run]",
+      flags: [{ name: "name", description: "source name", takesValue: true }, { name: "inventory", description: "inventory id or name", takesValue: true }, { name: "source", description: "source type", takesValue: true }, { name: "source-project", description: "source project id or name", takesValue: true }, { name: "credential", description: "credential id or name", takesValue: true }, { name: "source-vars", description: "source variables JSON", takesValue: true }, { name: "update-on-launch", description: "update on launch", takesValue: false }, { name: "no-update-on-launch", description: "do not update on launch", takesValue: false }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: editSourcePlan,
+    },
+    {
+      name: "source-delete", help: "awx-axi inventory source-delete <id|name> [--confirm] [--dry-run]", flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: deleteSourcePlan,
+    },
+    ...(["source-credential-add", "source-credential-remove"] as const).map((name) => ({ name, help: `awx-axi inventory ${name} <id|name> --credential <id|name> [--confirm] [--dry-run]`, flags: [{ name: "credential", description: "credential id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source_credential", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: sourceCredentialPlan(name.endsWith("remove")) })),
+    ...(["source-notification-add", "source-notification-remove"] as const).map((name) => ({ name, help: `awx-axi inventory ${name} <id|name> --event <event> --notification-template <id|name> [--confirm] [--dry-run]`, flags: [{ name: "event", description: "started, success, or error", takesValue: true }, { name: "notification-template", description: "notification template id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source_notification", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: sourceNotificationPlan(name.endsWith("remove")) })),
     {
       name: "create",
       help: "awx-axi inventory create [<name>] [--organization <o>] [--confirm] [--dry-run]",
@@ -1289,8 +1485,12 @@ const baseInventoryDomain: Domain = defineDomain({
 export const inventoryDomain: Domain = {
   ...baseInventoryDomain,
   async run(args, context) {
-    if (args[0] === "host" && (args[1] === "create" || args[1] === "edit" || args[1] === "delete")) {
+    if (args[0] === "host" && (args[1] === "create" || args[1] === "edit" || args[1] === "delete" || args[1] === "bulk-create" || args[1] === "bulk-delete")) {
       return baseInventoryDomain.run([`host-${args[1]}`, ...args.slice(2)], context);
+    }
+    if ((args[0] === "group" || args[0] === "source") && args[1] !== undefined) {
+      const action = args[1] === "create" || args[1] === "edit" || args[1] === "delete" ? `${args[0]}-${args[1]}` : `${args[0]}-${args.slice(1).join("-")}`;
+      return baseInventoryDomain.run([action, ...args.slice(2)], context);
     }
     return baseInventoryDomain.run(args, context);
   },

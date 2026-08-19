@@ -119,10 +119,10 @@ export async function main(options: MainOptions = {}): Promise<void> {
         return SETUP_HELP;
       }
       const domain = DOMAINS.find((candidate) => candidate.name === command);
-      return (
+      const help =
         domain?.subcommands.find((subcommand) => subcommand.name === argv[1])
-          ?.help ?? domain?.help
-      );
+          ?.help ?? domain?.help;
+      return help === undefined || help.endsWith("\n") ? help : `${help}\n`;
     },
     home: () => homeCommand(),
   });

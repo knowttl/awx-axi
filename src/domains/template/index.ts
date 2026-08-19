@@ -6,6 +6,7 @@ import { statSync, readFileSync } from "node:fs";
 import { AxiError } from "axi-sdk-js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive } from "../../core/mutations.js";
 import {
   detailOutput,
   listOutput,
@@ -623,6 +624,44 @@ function* copyPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+const TEMPLATE_ASSOCIATIONS: Record<string, { flag: string; route: string; listRoute: string; noun: string; tag: "security" | "config" }> = {
+  "credential-add": { flag: "credential", route: "credentials", listRoute: "credentials/", noun: "credential", tag: "security" },
+  "credential-remove": { flag: "credential", route: "credentials", listRoute: "credentials/", noun: "credential", tag: "security" },
+  "instance-group-add": { flag: "instance-group", route: "instance_groups", listRoute: "instance_groups/", noun: "instance group", tag: "config" },
+  "instance-group-remove": { flag: "instance-group", route: "instance_groups", listRoute: "instance_groups/", noun: "instance group", tag: "config" },
+  "label-add": { flag: "label", route: "labels", listRoute: "labels/", noun: "label", tag: "config" },
+  "label-remove": { flag: "label", route: "labels", listRoute: "labels/", noun: "label", tag: "config" },
+};
+
+function associationPlan(operation: string) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const spec = TEMPLATE_ASSOCIATIONS[operation];
+    if (spec === undefined) throw validationError("unsupported template association");
+    const template = yield* resolveId(input.args[0] ?? "", { listRoute: "job_templates/", noun: "job template", listCommand: "template list", command: `template ${operation}` });
+    const raw = input.flags[spec.flag]; if (typeof raw !== "string") throw validationError(`\`template ${operation}\` needs --${spec.flag} id or name`);
+    const target = yield* resolveId(raw, { listRoute: spec.listRoute, noun: spec.noun, listCommand: `${spec.noun.replace(" ", "-")} list`, command: `template ${operation}` });
+    const remove = operation.endsWith("-remove"); const path = `job_templates/${template}/${spec.route}/`; const payload = remove ? { id: target, disassociate: true } : { id: target };
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", spec.noun, { template, [spec.flag]: target }, `POST ${path}`, payload);
+    const response = yield* write(path, payload, { method: "POST", tag: spec.tag });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `template ${template}` });
+    return detailOutput({ label: "template_association", fields: { template, [spec.flag]: target, status: remove ? "removed" : "added" } });
+  };
+}
+
+function notificationAssociationPlan(remove: boolean) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const template = yield* resolveId(input.args[0] ?? "", { listRoute: "job_templates/", noun: "job template", listCommand: "template list", command: `template notification-${remove ? "remove" : "add"}` });
+    const event = input.flags.event; if (typeof event !== "string" || !["started", "success", "error"].includes(event)) throw validationError("--event must be started, success, or error");
+    if (typeof input.flags["notification-template"] !== "string") throw validationError("notification association needs --notification-template");
+    const notificationTemplate = yield* resolveId(input.flags["notification-template"], { listRoute: "notification_templates/", noun: "notification template", listCommand: "notification-template list", command: "template notification" });
+    const path = `job_templates/${template}/notification_templates_${event}/`; const payload = remove ? { id: notificationTemplate, disassociate: true } : { id: notificationTemplate };
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { template, notification_template: notificationTemplate, event }, `POST ${path}`, payload);
+    const response = yield* write(path, payload, { method: "POST", tag: "config" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `template ${template} notifications` });
+    return detailOutput({ label: "template_notification", fields: { template, notification_template: notificationTemplate, event, status: remove ? "removed" : "added" } });
+  };
+}
+
 function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "job_templates/",
@@ -672,6 +711,8 @@ export const templateDomain: Domain = defineDomain({
     "  show     <id|name>",
     "  survey   <id|name>",
     "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
+    "  credential-add|credential-remove, instance-group-add|instance-group-remove, label-add|label-remove",
+    "  notification-add|notification-remove <id|name> --event <started|success|error> --notification-template <id|name>",
   ].join("\n"),
   mcpEquivalents: [
     "list_job_templates",
@@ -684,6 +725,12 @@ export const templateDomain: Domain = defineDomain({
     "copy_job_template",
   ],
   subcommands: [
+    ...Object.entries(TEMPLATE_ASSOCIATIONS).map(([name, spec]) => ({
+      name, help: `awx-axi template ${name} <id|name> --${spec.flag} <id|name> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} id or name`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "template_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name),
+    })),
+    ...(["notification-add", "notification-remove"] as const).map((name) => ({
+      name, help: `awx-axi template ${name} <id|name> --event <event> --notification-template <id|name> [--confirm] [--dry-run]`, flags: [{ name: "event", description: "started, success, or error", takesValue: true }, { name: "notification-template", description: "notification template id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "template_notification", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: notificationAssociationPlan(name.endsWith("remove")),
+    })),
     {
       name: "create",
       help: "awx-axi template create [<name>] [--inventory <i|name>] [--project <p|name>] [--confirm] [--dry-run]",
