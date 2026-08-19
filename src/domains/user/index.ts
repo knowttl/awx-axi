@@ -373,7 +373,7 @@ function* tokenCreatePlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* tokenRevokePlan(input: SubcommandInput): Plan<DomainResult> {
-  const raw = input.args[0]; if (raw === undefined || !/^\\d+$/.test(raw)) throw validationError("`user token-revoke` needs a numeric token id");
+  const raw = input.args[0]; if (raw === undefined || !/^\d+$/.test(raw)) throw validationError("`user token-revoke` needs a numeric token id");
   const id = Number(raw);
   if (!isLive(input.flags)) return dryRun("revoke", "token", { token: id }, `DELETE tokens/${id}/`);
   const response = yield* write(`tokens/${id}/`, undefined, { method: "DELETE", tag: "security" });

@@ -15,7 +15,7 @@ import {
   type Plan,
   type SubcommandInput,
 } from "../../core/registry.js";
-import { redact, redactValue } from "../../core/redact.js";
+import { REDACTION, redact, redactValue } from "../../core/redact.js";
 import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
@@ -169,7 +169,11 @@ function* createPlan(input: SubcommandInput): Plan<DomainResult> {
   };
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   const messages = messagesFor(input); if (messages !== undefined) payload.messages = messages;
-  if (!isLive(input.flags)) return dryRun("create", "notification_template", { name }, "POST notification_templates/", { ...payload, notification_configuration: redactValue(payload.notification_configuration) as unknown as Record<string, unknown> });
+  if (!isLive(input.flags)) return dryRun("create", "notification_template", { name }, "POST notification_templates/", {
+    ...payload,
+    notification_configuration: REDACTION,
+    ...(messages === undefined ? {} : { messages: REDACTION }),
+  });
   const response = yield* write("notification_templates/", payload, { method: "POST", tag: "config" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `notification template ${name}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
@@ -186,8 +190,12 @@ function* editPlan(input: SubcommandInput): Plan<DomainResult> {
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (typeof input.flags["configuration-file"] === "string" || typeof input.flags["config-file"] === "string") payload.notification_configuration = configFor(input);
   const messages = messagesFor(input); if (messages !== undefined) payload.messages = messages;
-  const preview = { ...payload, ...(payload.notification_configuration === undefined ? {} : { notification_configuration: redactValue(payload.notification_configuration) }) };
-  if (!isLive(input.flags)) return dryRun("edit", "notification_template", { notification_template: id }, `PATCH notification_templates/${id}/`, preview as Record<string, unknown>);
+  const preview = {
+    ...payload,
+    ...(payload.notification_configuration === undefined ? {} : { notification_configuration: REDACTION }),
+    ...(messages === undefined ? {} : { messages: REDACTION }),
+  };
+  if (!isLive(input.flags)) return dryRun("edit", "notification_template", { notification_template: id }, `PATCH notification_templates/${id}/`, preview);
   const response = yield* write(`notification_templates/${id}/`, payload, { method: "PATCH", tag: "config" });
   if (response.status !== 200) throw errorForResponse(response, { subject: `notification template ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>;

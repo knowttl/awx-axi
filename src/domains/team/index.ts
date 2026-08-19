@@ -356,6 +356,39 @@ function* createTeamCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
   return detailOutput({ label: "credential", fields: { id, name: body.name ?? name, team }, help: [`Run \`awx-axi credential show ${id}\` to inspect credential`] });
 }
 
+function teamUserPlan(remove: boolean) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const team = yield* resolveId(input.args[0] ?? "", {
+      listRoute: "teams/",
+      noun: "team",
+      listCommand: "team list",
+      command: `team user-${remove ? "remove" : "add"}`,
+    });
+    if (typeof input.flags.user !== "string") {
+      throw validationError(`\`team user-${remove ? "remove" : "add"}\` needs --user id or name`);
+    }
+    const user = yield* resolveId(input.flags.user, {
+      listRoute: "users/",
+      noun: "user",
+      listCommand: "user list",
+      command: `team user-${remove ? "remove" : "add"}`,
+    });
+    const payload = remove ? { id: user, disassociate: true } : { id: user };
+    const route = `teams/${team}/users/`;
+    if (!isLive(input.flags)) {
+      return dryRun(remove ? "remove" : "add", "user", { team, user }, `POST ${route}`, payload);
+    }
+    const response = yield* write(route, payload, { method: "POST", tag: "security" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) {
+      throw errorForResponse(response, { subject: `team ${team} user` });
+    }
+    return detailOutput({
+      label: "team_user",
+      fields: { team, user, status: remove ? "removed" : "added" },
+    });
+  };
+}
+
 function* createTeamPlan(input: SubcommandInput): Plan<DomainResult> {
   const name =
     input.args[0] ??
@@ -517,13 +550,14 @@ export const teamDomain: Domain = defineDomain({
     "  list          [--search <s>] [--organization <id>] [--limit <n>]",
     "  show          <id|name>",
     "  users         <id|name> [--limit <n>]",
-    "  projects      <id|name> [--limit <n>]",
+    "  user-add|user-remove <id|name> --user <id|name> [--confirm] [--dry-run]",
+    "  projects      <id|name> [--limit <n>]", 
     "  credentials   <id|name> [--limit <n>]",
     "  roles         <id|name> [--limit <n>]",
     "  object-roles  <id|name> [--limit <n>]",
     "  access-list   <id|name> [--limit <n>]",
     "  credential-create <id|name> --name <name> --credential-type <id|name>",
-    "  Team users and projects are read-only sublists in AWX; manage access with RBAC roles.",
+    "  Team projects are read-only sublists in AWX; manage project access with RBAC roles.",
   ].join("\n"),
   mcpEquivalents: [
     "list_teams",
@@ -539,6 +573,19 @@ export const teamDomain: Domain = defineDomain({
     "list_team_access_list",
   ],
   subcommands: [
+    ...(["user-add", "user-remove"] as const).map((name) => ({
+      name,
+      help: `awx-axi team ${name} <id|name> --user <id|name> [--confirm] [--dry-run]`,
+      flags: [
+        { name: "user", description: "user id or name", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "preview without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "team_user", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: teamUserPlan(name.endsWith("remove")),
+    })),
     {
       name: "credential-create", help: "awx-axi team credential-create <id|name> --name <name> --credential-type <id|name> [--inputs-file <path>] [--confirm] [--dry-run]",
       flags: [{ name: "name", description: "credential name", takesValue: true }, { name: "credential-type", description: "credential type id or name", takesValue: true }, { name: "inputs-file", description: "0600 JSON inputs file", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "credential", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: createTeamCredentialPlan,

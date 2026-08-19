@@ -2,7 +2,7 @@
  * The `schedule` domain: scheduled unified-job runs (design.md §7.9).
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
-import { dryRun, isLive } from "../../core/mutations.js";
+import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -331,7 +331,9 @@ function associationPlan(operation: string) {
     const spec = SCHEDULE_ASSOCIATIONS[operation]; if (spec === undefined) throw validationError("unsupported schedule association");
     const schedule = yield* resolveId(input.args[0] ?? "", { listRoute: "schedules/", noun: "schedule", listCommand: "schedule list", command: `schedule ${operation}` });
     const raw = input.flags[spec.flag]; if (typeof raw !== "string") throw validationError(`\`schedule ${operation}\` needs --${spec.flag} id or name`);
-    const target = yield* resolveId(raw, { listRoute: spec.listRoute, noun: spec.noun, listCommand: `${spec.noun.replace(" ", "-")} list`, command: `schedule ${operation}` });
+    const target = spec.flag === "credential"
+    ? yield* resolveId(raw, { listRoute: spec.listRoute, noun: spec.noun, listCommand: "credential list", command: `schedule ${operation}` })
+    : parseInteger(raw, `--${spec.flag}`, 1);
     const remove = operation.endsWith("-remove"); const path = `schedules/${schedule}/${spec.route}/`; const payload = remove ? { id: target, disassociate: true } : { id: target };
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", spec.noun, { schedule, [spec.flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: spec.flag === "credential" ? "security" : "config" });
@@ -396,7 +398,7 @@ export const scheduleDomain: Domain = defineDomain({
     "delete_schedule",
   ],
   subcommands: [
-    ...Object.entries(SCHEDULE_ASSOCIATIONS).map(([name, spec]) => ({ name, help: `awx-axi schedule ${name} <id|name> --${spec.flag} <id|name> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} id or name`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "schedule_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name) })),
+    ...Object.entries(SCHEDULE_ASSOCIATIONS).map(([name, spec]) => ({ name, help: `awx-axi schedule ${name} <id|name> --${spec.flag} <${spec.flag === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} ${spec.flag === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "schedule_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name) })),
     {
       name: "create",
       help: "awx-axi schedule create [<name>] [--template <id|name>] [--rrule <rrule>] [--confirm] [--dry-run]",

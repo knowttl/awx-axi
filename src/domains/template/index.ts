@@ -6,7 +6,7 @@ import { statSync, readFileSync } from "node:fs";
 import { AxiError } from "axi-sdk-js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
-import { dryRun, isLive } from "../../core/mutations.js";
+import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import {
   detailOutput,
   listOutput,
@@ -639,7 +639,9 @@ function associationPlan(operation: string) {
     if (spec === undefined) throw validationError("unsupported template association");
     const template = yield* resolveId(input.args[0] ?? "", { listRoute: "job_templates/", noun: "job template", listCommand: "template list", command: `template ${operation}` });
     const raw = input.flags[spec.flag]; if (typeof raw !== "string") throw validationError(`\`template ${operation}\` needs --${spec.flag} id or name`);
-    const target = yield* resolveId(raw, { listRoute: spec.listRoute, noun: spec.noun, listCommand: `${spec.noun.replace(" ", "-")} list`, command: `template ${operation}` });
+    const target = spec.flag === "credential"
+      ? yield* resolveId(raw, { listRoute: spec.listRoute, noun: spec.noun, listCommand: "credential list", command: `template ${operation}` })
+      : parseInteger(raw, `--${spec.flag}`, 1);
     const remove = operation.endsWith("-remove"); const path = `job_templates/${template}/${spec.route}/`; const payload = remove ? { id: target, disassociate: true } : { id: target };
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", spec.noun, { template, [spec.flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: spec.tag });
@@ -726,7 +728,7 @@ export const templateDomain: Domain = defineDomain({
   ],
   subcommands: [
     ...Object.entries(TEMPLATE_ASSOCIATIONS).map(([name, spec]) => ({
-      name, help: `awx-axi template ${name} <id|name> --${spec.flag} <id|name> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} id or name`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "template_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name),
+      name, help: `awx-axi template ${name} <id|name> --${spec.flag} <${spec.flag === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} ${spec.flag === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "template_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name),
     })),
     ...(["notification-add", "notification-remove"] as const).map((name) => ({
       name, help: `awx-axi template ${name} <id|name> --event <event> --notification-template <id|name> [--confirm] [--dry-run]`, flags: [{ name: "event", description: "started, success, or error", takesValue: true }, { name: "notification-template", description: "notification template id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "template_notification", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: notificationAssociationPlan(name.endsWith("remove")),

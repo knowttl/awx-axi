@@ -1065,10 +1065,13 @@ function* createSourcePlan(input: SubcommandInput): Plan<DomainResult> {
   const payload: Record<string, unknown> = { name, source: input.flags.source, inventory: yield* resolveId(input.flags.inventory, { listRoute: "inventories/", noun: "inventory", listCommand: "inventory list", command: "inventory source-create" }) };
   if (typeof input.flags["source-project"] === "string") payload.source_project = yield* resolveId(input.flags["source-project"], { listRoute: "projects/", noun: "project", listCommand: "project list", command: "inventory source-create" });
   if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "inventory source-create" });
-  if (typeof input.flags["source-vars"] === "string") payload.source_vars = parseJsonObject(input.flags["source-vars"], "--source-vars");
+  if (typeof input.flags["source-vars"] === "string") {
+    parseJsonObject(input.flags["source-vars"], "--source-vars");
+    payload.source_vars = input.flags["source-vars"];
+  }
   if (input.flags["update-on-launch"] === true) payload.update_on_launch = true;
   if (!isLive(input.flags)) return dryRun("create", "inventory_source", { name }, "POST inventory_sources/", payload);
-  const response = yield* write("inventory_sources/", payload, { method: "POST", tag: "config" });
+  const response = yield* write("inventory_sources/", payload, { method: "POST", tag: payload.credential === undefined ? "config" : "security" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `inventory source ${name}` });
   const body = (response.body ?? {}) as Record<string, unknown>; const id = typeof body.id === "number" ? body.id : 0;
   return detailOutput({ label: "inventory_source", fields: { id, name: body.name ?? name }, help: [`Run \`awx-axi inventory sources <inventory>\` to inspect source`] });
@@ -1079,14 +1082,16 @@ function* editSourcePlan(input: SubcommandInput): Plan<DomainResult> {
   const payload: Record<string, unknown> = {};
   if (typeof input.flags.name === "string") payload.name = input.flags.name;
   if (typeof input.flags.source === "string") payload.source = input.flags.source;
-  if (typeof input.flags.inventory === "string") payload.inventory = yield* resolveId(input.flags.inventory, { listRoute: "inventories/", noun: "inventory", listCommand: "inventory list", command: "inventory source-edit" });
   if (typeof input.flags["source-project"] === "string") payload.source_project = yield* resolveId(input.flags["source-project"], { listRoute: "projects/", noun: "project", listCommand: "project list", command: "inventory source-edit" });
   if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "inventory source-edit" });
-  if (typeof input.flags["source-vars"] === "string") payload.source_vars = parseJsonObject(input.flags["source-vars"], "--source-vars");
+  if (typeof input.flags["source-vars"] === "string") {
+    parseJsonObject(input.flags["source-vars"], "--source-vars");
+    payload.source_vars = input.flags["source-vars"];
+  }
   if (input.flags["update-on-launch"] === true) payload.update_on_launch = true;
   if (input.flags["no-update-on-launch"] === true) payload.update_on_launch = false;
   if (!isLive(input.flags)) return dryRun("edit", "inventory_source", { inventory_source: id }, `PATCH inventory_sources/${id}/`, payload);
-  const response = yield* write(`inventory_sources/${id}/`, payload, { method: "PATCH", tag: "config" });
+  const response = yield* write(`inventory_sources/${id}/`, payload, { method: "PATCH", tag: payload.credential === undefined ? "config" : "security" });
   if (response.status !== 200) throw errorForResponse(response, { subject: `inventory source ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   return detailOutput({ label: "inventory_source", fields: { id, name: body.name ?? null }, help: [`Run \`awx-axi inventory sources <inventory>\` to inspect source`] });
@@ -1151,7 +1156,7 @@ function* bulkHostDeletePlan(input: SubcommandInput): Plan<DomainResult> {
   const payload = { hosts: ids };
   if (!isLive(input.flags)) return dryRun("delete", "hosts", { count: ids.length }, "POST bulk/host_delete/", payload);
   const response = yield* write("bulk/host_delete/", payload, { method: "POST", tag: "delete" });
-  if (response.status !== 200 && response.status !== 204) throw errorForResponse(response, { subject: "bulk hosts" });
+  if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: "bulk hosts" });
   return detailOutput({ label: "hosts", fields: { count: ids.length, status: "deleted" } });
 }
 
@@ -1265,7 +1270,7 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "source-edit", help: "awx-axi inventory source-edit <id|name> [--confirm] [--dry-run]",
-      flags: [{ name: "name", description: "source name", takesValue: true }, { name: "inventory", description: "inventory id or name", takesValue: true }, { name: "source", description: "source type", takesValue: true }, { name: "source-project", description: "source project id or name", takesValue: true }, { name: "credential", description: "credential id or name", takesValue: true }, { name: "source-vars", description: "source variables JSON", takesValue: true }, { name: "update-on-launch", description: "update on launch", takesValue: false }, { name: "no-update-on-launch", description: "do not update on launch", takesValue: false }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: editSourcePlan,
+      flags: [{ name: "name", description: "source name", takesValue: true }, { name: "source", description: "source type", takesValue: true }, { name: "source-project", description: "source project id or name", takesValue: true }, { name: "credential", description: "credential id or name", takesValue: true }, { name: "source-vars", description: "source variables JSON", takesValue: true }, { name: "update-on-launch", description: "update on launch", takesValue: false }, { name: "no-update-on-launch", description: "do not update on launch", takesValue: false }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: editSourcePlan,
     },
     {
       name: "source-delete", help: "awx-axi inventory source-delete <id|name> [--confirm] [--dry-run]", flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: deleteSourcePlan,

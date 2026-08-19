@@ -2,7 +2,7 @@
  * The `organization` domain: list and inspect AWX organizations (design.md v1 roadmap).
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
-import { dryRun, isLive } from "../../core/mutations.js";
+import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -99,7 +99,7 @@ function* createPlan(input: SubcommandInput): Plan<DomainResult> {
   }
   const payload: Record<string, unknown> = { name };
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
-  if (typeof input.flags["max-hosts"] === "string") payload.max_hosts = Number(input.flags["max-hosts"]);
+  if (typeof input.flags["max-hosts"] === "string") payload.max_hosts = parseInteger(input.flags["max-hosts"], "--max-hosts", 0);
   if (typeof input.flags["default-environment"] === "string") {
     payload.default_environment = yield* resolveId(input.flags["default-environment"], {
       listRoute: "execution_environments/", noun: "execution environment",
@@ -119,7 +119,7 @@ function* editPlan(input: SubcommandInput): Plan<DomainResult> {
   const payload: Record<string, unknown> = {};
   if (typeof input.flags.name === "string") payload.name = input.flags.name;
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
-  if (typeof input.flags["max-hosts"] === "string") payload.max_hosts = Number(input.flags["max-hosts"]);
+  if (typeof input.flags["max-hosts"] === "string") payload.max_hosts = parseInteger(input.flags["max-hosts"], "--max-hosts", 0);
   if (typeof input.flags["default-environment"] === "string") payload.default_environment = yield* resolveId(input.flags["default-environment"], { listRoute: "execution_environments/", noun: "execution environment", listCommand: "execution-environment list", command: "organization edit" });
   if (!isLive(input.flags)) return dryRun("edit", "organization", { organization: id }, `PATCH organizations/${id}/`, payload);
   const response = yield* write(`organizations/${id}/`, payload, { method: "PATCH", tag: "config" });
@@ -136,15 +136,28 @@ function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
   return detailOutput({ label: "organization", fields: { id, status: "deleted" } });
 }
 
-const ORGANIZATION_ASSOCIATIONS: Record<string, { flag: string; route: string; listRoute: string; noun: string; tag: "security" | "config" }> = {
-  "team-add": { flag: "team", route: "teams", listRoute: "teams/", noun: "team", tag: "security" },
-  "team-remove": { flag: "team", route: "teams", listRoute: "teams/", noun: "team", tag: "security" },
-  "execution-environment-add": { flag: "execution-environment", route: "execution_environments", listRoute: "execution_environments/", noun: "execution environment", tag: "config" },
-  "execution-environment-remove": { flag: "execution-environment", route: "execution_environments", listRoute: "execution_environments/", noun: "execution environment", tag: "config" },
-  "notification-template-add": { flag: "notification-template", route: "notification_templates", listRoute: "notification_templates/", noun: "notification template", tag: "config" },
-  "notification-template-remove": { flag: "notification-template", route: "notification_templates", listRoute: "notification_templates/", noun: "notification template", tag: "config" },
-  "galaxy-credential-add": { flag: "credential", route: "galaxy_credentials", listRoute: "credentials/", noun: "credential", tag: "security" },
-  "galaxy-credential-remove": { flag: "credential", route: "galaxy_credentials", listRoute: "credentials/", noun: "credential", tag: "security" },
+const ORGANIZATION_ASSOCIATIONS: Record<string, {
+  flag: string;
+  route: string;
+  listRoute: string;
+  listCommand?: string;
+  noun: string;
+  tag: "security" | "config";
+}> = {
+  "user-add": { flag: "user", route: "users", listRoute: "users/", listCommand: "user list", noun: "user", tag: "security" },
+  "user-remove": { flag: "user", route: "users", listRoute: "users/", listCommand: "user list", noun: "user", tag: "security" },
+  "admin-add": { flag: "user", route: "admins", listRoute: "users/", listCommand: "user list", noun: "user", tag: "security" },
+  "admin-remove": { flag: "user", route: "admins", listRoute: "users/", listCommand: "user list", noun: "user", tag: "security" },
+  "team-add": { flag: "team", route: "teams", listRoute: "teams/", listCommand: "team list", noun: "team", tag: "security" },
+  "team-remove": { flag: "team", route: "teams", listRoute: "teams/", listCommand: "team list", noun: "team", tag: "security" },
+  "instance-group-add": { flag: "instance-group", route: "instance_groups", listRoute: "instance_groups/", noun: "instance group", tag: "config" },
+  "instance-group-remove": { flag: "instance-group", route: "instance_groups", listRoute: "instance_groups/", noun: "instance group", tag: "config" },
+  "execution-environment-add": { flag: "execution-environment", route: "execution_environments", listRoute: "execution_environments/", listCommand: "execution-environment list", noun: "execution environment", tag: "config" },
+  "execution-environment-remove": { flag: "execution-environment", route: "execution_environments", listRoute: "execution_environments/", listCommand: "execution-environment list", noun: "execution environment", tag: "config" },
+  "notification-template-add": { flag: "notification-template", route: "notification_templates", listRoute: "notification_templates/", listCommand: "notification-template list", noun: "notification template", tag: "config" },
+  "notification-template-remove": { flag: "notification-template", route: "notification_templates", listRoute: "notification_templates/", listCommand: "notification-template list", noun: "notification template", tag: "config" },
+  "galaxy-credential-add": { flag: "credential", route: "galaxy_credentials", listRoute: "credentials/", listCommand: "credential list", noun: "credential", tag: "security" },
+  "galaxy-credential-remove": { flag: "credential", route: "galaxy_credentials", listRoute: "credentials/", listCommand: "credential list", noun: "credential", tag: "security" },
 };
 
 function associationPlan(operation: string) {
@@ -154,7 +167,9 @@ function associationPlan(operation: string) {
   const organization = yield* resolveId(input.args[0] ?? "", { listRoute: "organizations/", noun: "organization", listCommand: "organization list", command: `organization ${operation}` });
   const value = input.flags[spec.flag];
   if (typeof value !== "string") throw validationError(`\`organization ${operation}\` needs --${spec.flag} id or name`);
-  const target = yield* resolveId(value, { listRoute: spec.listRoute, noun: spec.noun, listCommand: spec.listRoute.slice(0, -1), command: `organization ${operation}` });
+  const target = spec.listCommand === undefined
+    ? parseInteger(value, `--${spec.flag}`, 1)
+    : yield* resolveId(value, { listRoute: spec.listRoute, noun: spec.noun, listCommand: spec.listCommand, command: `organization ${operation}` });
   const remove = operation.endsWith("-remove");
   const path = `organizations/${organization}/${spec.route}/`;
   const payload = remove ? { id: target, disassociate: true } : { id: target };
@@ -224,7 +239,8 @@ export const organizationDomain: Domain = defineDomain({
     "",
     "Subcommands:",
     "  create|edit|delete  organization configuration",
-    "  team-add|team-remove  manage organization teams",
+    "  user-add|user-remove, admin-add|admin-remove  manage organization membership",
+    "  team-add|team-remove, instance-group-add|instance-group-remove  manage associations",
     "  execution-environment-add|execution-environment-remove  manage execution environments",
     "  notification-template-add|notification-template-remove  manage notifications",
     "  galaxy-credential-add|galaxy-credential-remove  manage Galaxy credentials",
@@ -271,9 +287,9 @@ export const organizationDomain: Domain = defineDomain({
     })),
     ...Object.entries(ORGANIZATION_ASSOCIATIONS).map(([name, spec]) => ({
       name,
-      help: `awx-axi organization ${name} <id|name> --${spec.flag} <id|name> [--confirm] [--dry-run]`,
+      help: `awx-axi organization ${name} <id|name> --${spec.flag} <${spec.listCommand === undefined ? "id" : "id|name"}> [--confirm] [--dry-run]`,
       flags: [
-        { name: spec.flag, description: `${spec.noun} id or name`, takesValue: true },
+        { name: spec.flag, description: `${spec.noun} ${spec.listCommand === undefined ? "id" : "id or name"}`, takesValue: true },
         { name: "confirm", description: "confirm live execution", takesValue: false },
         { name: "dry-run", description: "preview without mutating", takesValue: false },
       ],

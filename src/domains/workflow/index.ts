@@ -7,7 +7,7 @@
  * for the full graph.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
-import { dryRun, isLive } from "../../core/mutations.js";
+import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { parseExtraVars } from "../template/index.js";
 import {
   detailOutput,
@@ -79,7 +79,7 @@ function nodePayload(input: SubcommandInput): Record<string, unknown> {
   if (typeof input.flags["job-type"] === "string") payload.job_type = input.flags["job-type"];
   if (typeof input.flags["job-tags"] === "string") payload.job_tags = input.flags["job-tags"];
   if (typeof input.flags["skip-tags"] === "string") payload.skip_tags = input.flags["skip-tags"];
-  if (typeof input.flags.verbosity === "string") payload.verbosity = Number(input.flags.verbosity);
+  if (typeof input.flags.verbosity === "string") payload.verbosity = parseInteger(input.flags.verbosity, "--verbosity", 0, 5);
   if (typeof input.flags.inventory === "string") payload.inventory = input.flags.inventory;
   return payload;
 }
@@ -133,7 +133,10 @@ function nodeAssociationPlan(kind: "credential" | "label" | "instance-group", re
     const node = yield* resolveId(input.args[0] ?? "", { listRoute: "workflow_job_template_nodes/", noun: "workflow node", listCommand: "workflow nodes", command: `workflow node-${kind}-${remove ? "remove" : "add"}` });
     const flag = kind; if (typeof input.flags[flag] !== "string") throw validationError(`node association needs --${flag}`);
     const routes = { credential: ["credentials", "credentials/", "credential"], label: ["labels", "labels/", "label"], "instance-group": ["instance_groups", "instance_groups/", "instance group"] } as const;
-    const [route, listRoute, noun] = routes[kind]; const target = yield* resolveId(input.flags[flag], { listRoute, noun, listCommand: `${noun.replace(" ", "-")} list`, command: "workflow node association" });
+    const [route, listRoute, noun] = routes[kind];
+    const target = kind === "credential"
+      ? yield* resolveId(input.flags[flag], { listRoute, noun, listCommand: "credential list", command: "workflow node association" })
+      : parseInteger(input.flags[flag], `--${flag}`, 1);
     const path = `workflow_job_template_nodes/${node}/${route}/`; const payload = remove ? { id: target, disassociate: true } : { id: target };
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", noun, { node, [flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: kind === "credential" ? "security" : "config" });
@@ -147,12 +150,58 @@ function* approvalNodePlan(input: SubcommandInput): Plan<DomainResult> {
   if (typeof input.flags.name !== "string") throw validationError("`workflow node-add-approval` needs --name");
   const payload: Record<string, unknown> = { name: input.flags.name };
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
-  if (typeof input.flags.timeout === "string") payload.timeout = Number(input.flags.timeout);
+  if (typeof input.flags.timeout === "string") payload.timeout = parseInteger(input.flags.timeout, "--timeout", 0);
   if (!isLive(input.flags)) return dryRun("add-approval", "workflow_node", { node }, `POST workflow_job_template_nodes/${node}/create_approval_template/`, payload);
   const response = yield* write(`workflow_job_template_nodes/${node}/create_approval_template/`, payload, { method: "POST", tag: "config" });
   if (response.status !== 200 && response.status !== 201) throw errorForResponse(response, { subject: `workflow node ${node} approval` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   return detailOutput({ label: "approval_template", fields: { node, id: body.id ?? null, name: body.name ?? input.flags.name }, help: [`Run \`awx-axi workflow show <id|name>\` to inspect workflow`] });
+}
+
+function workflowLabelPlan(remove: boolean) {
+  return function* plan(input: SubcommandInput): Plan<DomainResult> {
+    const workflow = yield* resolveId(input.args[0] ?? "", {
+      listRoute: "workflow_job_templates/",
+      noun: "workflow job template",
+      listCommand: "workflow list",
+      command: `workflow label-${remove ? "remove" : "add"}`,
+    });
+    if (typeof input.flags.label !== "string") {
+      throw validationError(`\`workflow label-${remove ? "remove" : "add"}\` needs --label id`);
+    }
+    const label = parseInteger(input.flags.label, "--label", 1);
+    const payload = remove ? { id: label, disassociate: true } : { id: label };
+    const route = `workflow_job_templates/${workflow}/labels/`;
+    if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "label", { workflow, label }, `POST ${route}`, payload);
+    const response = yield* write(route, payload, { method: "POST", tag: "config" });
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) {
+      throw errorForResponse(response, { subject: `workflow ${workflow} label` });
+    }
+    return detailOutput({ label: "workflow_label", fields: { workflow, label, status: remove ? "removed" : "added" } });
+  };
+}
+
+function* copyWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
+  const workflow = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "workflow_job_templates/",
+    noun: "workflow job template",
+    listCommand: "workflow list",
+    command: "workflow copy",
+  });
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (!isLive(input.flags)) return dryRun("copy", "workflow_job_template", { workflow }, `POST workflow_job_templates/${workflow}/copy/`, payload);
+  const response = yield* write(`workflow_job_templates/${workflow}/copy/`, payload, { method: "POST", tag: "config" });
+  if (response.status !== 200 && response.status !== 201) {
+    throw errorForResponse(response, { subject: `workflow ${workflow}` });
+  }
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({
+    label: "workflow",
+    fields: { id, name: body.name ?? null },
+    help: [`Run \`awx-axi workflow show ${id}\` to inspect copied workflow`],
+  });
 }
 
 function notificationAssociationPlan(remove: boolean) {
@@ -546,7 +595,9 @@ export const workflowDomain: Domain = defineDomain({
     "Subcommands:",
     "  create   [<name>] [--organization <o>] [--confirm] [--dry-run]",
     "  edit     <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  copy     <id|name> [--name <name>] [--confirm] [--dry-run]",
     "  delete   <id|name> [--confirm] [--dry-run]",
+    "  label-add|label-remove <id|name> --label <id> [--confirm] [--dry-run]",
     "  list     [--search <s>] [--limit <n>]",
     "  show     <id|name>",
     "  survey   <id|name>",
@@ -584,13 +635,39 @@ export const workflowDomain: Domain = defineDomain({
       name: "node-unlink", help: "awx-axi workflow node-unlink <node> --on <success|failure|always> --to <node> [--confirm] [--dry-run]", flags: [{ name: "on", description: "edge type", takesValue: true }, { name: "to", description: "target node id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "workflow_edge", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: (input) => linkNodePlan(input, true),
     },
     ...(["credential", "label", "instance-group"] as const).flatMap((kind) => [
-      { name: `node-${kind}-add`, help: `awx-axi workflow node-${kind}-add <node> --${kind} <id|name> [--confirm] [--dry-run]`, flags: [{ name: kind, description: `${kind} id or name`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "workflow_node_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: nodeAssociationPlan(kind, false) },
-      { name: `node-${kind}-remove`, help: `awx-axi workflow node-${kind}-remove <node> --${kind} <id|name> [--confirm] [--dry-run]`, flags: [{ name: kind, description: `${kind} id or name`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "workflow_node_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: nodeAssociationPlan(kind, true) },
+      { name: `node-${kind}-add`, help: `awx-axi workflow node-${kind}-add <node> --${kind} <${kind === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: kind, description: `${kind} ${kind === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "workflow_node_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: nodeAssociationPlan(kind, false) },
+      { name: `node-${kind}-remove`, help: `awx-axi workflow node-${kind}-remove <node> --${kind} <${kind === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: kind, description: `${kind} ${kind === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "workflow_node_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: nodeAssociationPlan(kind, true) },
     ]),
     {
       name: "node-add-approval", help: "awx-axi workflow node-add-approval <node> --name <name> [--timeout <seconds>] [--confirm] [--dry-run]", flags: [{ name: "name", description: "approval name", takesValue: true }, { name: "description", description: "description", takesValue: true }, { name: "timeout", description: "timeout seconds", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "approval_template", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: approvalNodePlan,
     },
     ...(["notification-add", "notification-remove"] as const).map((name) => ({ name, help: `awx-axi workflow ${name} <id|name> --event <event> --notification-template <id|name> [--confirm] [--dry-run]`, flags: [{ name: "event", description: "started, success, error, or approval", takesValue: true }, { name: "notification-template", description: "notification template id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "workflow_notification", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: notificationAssociationPlan(name.endsWith("remove")) })),
+    ...(["label-add", "label-remove"] as const).map((name) => ({
+      name,
+      help: `awx-axi workflow ${name} <id|name> --label <id> [--confirm] [--dry-run]`,
+      flags: [
+        { name: "label", description: "label id", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "preview without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "workflow_label", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: workflowLabelPlan(name.endsWith("remove")),
+    })),
+    {
+      name: "copy",
+      help: "awx-axi workflow copy <id|name> [--name <name>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "copied workflow name", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "preview without mutating", takesValue: false },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "workflow", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: copyWorkflowPlan,
+    },
     {
       name: "create",
       help: "awx-axi workflow create [<name>] [--organization <o>] [--confirm] [--dry-run]",

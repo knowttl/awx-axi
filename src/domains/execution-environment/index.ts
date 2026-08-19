@@ -131,7 +131,7 @@ function* createPlan(input: SubcommandInput): Plan<DomainResult> {
   if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "execution-environment create" });
   if (typeof input.flags.pull === "string") payload.pull = input.flags.pull;
   if (!isLive(input.flags)) return dryRun("create", "execution_environment", { name }, "POST execution_environments/", payload);
-  const response = yield* write("execution_environments/", payload, { method: "POST", tag: "config" });
+  const response = yield* write("execution_environments/", payload, { method: "POST", tag: payload.credential === undefined ? "config" : "security" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `execution environment ${name}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   const id = typeof body.id === "number" ? body.id : 0;
@@ -148,7 +148,7 @@ function* editPlan(input: SubcommandInput): Plan<DomainResult> {
   if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "execution-environment edit" });
   if (typeof input.flags.pull === "string") payload.pull = input.flags.pull;
   if (!isLive(input.flags)) return dryRun("edit", "execution_environment", { execution_environment: id }, `PATCH execution_environments/${id}/`, payload);
-  const response = yield* write(`execution_environments/${id}/`, payload, { method: "PATCH", tag: "config" });
+  const response = yield* write(`execution_environments/${id}/`, payload, { method: "PATCH", tag: payload.credential === undefined ? "config" : "security" });
   if (response.status !== 200) throw errorForResponse(response, { subject: `execution environment ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   return detailOutput({ label: "execution_environment", fields: { id, name: body.name ?? null, image: body.image ?? null }, help: [`Run \`awx-axi execution-environment show ${id}\` to inspect updated environment`] });

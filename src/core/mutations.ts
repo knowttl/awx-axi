@@ -37,6 +37,24 @@ export function accepted(status: number, ...expected: number[]): boolean {
   return expected.includes(status);
 }
 
+export function parseInteger(
+  raw: string,
+  flagName: string,
+  minimum: number,
+  maximum?: number,
+): number {
+  const value = Number(raw);
+  if (
+    !Number.isInteger(value) ||
+    value < minimum ||
+    (maximum !== undefined && value > maximum)
+  ) {
+    const range = maximum === undefined ? `at least ${minimum}` : `between ${minimum} and ${maximum}`;
+    throw validationError(`${flagName} must be an integer ${range}`);
+  }
+  return value;
+}
+
 export function parseJsonObject(raw: string, flagName: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(raw);
