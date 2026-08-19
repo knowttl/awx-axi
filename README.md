@@ -257,8 +257,8 @@ awx-axi reads controller and session settings through environment variables.
 | `CONTROLLER_VERIFY_SSL` | Set to `false` for self-signed certificates |
 | `AWX_AXI_HOME` | Token file directory, default `~/.awx-axi` |
 | `AWX_AXI_READ_ONLY` | Set `1` to block mutating commands in non-live contexts |
-| `AWX_AXI_ALLOW_CONFIG_WRITES` | Set `1` to allow configuration writes (PUT/PATCH) |
-| `AWX_AXI_ALLOW_DELETES` | Set `1` to allow delete operations (DELETE) |
+| `AWX_AXI_ALLOW_CONFIG_WRITES` | Set `1` to allow configuration-tagged mutations |
+| `AWX_AXI_ALLOW_DELETES` | Set `1` to allow delete-tagged mutations |
 | `AWX_AXI_ALLOW_SECURITY_WRITES` | Set `1` to allow security-sensitive writes |
 
 ## Development & Testing
