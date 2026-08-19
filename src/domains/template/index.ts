@@ -103,6 +103,34 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function toRoleRow(raw: unknown): Row {
+  const record = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: typeof record.id === "number" ? record.id : 0,
+    name: typeof record.name === "string" ? record.name : "",
+    description: typeof record.description === "string" ? record.description : "",
+    type: typeof record.type === "string" ? record.type : "",
+  };
+}
+
+function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "job_templates/",
+    noun: "job template",
+    listCommand: "template list",
+    command: "template object-roles",
+  });
+  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "object-roles");
+  const paged = yield* readPaged(`job_templates/${id}/object_roles/`, {}, limit);
+  return listOutput({
+    label: "object_roles",
+    rows: paged.rows.map(toRoleRow),
+    count: paged.count,
+    empty: "0 object roles found for template",
+    help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
+  });
+}
+
 function computePromptsOnLaunch(body: Record<string, unknown>): string[] {
   const promptableFlags: [string, string][] = [
     ["ask_limit_on_launch", "limit"],
@@ -711,6 +739,7 @@ export const templateDomain: Domain = defineDomain({
     "  copy     <id|name> [--name <n>] [--confirm] [--dry-run]",
     "  list     [--project <p>] [--search <s>] [--limit <n>]",
     "  show     <id|name>",
+    "  object-roles <id|name> [--limit <n>]",
     "  survey   <id|name>",
     "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  credential-add|credential-remove, instance-group-add|instance-group-remove, label-add|label-remove",
@@ -727,6 +756,15 @@ export const templateDomain: Domain = defineDomain({
     "copy_job_template",
   ],
   subcommands: [
+    {
+      name: "object-roles",
+      help: "awx-axi template object-roles <id|name> [--limit <n>]",
+      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: { label: "object_roles", defaultFields: ["id", "name", "description", "type"], fieldAllowlist: [] },
+      suggestions: [],
+      plan: objectRolesPlan,
+    },
     ...Object.entries(TEMPLATE_ASSOCIATIONS).map(([name, spec]) => ({
       name, help: `awx-axi template ${name} <id|name> --${spec.flag} <${spec.flag === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} ${spec.flag === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "template_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name),
     })),

@@ -72,15 +72,15 @@ Do not use write commands against a controller that has been designated read-onl
 
 commands[21 total]:
 \`job\`: list, show, stdout, events, hosts, cancel, relaunch, watch.
-\`template\`: create, edit, copy, delete, list, show, survey, launch, credential-add/remove, instance-group-add/remove, label-add/remove, notification-add/remove.
-\`workflow\`: create, edit, copy, delete, list, show, survey, launch, nodes, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
+\`template\`: create, edit, copy, delete, list, show, object-roles, survey, launch, credential-add/remove, instance-group-add/remove, label-add/remove, notification-add/remove.
+\`workflow\`: create, edit, copy, delete, list, show, object-roles, survey, launch, nodes, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
 \`approval\`: list, show, approve, deny.
 \`project\`: create, edit, copy, delete, list, show, playbooks, updates, roles, sync, notification-add/remove.
 \`inventory\`: create, edit, delete, sync, host-create/edit/delete, host-bulk-create/delete, group-create/edit/delete, group-add-host/remove-host, group-add-child/remove-child, source-create/edit/delete, source-credential-add/remove, source-notification-add/remove, list, show, groups, hosts, sources, updates, constructed-list, constructed-show.
 \`schedule\`: create, edit, delete, list, show, credential-add/remove, label-add/remove, instance-group-add/remove.
 \`execution-environment\`: create, edit, copy, delete, list, show.
 \`organization\`: create, edit, delete, user-add/remove, admin-add/remove, team-add/remove, instance-group-add/remove, execution-environment-add/remove, galaxy-credential-add/remove, notification-template-add/remove, notification-add/remove, list, show.
-\`credential\`: create, edit, copy, delete, list, show.
+\`credential\`: create, edit, copy, delete, list, show, object-roles.
 \`user\`: create, edit, delete, token-create, token-revoke, list, show.
 \`team\`: create, edit, delete, credential-create, user-add/remove, list, show, users, projects, credentials, roles, object-roles, access-list.
 \`role\`: grant, revoke, list, show, parents, children, users, teams.

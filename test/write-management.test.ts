@@ -288,6 +288,42 @@ describe("write-management coverage", () => {
     });
   });
 
+  it("lists object roles for credentials, templates, and workflows", async () => {
+    const cases = [
+      ["credential", "credentials/5/object_roles/"],
+      ["template", "job_templates/5/object_roles/"],
+      ["workflow", "workflow_job_templates/5/object_roles/"],
+    ] as const;
+    for (const [domain, route] of cases) {
+      const run = await runCli([domain, "object-roles", "5"], {
+        script: [{
+          status: 200,
+          body: {
+            count: 1,
+            next: null,
+            previous: null,
+            results: [{ id: 9, name: "Admin", description: "Can manage", type: "role" }],
+          },
+        }],
+      });
+      expect(run.exitCode).toBe(0);
+      expect(run.transport.requests[0]).toMatchObject({ method: "GET", route });
+      expect(run.stdout).toContain("Admin");
+    }
+  });
+
+  it("rejects workflow node names before issuing requests", async () => {
+    for (const argv of [
+      ["workflow", "node-edit", "deploy", "--limit", "web"],
+      ["workflow", "node-link", "2", "--on", "success", "--to", "deploy"],
+      ["workflow", "node-add-approval", "deploy", "--name", "approve"],
+    ]) {
+      const run = await runCli(argv);
+      expect(run.exitCode).toBe(2);
+      expect(run.transport.requests).toHaveLength(0);
+    }
+  });
+
   it("validates new integer fields before constructing requests", async () => {
     for (const argv of [
       ["organization", "create", "bad", "--max-hosts", "many"],
