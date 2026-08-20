@@ -49,26 +49,27 @@ Most of this section is what v1 deliberately does not do.
 Two entries record the opposite - a capability that **is** in v1 and needs its limits stated plainly - because
 the boundary matters more than the heading's symmetry.
 
-- **A deliberately narrow configuration and mutation surface.**
-  v1 ships configuration writes (§6.1 tier 2) for templates, projects, workflows, schedules, inventories, and inventory
-  hosts, plus Tier 3 mutations (§6.1 tier 3) for credential management, user management, team management, role grant/revoke,
-  and resource deletes across templates, workflows, projects, inventories, schedules, credentials, users, and teams.
-  Inventory groups, inventory sources, organizations, credential types, notification templates, labels, instances, and
-  instance groups remain out of write subcommands and are recorded as roadmap in §14.
-- **Deletes in domain subcommands are gated behind dry-run and AWX_AXI_ALLOW_DELETES.**
-  Domain modules expose delete subcommands for credentials, hosts, inventories, projects, roles, schedules, teams, templates, users, and workflows.
-  These requests default to dry-run previews and require `--confirm` plus `AWX_AXI_ALLOW_DELETES=1`.
-- **Credential, user, team, and RBAC role writes are gated behind AWX_AXI_ALLOW_SECURITY_WRITES.**
-  Credential create/edit/delete, user create/edit/delete, team create/edit/delete, and role grant/revoke subcommands default to dry-run previews and require `--confirm` plus `AWX_AXI_ALLOW_SECURITY_WRITES=1`.
+- **A deliberately bounded configuration and mutation surface.**
+  v1 ships the AWX 24.6.1 operations validated for templates, workflows, projects, inventories, hosts, groups, inventory sources, schedules, organizations, execution environments, notification templates, credentials, users, teams, and roles.
+  This includes supported copies, workflow topology, bulk host operations, and resource associations.
+  It does not imply CRUD for every AWX noun: notification, activity-stream, and system-job records are generated history, so notifications and activity-stream entries remain read-only and system jobs support only their genuine cancel lifecycle action.
+  Built-in system-job-template definitions are also read-only; only their genuine launch action is exposed.
+- **Every mutation defaults to dry-run and requires explicit confirmation.**
+  Without `--confirm`, a mutation prints a redacted preview and sends nothing; `--dry-run` forces that behavior even when `--confirm` is present.
+  `AWX_AXI_READ_ONLY=1` refuses every mutation at the transport seam before anything is sent.
+- **Ordinary configuration, deletes, and security-sensitive writes have separate environment gates.**
+  Configuration-tagged requests require `AWX_AXI_ALLOW_CONFIG_WRITES=1`, delete-tagged requests require `AWX_AXI_ALLOW_DELETES=1`, and security-tagged requests require `AWX_AXI_ALLOW_SECURITY_WRITES=1`.
+  The security gate covers credentials, roles, tokens, identity membership, and other operations that carry or confer sensitive access; the delete gate covers resource deletion, including bulk host deletion.
 - **Ad hoc command execution is in v1, and it is the sharpest command in the tool.**
   `ad-hoc launch` runs arbitrary modules against arbitrary hosts with no template review - with `shell` or
   `command` it is arbitrary remote execution across every host in the chosen inventory.
   That reasoning once made it a non-goal; it was accepted into v1 by captain decision 2026-07-31 because the
   inbox is useless without it, and the reasoning survives here because it is why the command deserves care.
   §7.9 documents it and §6.1 places it in a risk tier.
-- **No bulk endpoints.**
+- **No bulk job launch.**
   `/api/v2/bulk/job_launch` wraps its jobs in a workflow job that a non-admin cannot see in the UI job list,
   which is a confusing enough side effect that it needs its own design pass.
+  This exclusion does not cover AWX's direct bulk host create and delete endpoints, which are part of inventory management.
 - **No websocket streaming.**
   `job watch` polls (§7.10). AWX's event websocket is a separate transport with its own auth handshake.
 
@@ -336,10 +337,11 @@ This section is the framing that keeps them defensible.
 
 ### 6.1 The three tiers
 
-**Tier 1 - reversible operational writes. Gated by default.**
+**Tier 1 - operational writes. Gated by default.**
 
 `job cancel`, `job relaunch`, `template launch`, `workflow launch`, `project sync`, `inventory sync`,
-`ad-hoc launch`, `approval approve`, `approval deny`.
+`ad-hoc launch`, `approval approve`, `approval deny`, `system-job cancel`, `system-job-template launch`, and
+`notification-template test`.
 
 These are the actions an operator takes during an incident.
 Each is reversible or repeatable in the ordinary course of operations.
@@ -366,30 +368,23 @@ gates and which workflow it belongs to before anyone approves it.
 
 **Tier 2 - configuration writes. Gated in core transport.**
 
-Create, update, and copy of templates, projects, inventories, hosts, groups, schedules, execution
-environments, notification templates, and labels.
-The core transport supports `PUT` and `PATCH` requests.
-These requests are gated by `AWX_AXI_ALLOW_CONFIG_WRITES` in the environment.
+The configuration-tagged surface includes create and edit for templates, workflows, projects, inventories, hosts, groups, inventory sources, schedules, organizations, execution environments, and non-secret notification-template changes.
+It also includes template and workflow copies, workflow nodes and edges, bulk host creation, schedule enable and disable, group topology, and supported label, instance-group, execution-environment, and notification-template associations.
+Configuration-tagged requests may use `POST`, `PUT`, or `PATCH`; the risk tag, not the HTTP method, makes `AWX_AXI_ALLOW_CONFIG_WRITES=1` mandatory.
 
-Domain subcommands for this tier **are** part of v1, accepted by captain decision 2026-07-31:
-`template create|edit|copy`, `project create|edit`, `inventory create|edit|host-create|host-edit`,
-`workflow create|edit`, and `schedule create|edit`.
-They carry the same safety contract as tier 1 - each refuses to mutate by default and prints the §6.2 preview
-instead, and each mutates only when `--confirm` is passed on that invocation - and they additionally require
-`AWX_AXI_ALLOW_CONFIG_WRITES=1`, so the whole tier stays off unless it is deliberately enabled.
-`AWX_AXI_READ_ONLY=1` still refuses every one of them at the transport seam before anything is sent (§6.5).
+These commands carry the same safety contract as tier 1: each prints the §6.2 preview instead of mutating by default, each mutates only with `--confirm`, and `AWX_AXI_READ_ONLY=1` still refuses it at the transport seam (§6.5).
+The configuration gate keeps the whole tier off unless an operator deliberately enables it.
 
 **Tier 3 - destructive and security-sensitive writes. Gated in core transport.**
 
-Every delete, every credential write, every user write, every role grant or revoke.
-The core transport supports `DELETE` and security-tagged requests.
-These requests are gated by `AWX_AXI_ALLOW_DELETES` and `AWX_AXI_ALLOW_SECURITY_WRITES` respectively.
-Domain subcommands for this tier are part of v1: `credential create|edit|delete`, `user create|edit|delete`,
-`team create|edit|delete`, `role grant|revoke`, `inventory delete|host-delete`, `project delete`,
-`schedule delete`, `template delete`, and `workflow delete`.
-They carry the same mandatory default dry-run safety contract - refusing to mutate unless `--confirm` is passed - and additionally require `AWX_AXI_ALLOW_DELETES=1` (for deletes) or `AWX_AXI_ALLOW_SECURITY_WRITES=1` (for security writes).
+Delete-tagged operations include deletion of templates, workflows and workflow nodes, projects, inventories, hosts and bulk host sets, groups, inventory sources, schedules, organizations, execution environments, notification templates, credentials, users, and teams.
+They require `AWX_AXI_ALLOW_DELETES=1` even when AWX implements the delete operation as `POST`, as with bulk host deletion.
 
-### 6.2 Every tier-1 write defaults to dry-run unless confirmed
+Security-tagged operations include credential create, edit, and copy; secret-bearing notification-template changes; user and team management; token creation and revocation; role grants and revocations; user, admin, team, and credential associations; and copies that can preserve sensitive configuration.
+They require `AWX_AXI_ALLOW_SECURITY_WRITES=1` regardless of HTTP method.
+Both classes retain the mandatory default dry-run behavior and require `--confirm`; `AWX_AXI_READ_ONLY=1` overrides every gate.
+
+### 6.2 Every mutation defaults to dry-run unless confirmed
 
 Mutating commands default to a dry run unless `--confirm` is explicitly passed.
 The dry run prints exactly what would be sent, resolving names to ids, without issuing the mutation:

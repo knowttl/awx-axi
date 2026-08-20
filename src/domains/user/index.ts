@@ -4,6 +4,7 @@
 import { readFileSync, statSync } from "node:fs";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -360,6 +361,26 @@ function* editUserPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* tokenCreatePlan(input: SubcommandInput): Plan<DomainResult> {
+  const user = yield* resolveUserId(input.args[0] ?? "");
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.scope === "string") payload.scope = input.flags.scope;
+  if (!isLive(input.flags)) return dryRun("create", "token", { user }, `POST users/${user}/personal_tokens/`, payload);
+  const response = yield* write(`users/${user}/personal_tokens/`, payload, { method: "POST", tag: "security" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `user ${user} token` });
+  const body = (response.body ?? {}) as Record<string, unknown>; const tokenId = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "token", fields: { id: tokenId, user, scope: body.scope ?? input.flags.scope ?? "write", status: "created", secret: "not displayed" }, help: [`Run \`awx-axi user token-revoke ${tokenId} --confirm\` to revoke this token`] });
+}
+
+function* tokenRevokePlan(input: SubcommandInput): Plan<DomainResult> {
+  const raw = input.args[0]; if (raw === undefined || !/^\d+$/.test(raw)) throw validationError("`user token-revoke` needs a numeric token id");
+  const id = Number(raw);
+  if (!isLive(input.flags)) return dryRun("revoke", "token", { token: id }, `DELETE tokens/${id}/`);
+  const response = yield* write(`tokens/${id}/`, undefined, { method: "DELETE", tag: "security" });
+  if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `token ${id}` });
+  return detailOutput({ label: "token", fields: { id, status: "revoked" } });
+}
+
 function* deleteUserPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveUserId(input.args[0] ?? "");
 
@@ -399,6 +420,8 @@ export const userDomain: Domain = defineDomain({
     "  create  [<username>] [--password-file <p>] [--confirm] [--dry-run]",
     "  edit    <id|name> [--username <u>] [--password-file <p>] [--confirm] [--dry-run]",
     "  delete  <id|name> [--confirm] [--dry-run]",
+    "  token-create <id|name> [--scope <scope>] [--confirm] [--dry-run]",
+    "  token-revoke <id> [--confirm] [--dry-run]",
     "  list    [--search <s>] [--limit <n>]",
     "  show    <id|name>",
   ].join("\n"),
@@ -410,6 +433,12 @@ export const userDomain: Domain = defineDomain({
     "delete_user",
   ],
   subcommands: [
+    {
+      name: "token-create", help: "awx-axi user token-create <id|name> [--scope <scope>] [--confirm] [--dry-run]", flags: [{ name: "scope", description: "token scope", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "token", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: tokenCreatePlan,
+    },
+    {
+      name: "token-revoke", help: "awx-axi user token-revoke <id> [--confirm] [--dry-run]", flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id>"], required: 1 }, schema: { label: "token", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: tokenRevokePlan,
+    },
     {
       name: "create",
       help: "awx-axi user create [<username>] [--password-file <p>] [--confirm] [--dry-run]",

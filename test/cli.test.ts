@@ -79,6 +79,12 @@ describe("the CLI shell", () => {
     }
   });
 
+  it("terminates per-domain help with a newline", async () => {
+    const stdout = capture();
+    await main({ argv: ["organization", "list", "--help"], stdout, env: {} });
+    expect(stdout.text().endsWith("\n")).toBe(true);
+  });
+
   it("gives a complete help command for an unknown command", async () => {
     const stdout = capture();
     const previousExitCode = process.exitCode;

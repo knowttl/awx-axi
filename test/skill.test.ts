@@ -57,15 +57,17 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toContain("system-job-template show <id|name>");
     expect(markdown).toContain("system-job notifications");
     expect(markdown).toMatch(/notification\s+list, show <id>/);
-    expect(markdown).toMatch(/notification-template\s+list, show <id\|name>/);
+    expect(markdown).toContain("`notification-template`: list, show <id|name>, create, edit, copy, delete, test.");
     expect(markdown).toMatch(/activity-stream\s+list, show <id>/);
     expect(markdown).toContain("commands[21 total]");
   });
 
-  it("matches the committed skills/awx-axi/SKILL.md file verbatim", () => {
+  it("matches both committed generated skill files verbatim", () => {
+    const generated = createSkillMarkdown();
     const skillFilePath = resolve(process.cwd(), "skills/awx-axi/SKILL.md");
-    const committedContent = readFileSync(skillFilePath, "utf-8");
+    const localSkillFilePath = resolve(process.cwd(), ".agents/skills/axi/SKILL.md");
 
-    expect(createSkillMarkdown()).toBe(committedContent);
+    expect(readFileSync(skillFilePath, "utf-8")).toBe(generated);
+    expect(readFileSync(localSkillFilePath, "utf-8")).toBe(generated);
   });
 });

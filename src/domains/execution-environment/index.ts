@@ -2,11 +2,13 @@
  * The `execution-environment` domain: container images for job execution (design.md §7.10).
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -119,6 +121,59 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* createPlan(input: SubcommandInput): Plan<DomainResult> {
+  const name = input.args[0] ?? (typeof input.flags.name === "string" ? input.flags.name : undefined);
+  if (name === undefined || name.length === 0) throw validationError("`execution-environment create` needs a name argument or --name");
+  if (typeof input.flags.image !== "string") throw validationError("`execution-environment create` needs --image");
+  const payload: Record<string, unknown> = { name, image: input.flags.image };
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags.organization === "string") payload.organization = yield* resolveId(input.flags.organization, { listRoute: "organizations/", noun: "organization", listCommand: "organization list", command: "execution-environment create" });
+  if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "execution-environment create" });
+  if (typeof input.flags.pull === "string") payload.pull = input.flags.pull;
+  if (!isLive(input.flags)) return dryRun("create", "execution_environment", { name }, "POST execution_environments/", payload);
+  const response = yield* write("execution_environments/", payload, { method: "POST", tag: payload.credential === undefined ? "config" : "security" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `execution environment ${name}` });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  const id = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "execution_environment", fields: { id, name: body.name ?? name, image: body.image ?? input.flags.image }, help: [`Run \`awx-axi execution-environment show ${id}\` to inspect environment`] });
+}
+
+function* editPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "execution_environments/", noun: "execution environment", listCommand: "execution-environment list", command: "execution-environment edit" });
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (typeof input.flags.image === "string") payload.image = input.flags.image;
+  if (typeof input.flags.description === "string") payload.description = input.flags.description;
+  if (typeof input.flags.organization === "string") payload.organization = yield* resolveId(input.flags.organization, { listRoute: "organizations/", noun: "organization", listCommand: "organization list", command: "execution-environment edit" });
+  if (typeof input.flags.credential === "string") payload.credential = yield* resolveId(input.flags.credential, { listRoute: "credentials/", noun: "credential", listCommand: "credential list", command: "execution-environment edit" });
+  if (typeof input.flags.pull === "string") payload.pull = input.flags.pull;
+  if (!isLive(input.flags)) return dryRun("edit", "execution_environment", { execution_environment: id }, `PATCH execution_environments/${id}/`, payload);
+  const response = yield* write(`execution_environments/${id}/`, payload, { method: "PATCH", tag: payload.credential === undefined ? "config" : "security" });
+  if (response.status !== 200) throw errorForResponse(response, { subject: `execution environment ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  return detailOutput({ label: "execution_environment", fields: { id, name: body.name ?? null, image: body.image ?? null }, help: [`Run \`awx-axi execution-environment show ${id}\` to inspect updated environment`] });
+}
+
+function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "execution_environments/", noun: "execution environment", listCommand: "execution-environment list", command: "execution-environment delete" });
+  if (!isLive(input.flags)) return dryRun("delete", "execution_environment", { execution_environment: id }, `DELETE execution_environments/${id}/`);
+  const response = yield* write(`execution_environments/${id}/`, undefined, { method: "DELETE", tag: "delete" });
+  if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `execution environment ${id}` });
+  return detailOutput({ label: "execution_environment", fields: { id, status: "deleted" } });
+}
+
+function* copyPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "execution_environments/", noun: "execution environment", listCommand: "execution-environment list", command: "execution-environment copy" });
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  if (!isLive(input.flags)) return dryRun("copy", "execution_environment", { execution_environment: id }, `POST execution_environments/${id}/copy/`, payload);
+  const response = yield* write(`execution_environments/${id}/copy/`, payload, { method: "POST", tag: "security" });
+  if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `execution environment ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  const copyId = typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "execution_environment", fields: { id: copyId, name: body.name ?? null }, help: [`Run \`awx-axi execution-environment show ${copyId}\` to inspect copy`] });
+}
+
 function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "execution_environments/",
@@ -183,15 +238,45 @@ export const executionEnvironmentDomain: Domain = defineDomain({
     "execution-environment: execution environments and associated templates",
     "",
     "Subcommands:",
+    "  create|edit|delete|copy  execution environments",
     "  list  [--search <s>] [--organization <id>] [--type <type>] [--limit <n>]",
     "  show  <id|name>",
   ].join("\n"),
   mcpEquivalents: [
+    "create_execution_environment", "update_execution_environment", "delete_execution_environment",
     "list_execution_environments",
     "get_execution_environment",
     "list_execution_environment_unified_job_templates",
   ],
   subcommands: [
+    {
+      name: "create", help: "awx-axi execution-environment create [<name>] --image <image> [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "environment name", takesValue: true }, { name: "image", description: "container image", takesValue: true },
+        { name: "description", description: "description", takesValue: true }, { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "credential", description: "registry credential id or name", takesValue: true }, { name: "pull", description: "pull policy", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false },
+      ], positionals: { names: ["<name>"], required: 0 }, schema: { label: "execution_environment", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: createPlan,
+    },
+    {
+      name: "edit", help: "awx-axi execution-environment edit <id|name> [--image <image>] [--pull <policy>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "name", description: "environment name", takesValue: true }, { name: "image", description: "container image", takesValue: true },
+        { name: "description", description: "description", takesValue: true }, { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "credential", description: "registry credential id or name", takesValue: true }, { name: "pull", description: "pull policy", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false },
+      ], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "execution_environment", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: editPlan,
+    },
+    {
+      name: "delete", help: "awx-axi execution-environment delete <id|name> [--confirm] [--dry-run]",
+      flags: [{ name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }],
+      positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "execution_environment", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: deletePlan,
+    },
+    {
+      name: "copy", help: "awx-axi execution-environment copy <id|name> [--name <name>] [--confirm] [--dry-run]",
+      flags: [{ name: "name", description: "copy name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }],
+      positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "execution_environment", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: copyPlan,
+    },
     {
       name: "list",
       help: "awx-axi execution-environment list [--search <s>] [--organization <id>] [--type <type>] [--limit <n>]",

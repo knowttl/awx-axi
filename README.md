@@ -90,7 +90,7 @@ All core AWX domains are available and return only one noun per operation.
 
 **Every mutating subcommand refuses to mutate by default.** Without `--confirm` it prints a preview of exactly
 what it would send and changes nothing; `--dry-run` forces that preview even when `--confirm` is passed. The
-configuration-write subcommands require `AWX_AXI_ALLOW_CONFIG_WRITES=1`, delete subcommands require
+ordinary configuration mutations require `AWX_AXI_ALLOW_CONFIG_WRITES=1`, delete subcommands require
 `AWX_AXI_ALLOW_DELETES=1`, and security-sensitive subcommands require `AWX_AXI_ALLOW_SECURITY_WRITES=1` in the
 environment. Setting `AWX_AXI_READ_ONLY=1` refuses every write before anything is sent.
 
@@ -103,25 +103,29 @@ automation - so read the preview before you opt in.
 | --- | --- |
 | `auth` | `login`, `status`, `logout` |
 | `job` | `list`, `show`, `stdout`, `events`, `hosts`, `launch`, `cancel`, `relaunch`, `watch` |
-| `template` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `survey`, `launch` |
-| `workflow` | `create`, `edit`, `delete`, `list`, `show`, `survey`, `launch`, `nodes` |
+| `template` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `object-roles`, `survey`, `launch`, credential/instance-group/label/notification associations |
+| `workflow` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `object-roles`, `survey`, `launch`, `nodes`, template labels and notifications, node and edge management |
 | `approval` | `list`, `show`, `approve`, `deny` |
 | `ad-hoc` | `launch`, `list`, `show`, `events`, `stdout` |
-| `project` | `create`, `edit`, `delete`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync` |
-| `inventory` | `create`, `edit`, `delete`, `sync`, `host-create`, `host-edit`, `host-delete`, `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
-| `schedule` | `create`, `edit`, `delete`, `list`, `show` |
-| `system-job` | `list`, `show`, `events`, `notifications` |
-| `system-job-template` | `list`, `show` |
-| `execution-environment` | `list`, `show` |
-| `organization` | `list`, `show` |
-| `credential` | `create`, `edit`, `delete`, `list`, `show` |
-| `user` | `create`, `edit`, `delete`, `list`, `show` |
-| `team` | `create`, `edit`, `delete`, `list`, `show`, `users`, `projects`, `credentials`, `roles`, `object-roles`, `access-list` |
+| `project` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync`, notification associations |
+| `inventory` | `create`, `edit`, `delete`, `sync`, host CRUD and bulk operations, group topology, source management, `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
+| `schedule` | `create`, `edit`, `delete`, `list`, `show`, credential/label/instance-group associations |
+| `system-job` | `cancel`, `list`, `show`, `events`, `notifications` |
+| `system-job-template` | `launch`, `list`, `show` |
+| `execution-environment` | `create`, `edit`, `copy`, `delete`, `list`, `show` |
+| `organization` | `create`, `edit`, `delete`, `list`, `show`, membership, execution, credential, and notification associations |
+| `credential` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `object-roles` |
+| `user` | `create`, `edit`, `delete`, `token-create`, `token-revoke`, `list`, `show` |
+| `team` | `create`, `edit`, `delete`, `credential-create`, `user-add`, `user-remove`, `list`, `show`, `users`, `projects`, `credentials`, `roles`, `object-roles`, `access-list` |
 | `role` | `grant`, `revoke`, `list`, `show`, `parents`, `children`, `users`, `teams` |
 | `notification` | `list`, `show` |
-| `notification-template` | `list`, `show` |
+| `notification-template` | `create`, `edit`, `copy`, `delete`, `test`, `list`, `show` |
 | `activity-stream` | `list`, `show` |
 | `setup` | `hooks` |
+
+System jobs, notifications, and activity-stream entries are generated records rather than configuration resources.
+System jobs support cancellation, and built-in system job templates support launch, but AWX exposes no CRUD operations for those records.
+Notifications and activity-stream entries remain read-only.
 
 ```sh
 # Auth and setup
@@ -152,6 +156,7 @@ awx-axi workflow survey workflow-template
 awx-axi workflow launch workflow-template --wait
 awx-axi workflow create "Release Workflow"
 awx-axi workflow edit workflow-template --description "My workflow"
+awx-axi workflow node-create workflow-template --template deployment-template
 awx-axi workflow nodes 2048
 
 # ad-hoc commands
@@ -165,6 +170,8 @@ awx-axi ad-hoc launch Production --module-name ping
 
 # Identity, policy, and approvals
 awx-axi organization list
+awx-axi organization create Operations
+awx-axi organization user-add Operations --user alice
 awx-axi credential list --search github-token
 awx-axi credential create "AWS Credential" --credential-type "Amazon Web Services"
 awx-axi credential edit "AWS Credential" --description "Updated key"
@@ -210,12 +217,16 @@ awx-axi inventory edit base-inventory --description "Updated description"
 awx-axi inventory sync base-inventory --wait
 awx-axi inventory host-create web-01 --inventory Production
 awx-axi inventory host-edit web-01 --disabled
+awx-axi inventory group-create web --inventory Production
+awx-axi inventory source-create cloud --inventory Production --source ec2
 awx-axi schedule list
 awx-axi schedule create "Nightly Sync" --rrule "DTSTART:20250101T000000Z RRULE:FREQ=DAILY" --template 12
 awx-axi schedule edit "Nightly Sync" --disabled
 awx-axi execution-environment list
-awx-axi system-job list
-awx-axi system-job-template list
+awx-axi execution-environment create base --image quay.io/example/base
+awx-axi notification-template test 7
+awx-axi system-job cancel 44
+awx-axi system-job-template launch cleanup-jobs
 ```
 
 ### TOON output behavior
@@ -227,7 +238,7 @@ awx-axi system-job-template list
 - Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
   `--tail` and `--lines`, and `job stdout` also supports `--download`.
 - Errors include suggestions rather than raw service payloads.
-- Mutating commands (launch, relaunch, cancel, approve, deny, sync, create, edit, copy, delete, host-create, host-edit, host-delete, grant, revoke) default to a dry run.
+- Every mutating command defaults to a dry run.
   Pass the `--confirm` flag to execute the live mutation request.
 - `ad-hoc launch` runs an operator-supplied module on every host in the target inventory, so it is the sharpest
   command here. It previews like the rest and needs `--confirm` to act, but no dedicated environment gate covers
@@ -246,8 +257,8 @@ awx-axi reads controller and session settings through environment variables.
 | `CONTROLLER_VERIFY_SSL` | Set to `false` for self-signed certificates |
 | `AWX_AXI_HOME` | Token file directory, default `~/.awx-axi` |
 | `AWX_AXI_READ_ONLY` | Set `1` to block mutating commands in non-live contexts |
-| `AWX_AXI_ALLOW_CONFIG_WRITES` | Set `1` to allow configuration writes (PUT/PATCH) |
-| `AWX_AXI_ALLOW_DELETES` | Set `1` to allow delete operations (DELETE) |
+| `AWX_AXI_ALLOW_CONFIG_WRITES` | Set `1` to allow configuration-tagged mutations |
+| `AWX_AXI_ALLOW_DELETES` | Set `1` to allow delete-tagged mutations |
 | `AWX_AXI_ALLOW_SECURITY_WRITES` | Set `1` to allow security-sensitive writes |
 
 ## Development & Testing

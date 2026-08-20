@@ -2,11 +2,13 @@
  * The `system-job-template` domain: run templates for maintenance jobs.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { dryRun, isLive, parseJsonObject } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
   read,
   readPaged,
+  write,
   type Domain,
   type DomainResult,
   type Plan,
@@ -121,6 +123,18 @@ function toScheduleRows(rawRows: readonly unknown[]): Row[] {
   });
 }
 
+function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = yield* resolveId(input.args[0] ?? "", { listRoute: "system_job_templates/", noun: "system job template", listCommand: "system-job-template list", command: "system-job-template launch" });
+  const payload: Record<string, unknown> = {};
+  if (typeof input.flags["extra-vars"] === "string") payload.extra_vars = parseJsonObject(input.flags["extra-vars"], "--extra-vars");
+  if (!isLive(input.flags)) return dryRun("launch", "system_job", { system_job_template: id }, `POST system_job_templates/${id}/launch/`, payload);
+  const response = yield* write(`system_job_templates/${id}/launch/`, payload, { method: "POST", tag: "operational" });
+  if (response.status !== 201 && response.status !== 202 && response.status !== 200) throw errorForResponse(response, { subject: `system job template ${id}` });
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  const jobId = typeof body.system_job === "number" ? body.system_job : typeof body.id === "number" ? body.id : 0;
+  return detailOutput({ label: "system_job", fields: { id: jobId, template: id, status: body.status ?? "pending" }, help: [`Run \`awx-axi system-job show ${jobId}\` to inspect the maintenance job`] });
+}
+
 function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "system_job_templates/",
@@ -182,8 +196,10 @@ export const systemJobTemplateDomain: Domain = defineDomain({
     "system-job-template: system job templates and schedules",
     "",
     "Subcommands:",
+    "  launch  <id|name> [--extra-vars <json>] [--confirm] [--dry-run]",
     "  list    [--search <s>] [--limit <n>]",
     "  show    <id|name>",
+    "  The built-in system job template records remain read-only; only launch is supported.",
   ].join("\n"),
   mcpEquivalents: [
     "list_system_job_templates",
@@ -192,6 +208,14 @@ export const systemJobTemplateDomain: Domain = defineDomain({
     "system_job_template_schedules",
   ],
   subcommands: [
+    {
+      name: "launch", help: "awx-axi system-job-template launch <id|name> [--extra-vars <json>] [--confirm] [--dry-run]",
+      flags: [
+        { name: "extra-vars", description: "extra variables JSON object", takesValue: true },
+        { name: "confirm", description: "confirm live execution", takesValue: false },
+        { name: "dry-run", description: "preview without mutating", takesValue: false },
+      ], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "system_job", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: launchPlan,
+    },
     {
       name: "list",
       help: "awx-axi system-job-template list [--search <s>] [--limit <n>]",
