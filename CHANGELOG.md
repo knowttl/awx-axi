@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.2...awx-axi-v0.1.3) (2026-08-24)
+
+
+### Features
+
+* expand AWX write-management coverage ([#31](https://github.com/knowttl/awx-axi/issues/31)) ([499b2aa](https://github.com/knowttl/awx-axi/commit/499b2aa64213b4c23ed44290109524fe599eba3d))
+* **inventory:** support smart inventory filters ([#33](https://github.com/knowttl/awx-axi/issues/33)) ([1589518](https://github.com/knowttl/awx-axi/commit/1589518143a0abe84b5f9e9cbe606e9c06383316))
+
 ## [0.1.2](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.1...awx-axi-v0.1.2) (2026-08-11)
 
 
