@@ -745,9 +745,31 @@ function* createInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
     ]);
   }
 
+  const requestedKind = typeof input.flags.kind === "string" ? input.flags.kind : "standard";
+  if (requestedKind !== "standard" && requestedKind !== "smart") {
+    throw validationError("--kind must be standard or smart for `inventory create`", [
+      "Run `awx-axi inventory create <name> --kind smart --organization <id|name> --host-filter <filter>`",
+    ]);
+  }
+
+  const hostFilter = typeof input.flags["host-filter"] === "string"
+    ? input.flags["host-filter"]
+    : undefined;
+  const resolvedKind = requestedKind === "smart" || hostFilter !== undefined ? "smart" : "standard";
+  const organization = typeof input.flags.organization === "string"
+    ? input.flags.organization
+    : undefined;
+
+  if (resolvedKind === "smart" && (organization === undefined || organization === "")) {
+    throw validationError("`inventory create` needs --organization id or name for a smart inventory");
+  }
+  if (resolvedKind === "smart" && (hostFilter === undefined || hostFilter === "")) {
+    throw validationError("`inventory create` needs a non-empty --host-filter for a smart inventory");
+  }
+
   let orgId: number | undefined;
-  if (typeof input.flags.organization === "string") {
-    orgId = yield* resolveId(input.flags.organization, {
+  if (organization !== undefined) {
+    orgId = yield* resolveId(organization, {
       listRoute: "organizations/",
       noun: "organization",
       listCommand: "organization list",
@@ -759,6 +781,10 @@ function* createInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
   if (orgId !== undefined) payload.organization = orgId;
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (typeof input.flags.variables === "string") payload.variables = input.flags.variables;
+  if (resolvedKind === "smart") {
+    payload.kind = "smart";
+    payload.host_filter = hostFilter;
+  }
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
   if (!isLive) {
@@ -768,6 +794,8 @@ function* createInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
         action: "create",
         type: "inventory",
         name,
+        kind: resolvedKind,
+        host_filter: hostFilter ?? null,
         would_send: "POST inventories/",
         payload,
       },
@@ -789,6 +817,8 @@ function* createInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
       id,
       name: body.name ?? name,
       organization: orgId ?? null,
+      kind: resolvedKind,
+      host_filter: hostFilter ?? null,
     },
     help: [`Run \`awx-axi inventory show ${id}\` to inspect inventory`],
   });
@@ -814,6 +844,7 @@ function* editInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
   }
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (typeof input.flags.variables === "string") payload.variables = input.flags.variables;
+  if (typeof input.flags["host-filter"] === "string") payload.host_filter = input.flags["host-filter"];
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
   if (!isLive) {
@@ -1201,8 +1232,8 @@ const baseInventoryDomain: Domain = defineDomain({
     "inventory: inspect inventories, sources, hosts, and update history",
     "",
     "Subcommands:",
-    "  create               [<name>] [--organization <o>] [--confirm] [--dry-run]",
-    "  edit                 <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  create               [<name>] [--organization <o>] [--kind <standard|smart>] [--host-filter <filter>] [--confirm] [--dry-run]",
+    "  edit                 <id|name> [--name <n>] [--host-filter <filter>] [--confirm] [--dry-run]",
     "  delete               <id|name> [--confirm] [--dry-run]",
     "  sync                 <id|name> [--wait] [--confirm] [--dry-run]",
     "  host-create          [<name>] --inventory <i|name> [--confirm] [--dry-run]",
@@ -1279,10 +1310,12 @@ const baseInventoryDomain: Domain = defineDomain({
     ...(["source-notification-add", "source-notification-remove"] as const).map((name) => ({ name, help: `awx-axi inventory ${name} <id|name> --event <event> --notification-template <id|name> [--confirm] [--dry-run]`, flags: [{ name: "event", description: "started, success, or error", takesValue: true }, { name: "notification-template", description: "notification template id or name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "inventory_source_notification", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: sourceNotificationPlan(name.endsWith("remove")) })),
     {
       name: "create",
-      help: "awx-axi inventory create [<name>] [--organization <o>] [--confirm] [--dry-run]",
+      help: "awx-axi inventory create [<name>] [--organization <o>] [--kind <standard|smart>] [--host-filter <filter>] [--confirm] [--dry-run]",
       flags: [
         { name: "name", description: "inventory name", takesValue: true },
         { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "kind", description: "inventory kind: standard or smart; host-filter implies smart", takesValue: true },
+        { name: "host-filter", description: "smart inventory host filter", takesValue: true },
         { name: "description", description: "description", takesValue: true },
         { name: "variables", description: "inventory variables YAML/JSON", takesValue: true },
         { name: "confirm", description: "confirm live execution", takesValue: false },
@@ -1295,10 +1328,11 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "edit",
-      help: "awx-axi inventory edit <id|name> [--name <n>] [--confirm] [--dry-run]",
+      help: "awx-axi inventory edit <id|name> [--name <n>] [--host-filter <filter>] [--confirm] [--dry-run]",
       flags: [
         { name: "name", description: "inventory name", takesValue: true },
         { name: "organization", description: "organization id or name", takesValue: true },
+        { name: "host-filter", description: "smart inventory host filter", takesValue: true },
         { name: "description", description: "description", takesValue: true },
         { name: "variables", description: "inventory variables YAML/JSON", takesValue: true },
         { name: "confirm", description: "confirm live execution", takesValue: false },

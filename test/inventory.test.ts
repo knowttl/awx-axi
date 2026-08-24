@@ -290,6 +290,14 @@ describe("inventory domain (design.md §7.1)", () => {
     });
     expect(live.exitCode).toBe(0);
     expect(live.stdout).toContain("id: 50");
+    expect(live.stdout).toContain("kind: standard");
+    expect(live.stdout).toContain("host_filter: null");
+    expect(live.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "inventories/",
+      body: { name: "Production" },
+      tag: "config",
+    });
 
     const editDry = await runCli(["inventory", "edit", "50", "--name", "Prod-Updated"], { script: [] });
     expect(editDry.exitCode).toBe(0);
@@ -301,6 +309,181 @@ describe("inventory domain (design.md §7.1)", () => {
     });
     expect(editLive.exitCode).toBe(0);
     expect(editLive.stdout).toContain("name: Prod-Updated");
+  });
+
+  it("creates a smart inventory with the AWX kind and host filter fields", async () => {
+    const dry = await runCli([
+      "inventory",
+      "create",
+      "Smart web hosts",
+      "--kind",
+      "smart",
+      "--organization",
+      "1",
+      "--host-filter",
+      "name__icontains=web",
+    ], { script: [] });
+
+    expect(dry.exitCode).toBe(0);
+    expect(dry.transport.requests).toHaveLength(0);
+    expect(dry.stdout).toContain("kind: smart");
+    expect(dry.stdout).toContain("host_filter: name__icontains=web");
+    expect(dry.stdout).toContain("payload:");
+
+    const run = await runCli([
+      "inventory",
+      "create",
+      "Smart web hosts",
+      "--kind",
+      "smart",
+      "--organization",
+      "1",
+      "--host-filter",
+      "name__icontains=web",
+      "--confirm",
+    ], {
+      script: [{ status: 201, body: { id: 51, name: "Smart web hosts" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(1);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "inventories/",
+      body: {
+        name: "Smart web hosts",
+        organization: 1,
+        kind: "smart",
+        host_filter: "name__icontains=web",
+      },
+      tag: "config",
+    });
+    expect(run.stdout).toContain("kind: smart");
+    expect(run.stdout).toContain("host_filter: name__icontains=web");
+  });
+
+  it("treats host-filter as an implicit smart inventory kind", async () => {
+    const run = await runCli([
+      "inventory",
+      "create",
+      "Smart database hosts",
+      "--organization",
+      "1",
+      "--host-filter",
+      "name__icontains=database",
+      "--confirm",
+    ], {
+      script: [{ status: 201, body: { id: 52, name: "Smart database hosts" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "POST",
+      route: "inventories/",
+      body: {
+        kind: "smart",
+        host_filter: "name__icontains=database",
+      },
+    });
+  });
+
+  it("requires an organization for smart inventory creation", async () => {
+    const run = await runCli([
+      "inventory",
+      "create",
+      "Smart web hosts",
+      "--kind",
+      "smart",
+      "--host-filter",
+      "name__icontains=web",
+      "--confirm",
+    ], { script: [], env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" } });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.transport.requests).toHaveLength(0);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("--organization id or name for a smart inventory");
+  });
+
+  it("requires a host filter for smart inventory creation", async () => {
+    const run = await runCli([
+      "inventory",
+      "create",
+      "Smart web hosts",
+      "--kind",
+      "smart",
+      "--organization",
+      "1",
+      "--confirm",
+    ], { script: [], env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" } });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.transport.requests).toHaveLength(0);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("--host-filter for a smart inventory");
+  });
+
+  it("refuses smart inventory creation in read-only mode despite config-write enablement", async () => {
+    const run = await runCli([
+      "inventory",
+      "create",
+      "Smart web hosts",
+      "--kind",
+      "smart",
+      "--organization",
+      "1",
+      "--host-filter",
+      "name__icontains=web",
+      "--confirm",
+    ], {
+      script: [],
+      env: {
+        AWX_AXI_READ_ONLY: "1",
+        AWX_AXI_ALLOW_CONFIG_WRITES: "1",
+      },
+    });
+
+    expect(run.exitCode).toBe(1);
+    expect(run.transport.requests).toHaveLength(0);
+    expect(run.stdout).toContain("code: READ_ONLY_VIOLATION");
+    expect(run.stdout).toContain("this session is read-only");
+  });
+
+  it("edits an inventory host filter through the config-gated PATCH", async () => {
+    const run = await runCli([
+      "inventory",
+      "edit",
+      "51",
+      "--host-filter",
+      "name__icontains=database",
+      "--confirm",
+    ], {
+      script: [{ status: 200, body: { id: 51, name: "Smart web hosts" } }],
+      env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(1);
+    expect(run.transport.requests[0]).toMatchObject({
+      method: "PATCH",
+      route: "inventories/51/",
+      body: { host_filter: "name__icontains=database" },
+      tag: "config",
+    });
+  });
+
+  it("documents smart inventory flags in public command help", async () => {
+    const run = await runCli(["inventory", "create", "--help"], { script: [] });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("--kind <standard|smart>");
+    expect(run.stdout).toContain("--host-filter <filter>");
+
+    const edit = await runCli(["inventory", "edit", "--help"], { script: [] });
+    expect(edit.exitCode).toBe(0);
+    expect(edit.stdout).toContain("--host-filter <filter>");
   });
 
   it("host create and edit work with dry-run and --confirm", async () => {

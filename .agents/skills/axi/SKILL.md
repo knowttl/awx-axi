@@ -29,6 +29,8 @@ A mutation is sent only with `--confirm`, and the matching environment safety ga
 Use `job` for unified job history, stdout, events, host summaries, cancellation, relaunch, and bounded polling.
 Use `template` and `workflow` to manage launch templates, workflow nodes and edges, notification associations, credentials, labels, instance groups, and launches.
 Use `project`, `inventory`, and `schedule` to manage SCM projects, inventory topology and sources, bulk hosts, syncs, schedules, and schedule associations.
+For the AWX 24.6.1 smart inventory API, use `inventory create <name> --kind smart --organization <id|name> --host-filter 'name__icontains=web'`; supplying `--host-filter` implies `--kind smart`.
+AWX documents smart inventories as deprecated and encourages constructed inventories for new configurations, but this controller's smart inventory support remains available.
 Use `organization`, `credential`, `execution-environment`, `notification-template`, `team`, `user`, and `role` for identity, security, RBAC, notifications, and execution configuration.
 Common reads include `schedule list`, `execution-environment list`, `organization list`, `credential show <id|name>`, `user show <id|name>`, `system-job-template show <id|name>`, and `system-job notifications`.
 
@@ -100,4 +102,5 @@ Run `npx -y awx-axi --help` for top-level usage, or `npx -y awx-axi <command> --
 - Use `job watch <id>` after a launch, sync, or system job.
 - Use 0600 JSON files for credential inputs, notification configurations, notification messages, token-adjacent values, and other secret-bearing data.
 - Use `inventory host-bulk-create` and `inventory host-bulk-delete` for AWX's genuine bulk host endpoints.
+- Use `inventory edit <id|name> --host-filter <filter>` to update a smart inventory's host filter.
 - `notification list` and `activity-stream list` remain read-only because AWX does not expose object mutation endpoints for those generated records.
