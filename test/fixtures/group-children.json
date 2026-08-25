@@ -1,0 +1,18 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1923-1928",
+  "$note": "The group children relation returns direct child groups and excludes recursive all-children expansion.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 33,
+        "name": "web-canary",
+        "summary_fields": { "inventory": { "id": 11, "name": "Datacenter inventory" } }
+      }
+    ]
+  }
+}

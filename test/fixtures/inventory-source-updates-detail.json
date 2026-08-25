@@ -1,0 +1,33 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2312-2317",
+  "$note": "The inventory source updates relation returns direct update history with unified-job state and timing fields.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 902,
+        "name": "current sync",
+        "status": "running",
+        "created": "2026-08-20T10:30:00Z",
+        "started": "2026-08-20T10:30:05Z",
+        "finished": null,
+        "elapsed": 12.5,
+        "failed": false
+      },
+      {
+        "id": 901,
+        "name": "initial sync",
+        "status": "successful",
+        "created": "2026-08-19T10:30:00Z",
+        "started": "2026-08-19T10:30:05Z",
+        "finished": "2026-08-19T10:31:00Z",
+        "elapsed": 55.2,
+        "failed": false
+      }
+    ]
+  }
+}

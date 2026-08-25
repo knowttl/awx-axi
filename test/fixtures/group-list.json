@@ -1,0 +1,31 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2026-2060",
+  "$note": "Group list rows expose names and inventory summaries used for cross-inventory inspection.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 31,
+        "name": "web",
+        "description": "Web tier",
+        "inventory": 11,
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory", "organization_id": 1 }
+        }
+      },
+      {
+        "id": 32,
+        "name": "database",
+        "description": "Database tier",
+        "inventory": 12,
+        "summary_fields": {
+          "inventory": { "id": 12, "name": "Staging inventory", "organization_id": 2 }
+        }
+      }
+    ]
+  }
+}

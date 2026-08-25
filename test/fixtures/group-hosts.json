@@ -1,0 +1,19 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:1967-1974",
+  "$note": "The group hosts relation is the direct host membership endpoint, not the recursive all-hosts endpoint.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 501,
+        "name": "web-01.example.com",
+        "enabled": true,
+        "summary_fields": { "inventory": { "id": 11, "name": "Datacenter inventory" } }
+      }
+    ]
+  }
+}

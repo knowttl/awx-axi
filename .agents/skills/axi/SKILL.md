@@ -28,7 +28,7 @@ A mutation is sent only with `--confirm`, and the matching environment safety ga
 
 Use `job` for unified job history, stdout, events, host summaries, cancellation, relaunch, and bounded polling.
 Use `template` and `workflow` to manage launch templates, workflow nodes and edges, notification associations, credentials, labels, instance groups, and launches.
-Use `project`, `inventory`, `host`, and `schedule` to manage SCM projects, inventory topology and sources, hosts across inventories, bulk host operations, syncs, schedules, and schedule associations.
+Use `project`, `inventory`, `host`, `group`, `inventory-source`, and `schedule` to manage SCM projects, inventory topology and sources, hosts across inventories, groups and source history, bulk host operations, syncs, schedules, and schedule associations.
 For the AWX 24.6.1 smart inventory API, use `inventory create <name> --kind smart --organization <id|name> --host-filter 'name__icontains=web'`; supplying `--host-filter` implies `--kind smart`.
 AWX documents smart inventories as deprecated and encourages constructed inventories for new configurations, but this controller's smart inventory support remains available.
 Use `organization`, `credential`, `execution-environment`, `notification-template`, `team`, `user`, and `role` for identity, security, RBAC, notifications, and execution configuration.
@@ -56,7 +56,7 @@ Do not use write commands against a controller that has been designated read-onl
 
 ## Commands
 
-commands[22 total]:
+commands[24 total]:
 `job`: list, show, stdout, events, hosts, launch, cancel, relaunch, watch.
 `template`: create, edit, copy, delete, list, show, object-roles, survey, launch, credential-add/remove, instance-group-add/remove, label-add/remove, notification-add/remove.
 `workflow`: create, edit, copy, delete, list, show, object-roles, survey, launch, nodes, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
@@ -64,6 +64,8 @@ commands[22 total]:
 `project`: create, edit, copy, delete, list, show, playbooks, updates, roles, sync, notification-add/remove.
 `inventory`: create, edit, delete, sync, host-create/edit/delete, host-bulk-create/delete, group-create/edit/delete, group-add-host/remove-host, group-add-child/remove-child, source-create/edit/delete, source-credential-add/remove, source-notification-add/remove, list, show, groups, hosts, sources, updates, constructed-list, constructed-show.
 `host`: list, show.
+`group`: list, show.
+`inventory-source`: list, show.
 `schedule`: create, edit, delete, list, show, credential-add/remove, label-add/remove, instance-group-add/remove.
 `execution-environment`: create, edit, copy, delete, list, show.
 `organization`: create, edit, delete, user-add/remove, admin-add/remove, team-add/remove, instance-group-add/remove, execution-environment-add/remove, galaxy-credential-add/remove, notification-template-add/remove, notification-add/remove, list, show.
@@ -105,4 +107,6 @@ Run `npx -y awx-axi --help` for top-level usage, or `npx -y awx-axi <command> --
 - Use `inventory host-bulk-create` and `inventory host-bulk-delete` for AWX's genuine bulk host endpoints.
 - Use `inventory edit <id|name> --host-filter <filter>` to update a smart inventory's host filter.
 - Use `host list` to search visible hosts across inventories, or `host show <id|name>` for groups, variables, and facts.
+- Use `group list` and `group show <id|name>` for direct host and child-group membership with parsed variables.
+- Use `inventory-source list` and `inventory-source show <id|name>` for source configuration, update state, and direct update history.
 - `notification list` and `activity-stream list` remain read-only because AWX does not expose object mutation endpoints for those generated records.

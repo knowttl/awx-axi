@@ -17,7 +17,8 @@ The inventory host surface already supports `--search`, `--limit`, and optional 
 Every registered domain has an existing list and show pair unless the noun is an intentionally generated history surface with the same read-only pair.
 
 The audit baseline had 19 registered domains: `job`, `template`, `workflow`, `organization`, `system-job-template`, `system-job`, `credential`, `approval`, `ad-hoc`, `project`, `inventory`, `schedule`, `execution-environment`, `user`, `notification`, `notification-template`, `activity-stream`, `team`, and `role`.
-This first slice adds `host`, bringing the shipped total to 20 AWX domains.
+The first read slice added `host`, bringing the shipped total to 20 AWX domains.
+This slice adds `group` and `inventory-source`, bringing the shipped total to 22 AWX domains.
 
 ## Prioritized verified gaps
 
@@ -37,7 +38,8 @@ The first PR implements this gap as the read-only `host list` and `host show` no
 
 `inventory source-create`, `inventory source-edit`, and `inventory source-delete` have only the nested `inventory sources` list for inspection, although AWX exposes `inventory_sources/<id>/` detail and related routes in `awx/api/urls/inventory_source.py`.
 
-These should be one small read-only PR for top-level `group` and `inventory-source` list/show plus their highest-value relationships.
+Implemented in the second read slice as top-level read-only `group list/show` and `inventory-source list/show`.
+The commands use the global list endpoints for deterministic id-or-name resolution, direct group hosts and children, parsed group variables, source configuration with recursive redaction, and direct inventory-source update history.
 
 ### P1: workflow topology parity
 
@@ -54,12 +56,15 @@ AWX 24.6.1 exposes host `all_groups`, `activity_stream`, `inventory_sources`, `s
 This first PR reads direct groups, parsed `variable_data`, and `ansible_facts`; the remaining host relationships should follow after the basic noun is reviewed.
 
 AWX exposes group `children`, `hosts`, `all_hosts`, `variable_data`, job events, job host summaries, activity stream, inventory sources, potential children, and ad hoc commands in `awx/api/urls/group.py`.
+This slice reads only the verified direct `children` and `hosts` relations plus `variable_data`.
+The remaining group relationships stay on the P2 roadmap.
 
 AWX exposes inventory `root_groups`, `variable_data`, `tree`, `script`, activity stream, input inventories, job templates, ad hoc commands, access list, object roles, instance groups, and labels in `awx/api/urls/inventory.py`.
 
 AWX exposes inventory-source updates, activity stream, schedules, credentials, groups, hosts, and notification-template relationships in `awx/api/urls/inventory_source.py`.
+This slice reads only direct `inventory_updates` history; schedules, access/configuration relationships, groups, hosts, notifications, and activity remain P2.
 
-The current domain code reads only the relationships named in its public help and plans, so these are genuine endpoint gaps rather than undocumented aliases.
+The current domain code reads only the relationships named in its public help and plans, so these remaining routes are genuine endpoint gaps rather than undocumented aliases.
 
 ### P2: role and access inspection
 
@@ -97,8 +102,8 @@ Filters and projections should be added in resource-sized PRs after endpoint sem
 | Projects and SCM updates | `project list/show/playbooks/updates/roles` plus unified job reads | Add project access, activity, notification, and related configuration reads. |
 | Inventories | `inventory list/show` plus nested topology and source reads | Add parent relationships and access/object-role reads. |
 | Hosts | Nested `inventory hosts` list only before this PR | The first PR adds top-level `host list/show` with cross-inventory resolution and detail reads. |
-| Groups | Nested `inventory groups` list only | Add top-level group detail and relationship reads. |
-| Inventory sources | Nested `inventory sources` list and source update history | Add top-level inventory-source detail and relationship reads. |
+| Groups | Nested `inventory groups` list plus top-level `group list/show` with direct hosts, children, and variables | Add remaining group relationship reads only if operators need them. |
+| Inventory sources | Nested `inventory sources` list and source update history plus top-level `inventory-source list/show` | Add remaining source relationships only if operators need them. |
 | Schedules | `schedule list/show` | Add schedule runs and relationship reads. |
 | Organizations | `organization list/show` | Add access, object roles, members, teams, and related configuration reads. |
 | Execution environments | `execution-environment list/show` | Add linked templates and organization relationships if operators need them. |
@@ -111,11 +116,11 @@ Filters and projections should be added in resource-sized PRs after endpoint sem
 
 ## Small-PR sequence
 
-1. `host` inspection: cross-inventory list and unambiguous show with groups, variables, facts, redaction, help, and read-only tests.
-2. `group` and `inventory-source` inspection: list/show plus direct hosts, children, updates, and variable data where the endpoint contract is verified.
-3. Workflow-template node reads and high-value parent relationships for templates, projects, inventories, and sources.
+1. `host` inspection: cross-inventory list and unambiguous show with groups, variables, facts, redaction, help, and read-only tests. Implemented.
+2. `group` and `inventory-source` inspection: list/show plus direct hosts, children, updates, and variable data where the endpoint contract is verified. Implemented in this slice.
+3. Workflow-template node reads and high-value parent relationships for templates, projects, inventories, and sources. This is the next separate P1b slice; keep it out of this PR.
 4. RBAC access-list, object-role, membership, and role-scope inspection.
 5. Host/group/inventory/source activity and operator-facing system/configuration reads.
 6. Resource-sized filter and projection improvements, each backed by AWX 24.6.1 source and behavior tests.
 
-This document intentionally keeps the later gaps out of the first host implementation.
+This document intentionally keeps workflow-template node reads and the optional P2 relationships out of this slice.

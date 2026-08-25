@@ -1,0 +1,20 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2402-2443",
+  "$note": "A name-filtered inventory source query with one visible result resolves a source without a named URL.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 21,
+        "name": "Nightly EC2 sync",
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory", "organization_id": 1 }
+        }
+      }
+    ]
+  }
+}
