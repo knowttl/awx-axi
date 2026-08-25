@@ -44,7 +44,7 @@ describe("workflow template-node inspection", () => {
             failure_nodes: [],
             always_nodes: [],
             summary_fields: {
-              unified_job_template: { id: 12, name: "Deploy web tier", unified_job_type: "job_template" },
+              unified_job_template: { id: 12, name: "Deploy web tier", unified_job_type: "job" },
             },
           },
         ],
@@ -64,7 +64,7 @@ describe("workflow template-node inspection", () => {
             failure_nodes: [],
             always_nodes: [],
             summary_fields: {
-              unified_job_template: { id: 30, name: "Prod release gate", unified_job_type: "workflow_approval_template", timeout: 3600 },
+              unified_job_template: { id: 30, name: "Prod release gate", unified_job_type: "workflow_approval", timeout: 3600 },
             },
           },
           {
@@ -75,7 +75,7 @@ describe("workflow template-node inspection", () => {
             failure_nodes: [],
             always_nodes: [],
             summary_fields: {
-              unified_job_template: { id: 22, name: "Smoke test", unified_job_type: "job_template" },
+              unified_job_template: { id: 22, name: "Smoke test", unified_job_type: "job" },
             },
           },
         ],
@@ -135,7 +135,7 @@ describe("workflow template-node inspection", () => {
     expect(run.transport.requests.every((request) => request.method === "GET")).toBe(true);
     expect(run.stdout).toContain("workflow_template_node");
     expect(run.stdout).toContain("workflow_template: 10 (Release pipeline)");
-    expect(run.stdout).toContain("node_type: job_template");
+    expect(run.stdout).toContain("unified_job_type: job");
     expect(run.stdout).toContain("unified_job_template: 12 (Deploy web tier)");
     expect(run.stdout).toContain("Production inventory");
     expect(run.stdout).toContain("SSH deploy");
@@ -170,7 +170,7 @@ describe("workflow template-node inspection", () => {
                   id: 30,
                   name: "Prod release gate",
                   description: "Approve production release",
-                  unified_job_type: "workflow_approval_template",
+                  unified_job_type: "workflow_approval",
                   timeout: 3600,
                 },
               },
@@ -184,7 +184,7 @@ describe("workflow template-node inspection", () => {
     );
 
     expect(run.exitCode).toBe(0);
-    expect(run.stdout).toContain("node_type: approval");
+    expect(run.stdout).toContain("unified_job_type: workflow_approval");
     expect(run.stdout).toContain("approval:");
     expect(run.stdout).toContain("Prod release gate");
     expect(run.stdout).toContain("timeout: 3600");
@@ -214,6 +214,65 @@ describe("workflow template-node inspection", () => {
     expect(run.stdout).not.toContain("block-do-not-print");
     expect(run.stdout).not.toContain("user:secret@");
     expect(run.stdout).not.toContain("$encrypted$vault-value");
+  });
+
+  it("bounds very large prompt objects with explicit omission metadata", async () => {
+    const extraData: Record<string, string> = { password: "do-not-print" };
+    for (let index = 0; index < 1000; index += 1) {
+      extraData[`field_${String(index).padStart(4, "0")}`] = `value-${index}`;
+    }
+    const detail = {
+      status: 200,
+      body: {
+        id: 71,
+        workflow_job_template: 10,
+        extra_data: extraData,
+        summary_fields: {},
+      },
+    };
+    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+
+    const run = await runCli(
+      ["workflow", "template-node", "71"],
+      { script: [detail, empty, empty, empty] },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("password: ***");
+    expect(run.stdout).toContain("__awx_axi_omitted__");
+    expect(run.stdout).toContain("reason: item_limit");
+    expect(run.stdout).toContain("count: 901");
+    expect(run.stdout).not.toContain("do-not-print");
+    expect(run.stdout).not.toContain("field_0999");
+    expect(run.stdout.length).toBeLessThan(10_000);
+  });
+
+  it("bounds extreme prompt depth with explicit omission metadata", async () => {
+    let extraData: Record<string, unknown> = { leaf: "unbounded" };
+    for (let depth = 0; depth < 100; depth += 1) {
+      extraData = { nested: extraData };
+    }
+    const detail = {
+      status: 200,
+      body: {
+        id: 71,
+        workflow_job_template: 10,
+        extra_data: extraData,
+        summary_fields: {},
+      },
+    };
+    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+
+    const run = await runCli(
+      ["workflow", "template-node", "71"],
+      { script: [detail, empty, empty, empty] },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("__awx_axi_omitted__");
+    expect(run.stdout).toContain("reason: depth_limit");
+    expect(run.stdout).not.toContain("unbounded");
+    expect(run.stdout.length).toBeLessThan(5_000);
   });
 
   it("rejects an invalid node limit before contacting the controller", async () => {

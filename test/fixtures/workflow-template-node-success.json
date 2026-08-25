@@ -15,7 +15,7 @@
         "unified_job_template": 30,
         "all_parents_must_converge": true,
         "summary_fields": {
-          "unified_job_template": { "id": 30, "name": "Prod release gate", "unified_job_type": "workflow_approval_template", "timeout": 3600 }
+          "unified_job_template": { "id": 30, "name": "Prod release gate", "unified_job_type": "workflow_approval", "timeout": 3600 }
         }
       }
     ]

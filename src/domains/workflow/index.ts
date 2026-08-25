@@ -31,6 +31,10 @@ import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const NODES_LIMIT = 200;
+const PROMPT_MAX_DEPTH = 8;
+const PROMPT_MAX_ITEMS = 100;
+const PROMPT_MAX_KEY_LENGTH = 100;
+const PROMPT_MAX_STRING_LENGTH = 1000;
 
 const LIST_SCHEMA = {
   label: "workflow_job_templates",
@@ -526,19 +530,17 @@ function unifiedJobTemplate(
   return record(summary.unified_job_template ?? node.unified_job_template);
 }
 
-function nodeType(node: RecordValue, summary: RecordValue): string {
-  const ujt = unifiedJobTemplate(node, summary);
-  const type = stringOrNull(ujt.unified_job_type) ?? stringOrNull(ujt.type);
-  if (type === "workflow_approval_template" || type === "workflow_approval") {
-    return "approval";
-  }
-  return type ?? (relationReference(node.unified_job_template) === null
-    ? "unassigned"
-    : "unified_job_template");
+function unifiedJobType(node: RecordValue, summary: RecordValue): string | null {
+  return stringOrNull(unifiedJobTemplate(node, summary).unified_job_type);
+}
+
+function isApprovalNode(node: RecordValue, summary: RecordValue): boolean {
+  const type = unifiedJobType(node, summary);
+  return type === "workflow_approval_template" || type === "workflow_approval";
 }
 
 function approvalDetails(node: RecordValue, summary: RecordValue): RecordValue | null {
-  if (nodeType(node, summary) !== "approval") {
+  if (!isApprovalNode(node, summary)) {
     return null;
   }
   const ujt = unifiedJobTemplate(node, summary);
@@ -550,20 +552,76 @@ function approvalDetails(node: RecordValue, summary: RecordValue): RecordValue |
   };
 }
 
+function boundPromptValue(
+  value: unknown,
+  state: { remaining: number },
+  depth = 0,
+): unknown {
+  if (typeof value === "string") {
+    return value.length <= PROMPT_MAX_STRING_LENGTH
+      ? value
+      : `${value.slice(0, PROMPT_MAX_STRING_LENGTH)}... (truncated, ${value.length} chars total)`;
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (depth >= PROMPT_MAX_DEPTH) {
+    return { __awx_axi_omitted__: { reason: "depth_limit" } };
+  }
+
+  if (Array.isArray(value)) {
+    const output: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      if (state.remaining === 0) {
+        output.push({
+          __awx_axi_omitted__: {
+            reason: "item_limit",
+            count: value.length - index,
+          },
+        });
+        break;
+      }
+      state.remaining -= 1;
+      output.push(boundPromptValue(value[index], state, depth + 1));
+    }
+    return output;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  const output: RecordValue = {};
+  for (let index = 0; index < entries.length; index += 1) {
+    if (state.remaining === 0) {
+      output.__awx_axi_omitted__ = {
+        reason: "item_limit",
+        count: entries.length - index,
+      };
+      break;
+    }
+    state.remaining -= 1;
+    const [key, child] = entries[index] as [string, unknown];
+    const boundedKey = key.length <= PROMPT_MAX_KEY_LENGTH
+      ? key
+      : `${key.slice(0, PROMPT_MAX_KEY_LENGTH)}... (truncated, ${key.length} chars total, item ${index})`;
+    output[boundedKey] = boundPromptValue(child, state, depth + 1);
+  }
+  return output;
+}
+
 function safePromptValue(value: unknown): unknown {
   if (value === undefined || value === null) {
     return null;
   }
+  let safe: unknown;
   if (typeof value !== "string") {
-    return redactValue(value);
+    safe = redactValue(value);
+  } else {
+    try {
+      safe = redactValue(JSON.parse(value) as unknown);
+    } catch {
+      return REDACTION;
+    }
   }
-  try {
-    return redactValue(JSON.parse(value) as unknown);
-  } catch {
-    // An opaque prompt blob is safer omitted than printed: it may contain a
-    // nested password that cannot be inspected as structured data.
-    return REDACTION;
-  }
+  return boundPromptValue(safe, { remaining: PROMPT_MAX_ITEMS });
 }
 
 function promptFields(node: RecordValue): RecordValue {
@@ -627,20 +685,20 @@ function toTemplateNodeRow(raw: unknown): Row {
   const node = record(raw);
   const summary = record(node.summary_fields);
   const ujt = unifiedJobTemplate(node, summary);
-  const type = nodeType(node, summary);
+  const type = unifiedJobType(node, summary);
 
   return {
     id: numberOrNull(node.id) ?? 0,
     identifier: stringOrNull(node.identifier),
-    node_type: type,
+    unified_job_type: type,
     unified_job_template: formatReference(
       numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
       stringOrNull(ujt.name),
     ),
-    approval: type === "approval"
+    approval: isApprovalNode(node, summary)
       ? formatReference(numberOrNull(ujt.id), stringOrNull(ujt.name))
       : null,
-    approval_timeout: type === "approval" ? numberOrNull(ujt.timeout) : null,
+    approval_timeout: isApprovalNode(node, summary) ? numberOrNull(ujt.timeout) : null,
     inventory: relationReference(summary.inventory ?? node.inventory),
     credentials: relationList(node, summary, "credentials"),
     execution_environment: relationReference(
@@ -658,17 +716,17 @@ function toEdgeNode(raw: unknown): RecordValue {
   const node = record(raw);
   const summary = record(node.summary_fields);
   const ujt = unifiedJobTemplate(node, summary);
-  const type = nodeType(node, summary);
+  const type = unifiedJobType(node, summary);
 
   return {
     id: numberOrNull(node.id),
     identifier: stringOrNull(node.identifier),
-    node_type: type,
+    unified_job_type: type,
     unified_job_template: formatReference(
       numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
       stringOrNull(ujt.name),
     ),
-    approval: type === "approval"
+    approval: isApprovalNode(node, summary)
       ? formatReference(numberOrNull(ujt.id), stringOrNull(ujt.name))
       : null,
     all_parents_must_converge: booleanOrNull(node.all_parents_must_converge),
@@ -728,7 +786,7 @@ function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
   const node = record(detail.body);
   const summary = record(node.summary_fields);
   const ujt = unifiedJobTemplate(node, summary);
-  const type = nodeType(node, summary);
+  const type = unifiedJobType(node, summary);
   const workflowTemplateValue =
     summary.workflow_job_template ?? node.workflow_job_template;
   const workflowTemplate = relationReference(workflowTemplateValue);
@@ -739,7 +797,7 @@ function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
     id,
     identifier: stringOrNull(node.identifier),
     workflow_template: workflowTemplate,
-    node_type: type,
+    unified_job_type: type,
     unified_job_template: formatReference(
       numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
       stringOrNull(ujt.name),
@@ -1168,14 +1226,14 @@ export const workflowDomain: Domain = defineDomain({
         "Examples:",
         "  awx-axi workflow template-nodes 10",
         "  awx-axi workflow template-nodes \"Release pipeline\" --limit 50",
-      ].join("\\n"),
+      ].join("\n"),
       flags: [
         { name: "limit", description: "nodes to return", takesValue: true },
       ],
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "workflow_template_nodes",
-        defaultFields: ["id", "identifier", "node_type", "unified_job_template", "prompt_fields", "success_nodes", "failure_nodes", "always_nodes"],
+        defaultFields: ["id", "identifier", "unified_job_type", "unified_job_template", "prompt_fields", "success_nodes", "failure_nodes", "always_nodes"],
         fieldAllowlist: [],
       },
       suggestions: [],
@@ -1193,7 +1251,7 @@ export const workflowDomain: Domain = defineDomain({
         "Examples:",
         "  awx-axi workflow template-node 71",
         "  awx-axi workflow template-node 71 --limit 20",
-      ].join("\\n"),
+      ].join("\n"),
       flags: [
         { name: "limit", description: "edge targets to return per edge type", takesValue: true },
       ],

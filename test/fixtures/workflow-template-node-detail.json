@@ -36,7 +36,7 @@
     "always_nodes": [74],
     "summary_fields": {
       "workflow_job_template": { "id": 10, "name": "Release pipeline" },
-      "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job_template" },
+      "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job" },
       "inventory": { "id": 11, "name": "Production inventory" },
       "credentials": [ { "id": 7, "name": "SSH deploy", "kind": "ssh", "credential_type_id": 1 } ],
       "execution_environment": { "id": 5, "name": "Control EE", "image": "quay.io/example/control-ee" },

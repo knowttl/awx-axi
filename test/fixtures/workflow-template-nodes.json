@@ -22,7 +22,7 @@
         "failure_nodes": [],
         "always_nodes": [74],
         "summary_fields": {
-          "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job_template" },
+          "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job" },
           "inventory": { "id": 11, "name": "Production inventory" },
           "credentials": [ { "id": 7, "name": "SSH deploy", "kind": "ssh" } ],
           "execution_environment": { "id": 5, "name": "Control EE", "image": "quay.io/example/control-ee" },
@@ -39,7 +39,7 @@
         "failure_nodes": [73],
         "always_nodes": [],
         "summary_fields": {
-          "unified_job_template": { "id": 30, "name": "Prod release gate", "description": "Approve production release", "unified_job_type": "workflow_approval_template", "timeout": 3600 }
+          "unified_job_template": { "id": 30, "name": "Prod release gate", "description": "Approve production release", "unified_job_type": "workflow_approval", "timeout": 3600 }
         }
       },
       {
@@ -52,7 +52,7 @@
         "failure_nodes": [],
         "always_nodes": [],
         "summary_fields": {
-          "unified_job_template": { "id": 22, "name": "Smoke test", "unified_job_type": "job_template" }
+          "unified_job_template": { "id": 22, "name": "Smoke test", "unified_job_type": "job" }
         }
       }
     ]

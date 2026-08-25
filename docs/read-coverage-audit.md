@@ -106,7 +106,7 @@ Filters and projections should be added in resource-sized PRs after endpoint sem
 | --- | --- | --- |
 | Job and workflow execution actions | `job list/show`, stdout, events, hosts, and watch | No rebuild of the explicit job coverage above. |
 | Job templates | `template list/show/survey` | Add job, schedule, notification, label, instance-group, access, and activity reads. |
-| Workflow templates and template nodes | `workflow list/show/survey` and workflow-run `nodes` | Add template-node list/show and parent relationships. |
+| Workflow templates and template nodes | `workflow list/show/survey`, template-node `template-nodes/template-node`, and workflow-run `nodes` | Add parent relationships in P2. |
 | Projects and SCM updates | `project list/show/playbooks/updates/roles` plus unified job reads | Add project access, activity, notification, and related configuration reads. |
 | Inventories | `inventory list/show` plus nested topology and source reads | Add parent relationships and access/object-role reads. |
 | Hosts | Nested `inventory hosts` list only before this PR | The first PR adds top-level `host list/show` with cross-inventory resolution and detail reads. |
