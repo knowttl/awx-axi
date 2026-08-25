@@ -70,9 +70,9 @@ This slice reads only direct `inventory_updates` history; schedules, access/conf
 
 The current domain code reads only the relationships named in its public help and plans, so these remaining routes are genuine endpoint gaps rather than undocumented aliases.
 
-Workflow template-node inspection reads `workflow_job_template_nodes/<id>/` plus its direct `success_nodes/`, `failure_nodes/`, and `always_nodes/` child routes.
-The node serializer's exposed inventory, credential summaries or ids, execution-environment, launch prompt, approval-template summary, convergence, and edge fields are projected safely.
-Parent-node enumeration, labels, instance groups, dedicated credential relationship detail, and other workflow-template relationships remain deferred to P2 unless operators request them.
+Workflow template-node inspection reads `workflow_job_template_nodes/<id>/` plus its direct `credentials/`, `success_nodes/`, `failure_nodes/`, and `always_nodes/` child routes.
+The node serializer's exposed inventory, execution-environment, launch prompt, approval-template summary, convergence, and edge fields are projected safely, along with safe credential context from the dedicated relationship.
+Parent-node enumeration, labels, instance groups, and other workflow-template relationships remain deferred to P2 unless operators request them.
 
 ### P2: role and access inspection
 
