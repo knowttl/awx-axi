@@ -1,11 +1,13 @@
 /**
- * The `workflow` domain: workflow job templates and node rollups (design.md §7.6).
+ * The `workflow` domain: workflow job templates, template-node topology, and run node rollups (design.md §7.6).
  *
  * Workflow runs live under `job` (§7.2), so there is no singular/plural pair
  * like `workflow job` next to `workflow jobs`. `job show <workflow-run-id>`
  * carries the node rollup inline (§8.3), and `workflow nodes` is the escape hatch
  * for the full graph.
  */
+import { parse as parseYaml } from "yaml";
+
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { parseExtraVars } from "../template/index.js";
@@ -14,6 +16,12 @@ import {
   listOutput,
   type Row,
 } from "../../core/output.js";
+import {
+  REDACTION,
+  isSensitiveKey,
+  redact,
+  redactValue,
+} from "../../core/redact.js";
 import { pollUntilTerminal, succeeded } from "../../core/poll.js";
 import {
   defineDomain,
@@ -30,6 +38,10 @@ import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const NODES_LIMIT = 200;
+const PROMPT_MAX_DEPTH = 8;
+const PROMPT_MAX_ITEMS = 100;
+const PROMPT_MAX_KEY_LENGTH = 100;
+const PROMPT_MAX_STRING_LENGTH = 1000;
 
 const LIST_SCHEMA = {
   label: "workflow_job_templates",
@@ -433,6 +445,466 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+type RecordValue = Record<string, unknown>;
+
+function record(value: unknown): RecordValue {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as RecordValue)
+    : {};
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function booleanOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function formatReference(id: number | null, name: string | null): string | null {
+  if (id === null && name === null) {
+    return null;
+  }
+  if (id === null) {
+    return name;
+  }
+  return name === null ? String(id) : `${id} (${name})`;
+}
+
+function relationReference(value: unknown): string | null {
+  if (typeof value === "number") {
+    return String(value);
+  }
+  const relation = record(value);
+  return formatReference(
+    numberOrNull(relation.id),
+    stringOrNull(relation.name),
+  );
+}
+
+function toCredentialContext(raw: unknown): RecordValue {
+  const credential = record(raw);
+  const summary = record(credential.summary_fields);
+  return {
+    id: numberOrNull(credential.id),
+    name: stringOrNull(credential.name),
+    organization: relationReference(summary.organization ?? credential.organization),
+    credential_type: relationReference(
+      summary.credential_type ?? credential.credential_type,
+    ),
+    kind: stringOrNull(credential.kind),
+    managed: booleanOrNull(credential.managed),
+  };
+}
+
+function unifiedJobTemplate(
+  node: RecordValue,
+  summary: RecordValue,
+): RecordValue {
+  return record(summary.unified_job_template ?? node.unified_job_template);
+}
+
+function unifiedJobType(node: RecordValue, summary: RecordValue): string | null {
+  return stringOrNull(unifiedJobTemplate(node, summary).unified_job_type);
+}
+
+function isApprovalNode(node: RecordValue, summary: RecordValue): boolean {
+  const type = unifiedJobType(node, summary);
+  return type === "workflow_approval_template" || type === "workflow_approval";
+}
+
+function approvalDetails(node: RecordValue, summary: RecordValue): RecordValue | null {
+  if (!isApprovalNode(node, summary)) {
+    return null;
+  }
+  const ujt = unifiedJobTemplate(node, summary);
+  return {
+    id: numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
+    name: stringOrNull(ujt.name),
+    description: stringOrNull(ujt.description),
+    timeout: numberOrNull(ujt.timeout),
+  };
+}
+
+function safePromptValue(
+  value: unknown,
+  state = { remaining: PROMPT_MAX_ITEMS },
+  depth = 0,
+): unknown {
+  if (typeof value === "string") {
+    const safe = redact(value);
+    return safe.length <= PROMPT_MAX_STRING_LENGTH
+      ? safe
+      : `${safe.slice(0, PROMPT_MAX_STRING_LENGTH)}... (truncated, ${safe.length} chars total)`;
+  }
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "object") {
+    return value;
+  }
+  if (depth >= PROMPT_MAX_DEPTH) {
+    return { __awx_axi_omitted__: { reason: "depth_limit" } };
+  }
+
+  if (Array.isArray(value)) {
+    const output: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      if (state.remaining === 0) {
+        output.push({
+          __awx_axi_omitted__: {
+            reason: "item_limit",
+            count: value.length - index,
+          },
+        });
+        break;
+      }
+      state.remaining -= 1;
+      output.push(safePromptValue(value[index], state, depth + 1));
+    }
+    return output;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  const output: RecordValue = {};
+  for (let index = 0; index < entries.length; index += 1) {
+    if (state.remaining === 0) {
+      output.__awx_axi_omitted__ = {
+        reason: "item_limit",
+        count: entries.length - index,
+      };
+      break;
+    }
+    state.remaining -= 1;
+    const [key, child] = entries[index] as [string, unknown];
+    const boundedKey = key.length <= PROMPT_MAX_KEY_LENGTH
+      ? key
+      : `${key.slice(0, PROMPT_MAX_KEY_LENGTH)}... (truncated, ${key.length} chars total, item ${index})`;
+    output[boundedKey] = isSensitiveKey(key)
+      ? REDACTION
+      : safePromptValue(child, state, depth + 1);
+  }
+  return output;
+}
+
+function isSafelyRepresentablePromptValue(value: unknown): boolean {
+  const active = new WeakSet<object>();
+  const complete = new WeakSet<object>();
+  const stack: Array<{ value: unknown; exit: boolean }> = [
+    { value, exit: false },
+  ];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) {
+      break;
+    }
+    const item = current.value;
+    if (
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "boolean"
+    ) {
+      continue;
+    }
+    if (typeof item === "number") {
+      if (!Number.isFinite(item)) {
+        return false;
+      }
+      continue;
+    }
+    if (typeof item !== "object") {
+      return false;
+    }
+    if (current.exit) {
+      active.delete(item);
+      complete.add(item);
+      continue;
+    }
+    if (active.has(item)) {
+      return false;
+    }
+    if (complete.has(item)) {
+      continue;
+    }
+
+    const prototype = Object.getPrototypeOf(item);
+    if (
+      !Array.isArray(item) &&
+      prototype !== null &&
+      prototype !== Object.prototype
+    ) {
+      return false;
+    }
+    active.add(item);
+    stack.push({ value: item, exit: true });
+
+    if (Array.isArray(item)) {
+      for (let index = item.length - 1; index >= 0; index -= 1) {
+        stack.push({ value: item[index], exit: false });
+      }
+      continue;
+    }
+
+    const entries = Object.entries(item as RecordValue);
+    if (
+      entries.some(([key]) =>
+        key === "__proto__" || key === "constructor" || key === "prototype"
+      )
+    ) {
+      return false;
+    }
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      stack.push({ value: entries[index]?.[1], exit: false });
+    }
+  }
+
+  return true;
+}
+
+function parseSafePromptValue(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return safePromptValue(value);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch {
+    try {
+      parsed = parseYaml(value) as unknown;
+    } catch {
+      return REDACTION;
+    }
+  }
+
+  return isSafelyRepresentablePromptValue(parsed)
+    ? safePromptValue(parsed)
+    : REDACTION;
+}
+
+function safePromptString(value: unknown): string | null {
+  return typeof value === "string" ? safePromptValue(value) as string : null;
+}
+
+function promptFields(node: RecordValue): RecordValue {
+  return {
+    extra_data: parseSafePromptValue(node.extra_data),
+    survey_passwords: parseSafePromptValue(node.survey_passwords),
+    char_prompts: parseSafePromptValue(node.char_prompts),
+    limit: safePromptString(node.limit),
+    scm_branch: safePromptString(node.scm_branch),
+    job_type: safePromptString(node.job_type),
+    job_tags: safePromptString(node.job_tags),
+    skip_tags: safePromptString(node.skip_tags),
+    diff_mode: booleanOrNull(node.diff_mode),
+    verbosity: numberOrNull(node.verbosity),
+    forks: numberOrNull(node.forks),
+    job_slice_count: numberOrNull(node.job_slice_count),
+    timeout: numberOrNull(node.timeout),
+  };
+}
+
+function edgeIds(value: unknown): string | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const ids = value.filter((id): id is number => typeof id === "number");
+  return ids.length > 0 ? ids.join(",") : null;
+}
+
+function promptFieldNames(node: RecordValue): string | null {
+  const names: string[] = [];
+  for (const field of ["extra_data", "survey_passwords", "char_prompts"]) {
+    const value = node[field];
+    if (
+      value !== undefined &&
+      value !== null &&
+      (typeof value !== "object" || Object.keys(record(value)).length > 0)
+    ) {
+      names.push(field);
+    }
+  }
+  for (const field of [
+    "limit",
+    "scm_branch",
+    "job_type",
+    "job_tags",
+    "skip_tags",
+    "diff_mode",
+    "verbosity",
+    "forks",
+    "job_slice_count",
+    "timeout",
+  ]) {
+    if (node[field] !== undefined && node[field] !== null) {
+      names.push(field);
+    }
+  }
+  return names.length > 0 ? names.join(",") : null;
+}
+
+function toTemplateNodeRow(raw: unknown): Row {
+  const node = record(raw);
+  const summary = record(node.summary_fields);
+  const ujt = unifiedJobTemplate(node, summary);
+  const type = unifiedJobType(node, summary);
+
+  return {
+    id: numberOrNull(node.id) ?? 0,
+    identifier: stringOrNull(node.identifier),
+    unified_job_type: type,
+    unified_job_template: formatReference(
+      numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
+      stringOrNull(ujt.name),
+    ),
+    approval: isApprovalNode(node, summary)
+      ? formatReference(numberOrNull(ujt.id), stringOrNull(ujt.name))
+      : null,
+    approval_timeout: isApprovalNode(node, summary) ? numberOrNull(ujt.timeout) : null,
+    inventory: relationReference(summary.inventory ?? node.inventory),
+    execution_environment: relationReference(
+      summary.execution_environment ?? node.execution_environment,
+    ),
+    all_parents_must_converge: booleanOrNull(node.all_parents_must_converge),
+    prompt_fields: promptFieldNames(node),
+    success_nodes: edgeIds(node.success_nodes),
+    failure_nodes: edgeIds(node.failure_nodes),
+    always_nodes: edgeIds(node.always_nodes),
+  };
+}
+
+function toEdgeNode(raw: unknown): RecordValue {
+  const node = record(raw);
+  const summary = record(node.summary_fields);
+  const ujt = unifiedJobTemplate(node, summary);
+  const type = unifiedJobType(node, summary);
+
+  return {
+    id: numberOrNull(node.id),
+    identifier: stringOrNull(node.identifier),
+    unified_job_type: type,
+    unified_job_template: formatReference(
+      numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
+      stringOrNull(ujt.name),
+    ),
+    approval: isApprovalNode(node, summary)
+      ? formatReference(numberOrNull(ujt.id), stringOrNull(ujt.name))
+      : null,
+    all_parents_must_converge: booleanOrNull(node.all_parents_must_converge),
+  };
+}
+
+function* templateNodesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = positiveLimit(input.flags.limit, NODES_LIMIT, "template-nodes");
+  const workflow = yield* resolveId(input.args[0] ?? "", {
+    listRoute: "workflow_job_templates/",
+    noun: "workflow job template",
+    listCommand: "workflow list",
+    command: "workflow template-nodes",
+  });
+  const paged = yield* readPaged(
+    `workflow_job_templates/${workflow}/workflow_nodes/`,
+    {},
+    limit,
+  );
+
+  return listOutput({
+    label: "workflow_template_nodes",
+    rows: paged.rows.map(toTemplateNodeRow),
+    count: paged.count,
+    empty: `0 workflow template nodes found for workflow template ${workflow}`,
+    help: [
+      "Run `awx-axi workflow template-node <id>` for node detail and edge targets",
+      `Run \`awx-axi workflow show ${workflow}\` for workflow template settings`,
+    ],
+  });
+}
+
+function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
+  const id = workflowNodeId(input.args[0] ?? "", "workflow template node id");
+  const limit = positiveLimit(input.flags.limit, NODES_LIMIT, "template-node");
+  const detail = yield* read(`workflow_job_template_nodes/${id}/`);
+  if (detail.status !== 200) {
+    throw errorForResponse(detail, { subject: `workflow template node ${id}` });
+  }
+
+  const credentials = yield* readPaged(
+    `workflow_job_template_nodes/${id}/credentials/`,
+    {},
+    limit,
+  );
+  const success = yield* readPaged(
+    `workflow_job_template_nodes/${id}/success_nodes/`,
+    {},
+    limit,
+  );
+  const failure = yield* readPaged(
+    `workflow_job_template_nodes/${id}/failure_nodes/`,
+    {},
+    limit,
+  );
+  const always = yield* readPaged(
+    `workflow_job_template_nodes/${id}/always_nodes/`,
+    {},
+    limit,
+  );
+
+  const node = record(detail.body);
+  const summary = record(node.summary_fields);
+  const ujt = unifiedJobTemplate(node, summary);
+  const type = unifiedJobType(node, summary);
+  const workflowTemplateValue =
+    summary.workflow_job_template ?? node.workflow_job_template;
+  const workflowTemplate = relationReference(workflowTemplateValue);
+  const workflowTemplateId =
+    numberOrNull(record(workflowTemplateValue).id) ??
+    numberOrNull(workflowTemplateValue);
+  const fields: RecordValue = {
+    id,
+    identifier: stringOrNull(node.identifier),
+    workflow_template: workflowTemplate,
+    unified_job_type: type,
+    unified_job_template: formatReference(
+      numberOrNull(ujt.id) ?? numberOrNull(node.unified_job_template),
+      stringOrNull(ujt.name),
+    ),
+    approval: approvalDetails(node, summary),
+    inventory: relationReference(summary.inventory ?? node.inventory),
+    credentials: credentials.rows.map(toCredentialContext),
+    credentials_total: credentials.count ?? credentials.rows.length,
+    execution_environment: relationReference(
+      summary.execution_environment ?? node.execution_environment,
+    ),
+    all_parents_must_converge: booleanOrNull(node.all_parents_must_converge),
+    ...promptFields(node),
+    success_nodes: success.rows.map(toEdgeNode),
+    success_nodes_total: success.count ?? success.rows.length,
+    failure_nodes: failure.rows.map(toEdgeNode),
+    failure_nodes_total: failure.count ?? failure.rows.length,
+    always_nodes: always.rows.map(toEdgeNode),
+    always_nodes_total: always.count ?? always.rows.length,
+  };
+
+  const templateArgument = workflowTemplateId === null
+    ? "<id|name>"
+    : String(workflowTemplateId);
+  return detailOutput({
+    label: "workflow_template_node",
+    fields: redactValue(fields) as RecordValue,
+    help: [
+      `Run \`awx-axi workflow template-nodes ${templateArgument}\` to inspect the complete template graph`,
+      workflowTemplate === null
+        ? "Run `awx-axi workflow list` to find the workflow template"
+        : `Run \`awx-axi workflow show ${templateArgument}\` for template settings`,
+    ],
+  });
+}
+
 function* nodesPlan(input: SubcommandInput): Plan<DomainResult> {
   const runIdArg = input.args[0] ?? "";
   const runId = yield* resolveId(runIdArg, {
@@ -622,7 +1094,7 @@ function* deleteWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
 export const workflowDomain: Domain = defineDomain({
   name: "workflow",
   help: [
-    "workflow: workflow job templates and node rollups",
+    "workflow: workflow job templates, template graphs, and run node rollups",
     "",
     "Subcommands:",
     "  create   [<name>] [--organization <o>] [--confirm] [--dry-run]",
@@ -636,6 +1108,8 @@ export const workflowDomain: Domain = defineDomain({
     "  survey   <id|name>",
     "  launch   <id|name> [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  nodes    <run-id>",
+    "  template-nodes <id|name> [--limit <n>]   editable template graph",
+    "  template-node <id> [--limit <n>]         node detail and edges",
     "  node-create|node-edit|node-delete|node-link|node-add-approval",
     "  notification-add|notification-remove <id|name> --event <event> --notification-template <id|name>",
   ].join("\n"),
@@ -812,6 +1286,51 @@ export const workflowDomain: Domain = defineDomain({
       schema: { label: "nodes", defaultFields: ["id", "template", "job", "status"], fieldAllowlist: [] },
       suggestions: [],
       plan: nodesPlan,
+    },
+    {
+      name: "template-nodes",
+      help: [
+        "awx-axi workflow template-nodes <id|name> [--limit <n>]",
+        "",
+        "Lists editable nodes in a workflow job template. This is distinct from",
+        "`workflow nodes`, which inspects nodes of a workflow job run.",
+        "",
+        "Examples:",
+        "  awx-axi workflow template-nodes 10",
+        "  awx-axi workflow template-nodes \"Release pipeline\" --limit 50",
+      ].join("\n"),
+      flags: [
+        { name: "limit", description: "nodes to return", takesValue: true },
+      ],
+      positionals: { names: ["<id|name>"], required: 1 },
+      schema: {
+        label: "workflow_template_nodes",
+        defaultFields: ["id", "identifier", "unified_job_type", "unified_job_template", "prompt_fields", "success_nodes", "failure_nodes", "always_nodes"],
+        fieldAllowlist: [],
+      },
+      suggestions: [],
+      plan: templateNodesPlan,
+    },
+    {
+      name: "template-node",
+      help: [
+        "awx-axi workflow template-node <id> [--limit <n>]",
+        "",
+        "Shows one editable workflow-template node, its launch prompts,",
+        "credentials and runtime context, convergence setting, and edge targets.",
+        "This is distinct from `workflow nodes <run-id>`.",
+        "",
+        "Examples:",
+        "  awx-axi workflow template-node 71",
+        "  awx-axi workflow template-node 71 --limit 20",
+      ].join("\n"),
+      flags: [
+        { name: "limit", description: "credentials or edge targets to return per relation", takesValue: true },
+      ],
+      positionals: { names: ["<id>"], required: 1 },
+      schema: { label: "workflow_template_node", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: templateNodePlan,
     },
   ],
 });

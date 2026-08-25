@@ -1,0 +1,12 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4222-4244",
+  "$note": "Empty workflow job template node collection, preserving AWX pagination metadata when a template has no editable graph nodes.",
+  "status": 200,
+  "body": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}

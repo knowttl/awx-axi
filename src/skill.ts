@@ -43,7 +43,7 @@ All mutating commands preview the request as TOON by default.
 A mutation is sent only with \`--confirm\`, and the matching environment safety gate must also be enabled.
 
 Use \`job\` for unified job history, stdout, events, host summaries, cancellation, relaunch, and bounded polling.
-Use \`template\` and \`workflow\` to manage launch templates, workflow nodes and edges, notification associations, credentials, labels, instance groups, and launches.
+Use \`template\` and \`workflow\` to manage launch templates, inspect workflow-template nodes and topology separately from workflow-job-run nodes, manage edges and notification associations, credentials, labels, instance groups, and launches.
 Use \`project\`, \`inventory\`, \`host\`, \`group\`, \`inventory-source\`, and \`schedule\` to manage SCM projects, inventory topology and sources, hosts across inventories, groups and source history, bulk host operations, syncs, schedules, and schedule associations.
 For the AWX 24.6.1 smart inventory API, use \`inventory create <name> --kind smart --organization <id|name> --host-filter 'name__icontains=web'\`; supplying \`--host-filter\` implies \`--kind smart\`.
 AWX documents smart inventories as deprecated and encourages constructed inventories for new configurations, but this controller's smart inventory support remains available.
@@ -75,7 +75,7 @@ Do not use write commands against a controller that has been designated read-onl
 commands[24 total]:
 \`job\`: list, show, stdout, events, hosts, launch, cancel, relaunch, watch.
 \`template\`: create, edit, copy, delete, list, show, object-roles, survey, launch, credential-add/remove, instance-group-add/remove, label-add/remove, notification-add/remove.
-\`workflow\`: create, edit, copy, delete, list, show, object-roles, survey, launch, nodes, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
+\`workflow\`: create, edit, copy, delete, list, show, object-roles, survey, launch, nodes, template-nodes, template-node, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
 \`approval\`: list, show, approve, deny.
 \`project\`: create, edit, copy, delete, list, show, playbooks, updates, roles, sync, notification-add/remove.
 \`inventory\`: create, edit, delete, sync, host-create/edit/delete, host-bulk-create/delete, group-create/edit/delete, group-add-host/remove-host, group-add-child/remove-child, source-create/edit/delete, source-credential-add/remove, source-notification-add/remove, list, show, groups, hosts, sources, updates, constructed-list, constructed-show.
@@ -125,6 +125,7 @@ Run \`npx -y awx-axi --help\` for top-level usage, or \`npx -y awx-axi <command>
 - Use \`host list\` to search visible hosts across inventories, or \`host show <id|name>\` for groups, variables, and facts.
 - Use \`group list\` and \`group show <id|name>\` for direct host and child-group membership with parsed variables.
 - Use \`inventory-source list\` and \`inventory-source show <id|name>\` for source configuration, update state, and direct update history.
+- Use \`workflow template-nodes <id|name>\` and \`workflow template-node <id>\` for editable workflow-template nodes, prompts, runtime context, convergence, and success/failure/always edges. These are distinct from \`workflow nodes <run-id>\`, which reads a workflow job run.
 - \`notification list\` and \`activity-stream list\` remain read-only because AWX does not expose object mutation endpoints for those generated records.`;
 
   return `${frontmatter}\n\n${body}\n`;

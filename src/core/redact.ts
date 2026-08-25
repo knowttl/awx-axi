@@ -37,6 +37,10 @@ export function redact(text: string): string {
  */
 const SENSITIVE_KEY = /(password|api[-_]?key|access[-_]?key|private[-_]?key|secret|token|passphrase)/i;
 
+export function isSensitiveKey(key: string): boolean {
+  return SENSITIVE_KEY.test(key);
+}
+
 export function redactValue(value: unknown): unknown {
   if (value === null || value === undefined) {
     return value;
@@ -54,7 +58,7 @@ export function redactValue(value: unknown): unknown {
     const input = value as Record<string, unknown>;
     const output: Record<string, unknown> = {};
     for (const [key, raw] of Object.entries(input)) {
-      if (SENSITIVE_KEY.test(key)) {
+      if (isSensitiveKey(key)) {
         output[key] = REDACTION;
       } else {
         output[key] = redactValue(raw);
