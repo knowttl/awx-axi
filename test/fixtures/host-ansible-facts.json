@@ -1,0 +1,11 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2338-2347",
+  "$note": "The host ansible_facts endpoint returns the most recent facts object; sensitive-looking fact keys are redacted before output.",
+  "status": 200,
+  "body": {
+    "ansible_distribution": "Debian",
+    "ansible_hostname": "web-01",
+    "ansible_user_password": "do-not-print"
+  }
+}

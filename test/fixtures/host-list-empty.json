@@ -1,0 +1,12 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2330-2340",
+  "$note": "The AWX host collection returns an empty paginated envelope when filters match no visible hosts.",
+  "status": 200,
+  "body": {
+    "count": 0,
+    "next": null,
+    "previous": null,
+    "results": []
+  }
+}
