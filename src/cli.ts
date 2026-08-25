@@ -39,6 +39,8 @@ import { activityStreamDomain } from "./domains/activity-stream/index.js";
 import { teamDomain } from "./domains/team/index.js";
 import { roleDomain } from "./domains/role/index.js";
 import { hostDomain } from "./domains/host/index.js";
+import { groupDomain } from "./domains/group/index.js";
+import { inventorySourceDomain } from "./domains/inventory-source/index.js";
 
 export const DESCRIPTION = "Inspect and run AWX automation from the shell";
 
@@ -62,6 +64,8 @@ export const DOMAINS: readonly Domain[] = [
   projectDomain,
   inventoryDomain,
   hostDomain,
+  groupDomain,
+  inventorySourceDomain,
   scheduleDomain,
   executionEnvironmentDomain,
   userDomain,

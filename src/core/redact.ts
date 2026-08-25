@@ -35,7 +35,7 @@ export function redact(text: string): string {
  * - keys that look secret are replaced with `***`
  * - arrays and objects are walked recursively
  */
-const SENSITIVE_KEY = /(password|api[-_]?key|secret|token|passphrase)/i;
+const SENSITIVE_KEY = /(password|api[-_]?key|access[-_]?key|private[-_]?key|secret|token|passphrase)/i;
 
 export function redactValue(value: unknown): unknown {
   if (value === null || value === undefined) {

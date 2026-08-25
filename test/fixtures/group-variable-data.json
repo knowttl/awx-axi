@@ -1,0 +1,11 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2319-2347",
+  "$note": "Group variable_data parses stored JSON or YAML into an object before awx-axi recursively redacts it.",
+  "status": 200,
+  "body": {
+    "ansible_port": 22,
+    "password": "do-not-print",
+    "nested": { "api_key": "also-do-not-print" }
+  }
+}

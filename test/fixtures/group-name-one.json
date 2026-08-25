@@ -1,0 +1,20 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2026-2060",
+  "$note": "A name-filtered group query with one visible result resolves a group without a named URL.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 31,
+        "name": "web",
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory", "organization_id": 1 }
+        }
+      }
+    ]
+  }
+}

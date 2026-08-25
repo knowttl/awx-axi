@@ -60,8 +60,9 @@ export function* resolveId(
     );
   }
 
+  const total = page.count ?? matches.length;
   const first = matches[0] as NamedObject;
-  if (matches.length === 1) {
+  if (total === 1 && matches.length === 1) {
     return first.id;
   }
 
@@ -73,7 +74,6 @@ export function* resolveId(
   // §7.3 resolves by filtered query: with more same-named objects than the
   // controller's page size, the rows on hand are one page and saying so is the
   // only honest report.
-  const total = page.count ?? matches.length;
   const partial = total > matches.length;
 
   throw new AwxAxiError(
@@ -95,6 +95,7 @@ interface NamedObject {
   readonly id: number;
   readonly name: string;
   readonly organization: string;
+  readonly inventory?: string;
 }
 
 /** One filtered page: the rows it carried, and the server's own total. */
@@ -132,12 +133,32 @@ function toNamedObject(row: unknown): NamedObject {
   const record = (row ?? {}) as Record<string, unknown>;
   const summary = (record.summary_fields ?? {}) as Record<string, unknown>;
   const organization = (summary.organization ?? {}) as Record<string, unknown>;
+  const inventory = (summary.inventory ?? {}) as Record<string, unknown>;
+  const inventoryId =
+    typeof inventory.id === "number" ? inventory.id : undefined;
+  const inventoryName =
+    typeof inventory.name === "string" ? inventory.name : undefined;
+  const inventoryReference =
+    inventoryId === undefined && inventoryName === undefined
+      ? undefined
+      : inventoryId === undefined
+        ? inventoryName
+        : inventoryName === undefined
+          ? String(inventoryId)
+          : `${inventoryId} (${inventoryName})`;
 
   return {
     id: typeof record.id === "number" ? record.id : 0,
     name: typeof record.name === "string" ? record.name : "",
     organization:
-      typeof organization.name === "string" ? organization.name : "",
+      typeof organization.name === "string"
+        ? organization.name
+        : typeof inventory.organization_id === "number"
+          ? String(inventory.organization_id)
+          : "",
+    ...(inventoryReference === undefined
+      ? {}
+      : { inventory: inventoryReference }),
   };
 }
 

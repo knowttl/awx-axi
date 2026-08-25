@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2203-2207",
+  "$note": "An empty filtered inventory source list keeps the AWX pagination envelope and definitive zero result.",
+  "status": 200,
+  "body": { "count": 0, "next": null, "previous": null, "results": [] }
+}

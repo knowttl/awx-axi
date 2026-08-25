@@ -1,0 +1,27 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/main/models/inventory.py:1103-1116",
+  "$note": "Inventory source names are scoped by inventory, so duplicate visible names must be refused deterministically.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 21,
+        "name": "Nightly sync",
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Production inventory", "organization_id": 1 }
+        }
+      },
+      {
+        "id": 41,
+        "name": "Nightly sync",
+        "summary_fields": {
+          "inventory": { "id": 12, "name": "Staging inventory", "organization_id": 2 }
+        }
+      }
+    ]
+  }
+}

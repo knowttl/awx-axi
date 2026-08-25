@@ -1,0 +1,16 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2026-2060",
+  "$note": "Group detail includes identity, description, inventory, and related links while variables use a dedicated route.",
+  "status": 200,
+  "body": {
+    "id": 31,
+    "type": "group",
+    "name": "web",
+    "description": "Web tier",
+    "inventory": 11,
+    "summary_fields": {
+      "inventory": { "id": 11, "name": "Datacenter inventory", "organization_id": 1 }
+    }
+  }
+}

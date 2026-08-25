@@ -1,0 +1,35 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2349-2443",
+  "$note": "Inventory source list rows expose source status and inventory context while related configuration stays in detail.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 21,
+        "name": "Nightly EC2 sync",
+        "source": "ec2",
+        "status": "successful",
+        "inventory": 11,
+        "summary_fields": {
+          "inventory": { "id": 11, "name": "Datacenter inventory", "organization_id": 1 },
+          "source_project": { "id": 4, "name": "infra-playbooks" },
+          "credential": { "id": 7, "name": "AWS cloud" }
+        }
+      },
+      {
+        "id": 22,
+        "name": "Staging file sync",
+        "source": "file",
+        "status": "never updated",
+        "inventory": 12,
+        "summary_fields": {
+          "inventory": { "id": 12, "name": "Staging inventory", "organization_id": 2 }
+        }
+      }
+    ]
+  }
+}

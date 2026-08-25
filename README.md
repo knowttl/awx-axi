@@ -110,6 +110,8 @@ automation - so read the preview before you opt in.
 | `project` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync`, notification associations |
 | `inventory` | `create`, `edit`, `delete`, `sync`, host CRUD and bulk operations, group topology, source management, `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
 | `host` | `list`, `show` across all visible inventories and organizations |
+| `group` | `list`, `show` with direct hosts, child groups, and variables |
+| `inventory-source` | `list`, `show` with safe configuration and direct update history |
 | `schedule` | `create`, `edit`, `delete`, `list`, `show`, credential/label/instance-group associations |
 | `system-job` | `cancel`, `list`, `show`, `events`, `notifications` |
 | `system-job-template` | `launch`, `list`, `show` |
@@ -220,6 +222,10 @@ awx-axi inventory host-create web-01 --inventory Production
 awx-axi inventory host-edit web-01 --disabled
 awx-axi host list --search web --inventory 11
 awx-axi host show web-01
+awx-axi group list --inventory 11
+awx-axi group show web
+awx-axi inventory-source list --source ec2 --status successful
+awx-axi inventory-source show "Nightly EC2 sync"
 awx-axi inventory group-create web --inventory Production
 awx-axi inventory source-create cloud --inventory Production --source ec2
 awx-axi schedule list

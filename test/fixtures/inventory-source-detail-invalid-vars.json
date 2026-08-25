@@ -1,0 +1,38 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:2349-2443",
+  "$note": "Malformed source variables are omitted rather than risking disclosure.",
+  "status": 200,
+  "body": {
+    "id": 21,
+    "type": "inventory_source",
+    "name": "Nightly EC2 sync",
+    "description": "Cloud inventory refresh",
+    "inventory": 11,
+    "source": "ec2",
+    "source_path": "",
+    "source_vars": "regions:\n  - us-east-1\ntoken: [malformed-do-not-print",
+    "scm_branch": "main",
+    "enabled_var": "status",
+    "enabled_value": "running",
+    "host_filter": "",
+    "overwrite": true,
+    "overwrite_vars": false,
+    "update_on_launch": true,
+    "update_cache_timeout": 3600,
+    "timeout": 30,
+    "verbosity": 1,
+    "limit": "web-*",
+    "status": "successful",
+    "last_update_failed": false,
+    "last_updated": "2026-08-20T10:30:00Z",
+    "summary_fields": {
+      "inventory": { "id": 11, "name": "Datacenter inventory", "organization_id": 1 },
+      "organization": { "id": 1, "name": "Operations" },
+      "source_project": { "id": 4, "name": "infra-playbooks" },
+      "credential": { "id": 7, "name": "AWS cloud" },
+      "current_update": { "id": 902, "name": "current sync", "status": "running", "failed": false },
+      "last_update": { "id": 901, "name": "initial sync", "status": "successful", "failed": false }
+    }
+  }
+}
