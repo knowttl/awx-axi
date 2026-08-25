@@ -1,0 +1,60 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4222-4272",
+  "$note": "Workflow job template node collection with a regular unified job template node, an approval node, prompt configuration, convergence, and all three edge id fields.",
+  "status": 200,
+  "body": {
+    "count": 3,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 71,
+        "workflow_job_template": 10,
+        "identifier": "build",
+        "unified_job_template": 12,
+        "inventory": 11,
+        "credentials": [7],
+        "execution_environment": 5,
+        "instance_groups": [2],
+        "all_parents_must_converge": false,
+        "success_nodes": [72],
+        "failure_nodes": [],
+        "always_nodes": [74],
+        "summary_fields": {
+          "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job_template" },
+          "inventory": { "id": 11, "name": "Production inventory" },
+          "credentials": [ { "id": 7, "name": "SSH deploy", "kind": "ssh" } ],
+          "execution_environment": { "id": 5, "name": "Control EE", "image": "quay.io/example/control-ee" },
+          "instance_groups": [ { "id": 2, "name": "default", "is_container_group": false } ]
+        }
+      },
+      {
+        "id": 72,
+        "workflow_job_template": 10,
+        "identifier": "approval",
+        "unified_job_template": 30,
+        "all_parents_must_converge": true,
+        "success_nodes": [],
+        "failure_nodes": [73],
+        "always_nodes": [],
+        "summary_fields": {
+          "unified_job_template": { "id": 30, "name": "Prod release gate", "description": "Approve production release", "unified_job_type": "workflow_approval_template", "timeout": 3600 }
+        }
+      },
+      {
+        "id": 74,
+        "workflow_job_template": 10,
+        "identifier": "smoke",
+        "unified_job_template": 22,
+        "all_parents_must_converge": false,
+        "success_nodes": [],
+        "failure_nodes": [],
+        "always_nodes": [],
+        "summary_fields": {
+          "unified_job_template": { "id": 22, "name": "Smoke test", "unified_job_type": "job_template" }
+        }
+      }
+    ]
+  }
+}

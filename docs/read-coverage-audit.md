@@ -2,9 +2,12 @@
 
 This audit starts the read-coverage initiative for AWX 24.6.1.
 
+**P1 status: complete through workflow-template node inspection.**
+P2 parent and relationship reads, RBAC, activity/configuration inspection, and broad filter and projection expansion remain deferred.
+
 Evidence was checked against the registered domains in `src/cli.ts`, every domain declaration under `src/domains/`, the read/write request plans, `docs/design.md`, the full-write change in commit `499b2aa`, the smart-inventory change in commit `1589518`, and AWX source at tag `24.6.1`.
 
-The AWX source checks used `awx/api/urls/*.py`, `awx/api/views/__init__.py`, `awx/api/serializers.py`, `awx/main/models/inventory.py`, and the tagged REST API filtering, searching, and sorting documentation.
+The AWX source checks used `awx/api/urls/*.py`, `awx/api/views/__init__.py`, `awx/api/serializers.py`, `awx/main/models/inventory.py`, `awx/main/models/workflow.py`, and the tagged REST API filtering, searching, and sorting documentation.
 
 ## Confirmed existing coverage
 
@@ -46,8 +49,9 @@ The commands use the global list endpoints for deterministic id-or-name resoluti
 `workflow node-create`, `workflow node-edit`, `workflow node-delete`, and edge operations mutate workflow template nodes, while `workflow nodes` reads nodes for a workflow job run rather than the editable template graph.
 
 AWX exposes `workflow_job_templates/<id>/workflow_nodes/` in `awx/api/urls/workflow_job_template.py`.
+The tagged `awx/api/urls/workflow_job_template_node.py` defines the numeric node detail and `success_nodes`, `failure_nodes`, and `always_nodes` relationships used by the inspection surface.
 
-A later PR should add template-node inspection without changing the existing workflow-run node command.
+Implemented in the final P1b slice as `workflow template-nodes <id|name>` and `workflow template-node <id>`, without changing the existing workflow-run `workflow nodes <run-id>` command.
 
 ### P2: parent and relationship reads
 
@@ -65,6 +69,10 @@ AWX exposes inventory-source updates, activity stream, schedules, credentials, g
 This slice reads only direct `inventory_updates` history; schedules, access/configuration relationships, groups, hosts, notifications, and activity remain P2.
 
 The current domain code reads only the relationships named in its public help and plans, so these remaining routes are genuine endpoint gaps rather than undocumented aliases.
+
+Workflow template-node inspection reads `workflow_job_template_nodes/<id>/` plus its direct `success_nodes/`, `failure_nodes/`, and `always_nodes/` child routes.
+The node serializer's exposed inventory, credential summaries or ids, execution-environment, launch prompt, approval-template summary, convergence, and edge fields are projected safely.
+Parent-node enumeration, labels, instance groups, dedicated credential relationship detail, and other workflow-template relationships remain deferred to P2 unless operators request them.
 
 ### P2: role and access inspection
 
@@ -118,9 +126,10 @@ Filters and projections should be added in resource-sized PRs after endpoint sem
 
 1. `host` inspection: cross-inventory list and unambiguous show with groups, variables, facts, redaction, help, and read-only tests. Implemented.
 2. `group` and `inventory-source` inspection: list/show plus direct hosts, children, updates, and variable data where the endpoint contract is verified. Implemented in this slice.
-3. Workflow-template node reads and high-value parent relationships for templates, projects, inventories, and sources. This is the next separate P1b slice; keep it out of this PR.
-4. RBAC access-list, object-role, membership, and role-scope inspection.
-5. Host/group/inventory/source activity and operator-facing system/configuration reads.
-6. Resource-sized filter and projection improvements, each backed by AWX 24.6.1 source and behavior tests.
+3. Workflow-template node reads and high-value parent relationships for templates, projects, inventories, and sources. Workflow-template node list/show is complete in this final P1b slice; parent relationships remain deferred.
+4. RBAC access-list, object-role, membership, and role-scope inspection remains deferred to P2.
+5. Host/group/inventory/source activity and operator-facing system/configuration reads remain deferred to P2.
+6. Resource-sized filter and projection improvements, each backed by AWX 24.6.1 source and behavior tests, remain deferred to P2.
 
-This document intentionally keeps workflow-template node reads and the optional P2 relationships out of this slice.
+This final P1b slice completes workflow-template node reads.
+P2 parent and relationship reads, RBAC, activity/configuration inspection, and broad filter and projection expansion remain explicitly deferred.

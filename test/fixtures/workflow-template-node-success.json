@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2993-3055",
+  "$note": "Success-edge child collection for a template node, using the AWX relation endpoint and the node serializer to identify the target node.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 72,
+        "workflow_job_template": 10,
+        "identifier": "approval",
+        "unified_job_template": 30,
+        "all_parents_must_converge": true,
+        "summary_fields": {
+          "unified_job_template": { "id": 30, "name": "Prod release gate", "unified_job_type": "workflow_approval_template", "timeout": 3600 }
+        }
+      }
+    ]
+  }
+}

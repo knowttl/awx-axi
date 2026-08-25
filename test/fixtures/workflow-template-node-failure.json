@@ -1,0 +1,23 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2993-3055",
+  "$note": "Failure-edge child collection for a template node, showing that a target node is read from the dedicated AWX relationship endpoint.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 73,
+        "workflow_job_template": 10,
+        "identifier": "rollback",
+        "unified_job_template": 22,
+        "all_parents_must_converge": false,
+        "summary_fields": {
+          "unified_job_template": { "id": 22, "name": "Rollback release", "unified_job_type": "job_template" }
+        }
+      }
+    ]
+  }
+}

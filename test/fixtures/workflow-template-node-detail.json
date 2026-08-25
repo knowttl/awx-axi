@@ -1,0 +1,46 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:4073-4244",
+  "$note": "Detailed template node payload showing the inherited launch configuration fields, nested prompt data, protected survey values, runtime relations, convergence, and edge ids.",
+  "status": 200,
+  "body": {
+    "id": 71,
+    "workflow_job_template": 10,
+    "identifier": "build",
+    "unified_job_template": 12,
+    "inventory": 11,
+    "credentials": [7],
+    "execution_environment": 5,
+    "instance_groups": [2],
+    "all_parents_must_converge": true,
+    "extra_data": {
+      "release": "2026.07",
+      "nested": { "password": "do-not-print", "url": "https://user:secret@scm.example/repo" },
+      "items": [ { "api_key": "also-do-not-print" } ],
+      "object": { "api_key": "also-do-not-print" }
+    },
+    "survey_passwords": { "vault_password": "$encrypted$vault-value" },
+    "char_prompts": { "limit": "web*", "nested": { "private_key": "block-do-not-print" } },
+    "limit": "web*",
+    "scm_branch": "release",
+    "job_type": "run",
+    "job_tags": "deploy",
+    "skip_tags": "never",
+    "diff_mode": false,
+    "verbosity": 2,
+    "forks": 5,
+    "job_slice_count": 1,
+    "timeout": 900,
+    "success_nodes": [72],
+    "failure_nodes": [73],
+    "always_nodes": [74],
+    "summary_fields": {
+      "workflow_job_template": { "id": 10, "name": "Release pipeline" },
+      "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job_template" },
+      "inventory": { "id": 11, "name": "Production inventory" },
+      "credentials": [ { "id": 7, "name": "SSH deploy", "kind": "ssh", "credential_type_id": 1 } ],
+      "execution_environment": { "id": 5, "name": "Control EE", "image": "quay.io/example/control-ee" },
+      "instance_groups": [ { "id": 2, "name": "default", "is_container_group": false } ]
+    }
+  }
+}
