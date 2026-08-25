@@ -222,6 +222,101 @@ describe("workflow template-node inspection", () => {
     expect(run.stdout).not.toContain("$encrypted$vault-value");
   });
 
+  it("parses YAML prompts while recursively redacting secret block and list values", async () => {
+    const detail = {
+      status: 200,
+      body: {
+        id: 71,
+        workflow_job_template: 10,
+        extra_data: [
+          "release: 2026.07",
+          "targets:",
+          "  - web",
+          "  - worker",
+          "password: |",
+          "  yaml-password-do-not-print",
+          "nested:",
+          "  - environment: production",
+          "  - private_key: yaml-key-do-not-print",
+        ].join("\n"),
+        summary_fields: {},
+      },
+    };
+    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+
+    const run = await runCli(
+      ["workflow", "template-node", "71"],
+      { script: [detail, empty, empty, empty, empty] },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("release: 2026.07");
+    expect(run.stdout).toContain('targets[2]: web,worker');
+    expect(run.stdout).toContain("environment: production");
+    expect(run.stdout).toContain("password: ***");
+    expect(run.stdout).toContain("private_key: ***");
+    expect(run.stdout).not.toContain("yaml-password-do-not-print");
+    expect(run.stdout).not.toContain("yaml-key-do-not-print");
+  });
+
+  it("bounds oversized YAML prompts after parsing", async () => {
+    const fields = ["password: yaml-secret-do-not-print"];
+    for (let index = 0; index < 1000; index += 1) {
+      fields.push(`field_${String(index).padStart(4, "0")}: value-${index}`);
+    }
+    const detail = {
+      status: 200,
+      body: {
+        id: 71,
+        workflow_job_template: 10,
+        extra_data: fields.join("\n"),
+        summary_fields: {},
+      },
+    };
+    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+
+    const run = await runCli(
+      ["workflow", "template-node", "71"],
+      { script: [detail, empty, empty, empty, empty] },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("password: ***");
+    expect(run.stdout).toContain("reason: item_limit");
+    expect(run.stdout).toContain("count: 901");
+    expect(run.stdout).not.toContain("yaml-secret-do-not-print");
+    expect(run.stdout).not.toContain("field_0999");
+    expect(run.stdout.length).toBeLessThan(10_000);
+  });
+
+  it("redacts unsafe YAML objects, prototype keys, and cyclic aliases wholesale", async () => {
+    const detail = {
+      status: 200,
+      body: {
+        id: 71,
+        workflow_job_template: 10,
+        extra_data: "__proto__:\n  polluted: parser-secret-do-not-print",
+        survey_passwords: "unsafe: !!set\n  parser-set-secret: null",
+        char_prompts: "cycle: &cycle\n  nested: *cycle",
+        summary_fields: {},
+      },
+    };
+    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+
+    const run = await runCli(
+      ["workflow", "template-node", "71"],
+      { script: [detail, empty, empty, empty, empty] },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("extra_data: ***");
+    expect(run.stdout).toContain("survey_passwords: ***");
+    expect(run.stdout).toContain("char_prompts: ***");
+    expect(run.stdout).not.toContain("polluted");
+    expect(run.stdout).not.toContain("parser-secret-do-not-print");
+    expect(run.stdout).not.toContain("parser-set-secret");
+  });
+
   it("bounds very large prompt objects with explicit omission metadata", async () => {
     const extraData: Record<string, string> = { password: "do-not-print" };
     for (let index = 0; index < 1000; index += 1) {

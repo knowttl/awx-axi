@@ -6,6 +6,8 @@
  * carries the node rollup inline (§8.3), and `workflow nodes` is the escape hatch
  * for the full graph.
  */
+import { parse as parseYaml } from "yaml";
+
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { parseExtraVars } from "../template/index.js";
@@ -589,15 +591,100 @@ function safePromptValue(
   return output;
 }
 
+function isSafelyRepresentablePromptValue(value: unknown): boolean {
+  const active = new WeakSet<object>();
+  const complete = new WeakSet<object>();
+  const stack: Array<{ value: unknown; exit: boolean }> = [
+    { value, exit: false },
+  ];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) {
+      break;
+    }
+    const item = current.value;
+    if (
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "boolean"
+    ) {
+      continue;
+    }
+    if (typeof item === "number") {
+      if (!Number.isFinite(item)) {
+        return false;
+      }
+      continue;
+    }
+    if (typeof item !== "object") {
+      return false;
+    }
+    if (current.exit) {
+      active.delete(item);
+      complete.add(item);
+      continue;
+    }
+    if (active.has(item)) {
+      return false;
+    }
+    if (complete.has(item)) {
+      continue;
+    }
+
+    const prototype = Object.getPrototypeOf(item);
+    if (
+      !Array.isArray(item) &&
+      prototype !== null &&
+      prototype !== Object.prototype
+    ) {
+      return false;
+    }
+    active.add(item);
+    stack.push({ value: item, exit: true });
+
+    if (Array.isArray(item)) {
+      for (let index = item.length - 1; index >= 0; index -= 1) {
+        stack.push({ value: item[index], exit: false });
+      }
+      continue;
+    }
+
+    const entries = Object.entries(item as RecordValue);
+    if (
+      entries.some(([key]) =>
+        key === "__proto__" || key === "constructor" || key === "prototype"
+      )
+    ) {
+      return false;
+    }
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      stack.push({ value: entries[index]?.[1], exit: false });
+    }
+  }
+
+  return true;
+}
+
 function parseSafePromptValue(value: unknown): unknown {
   if (typeof value !== "string") {
     return safePromptValue(value);
   }
+
+  let parsed: unknown;
   try {
-    return safePromptValue(JSON.parse(value) as unknown);
+    parsed = JSON.parse(value) as unknown;
   } catch {
-    return REDACTION;
+    try {
+      parsed = parseYaml(value) as unknown;
+    } catch {
+      return REDACTION;
+    }
   }
+
+  return isSafelyRepresentablePromptValue(parsed)
+    ? safePromptValue(parsed)
+    : REDACTION;
 }
 
 function safePromptString(value: unknown): string | null {
