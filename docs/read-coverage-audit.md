@@ -16,7 +16,8 @@ The inventory host surface already supports `--search`, `--limit`, and optional 
 
 Every registered domain has an existing list and show pair unless the noun is an intentionally generated history surface with the same read-only pair.
 
-The 19 registered domains are `job`, `template`, `workflow`, `organization`, `system-job-template`, `system-job`, `credential`, `approval`, `ad-hoc`, `project`, `inventory`, `schedule`, `execution-environment`, `user`, `notification`, `notification-template`, `activity-stream`, `team`, and `role`.
+The audit baseline had 19 registered domains: `job`, `template`, `workflow`, `organization`, `system-job-template`, `system-job`, `credential`, `approval`, `ad-hoc`, `project`, `inventory`, `schedule`, `execution-environment`, `user`, `notification`, `notification-template`, `activity-stream`, `team`, and `role`.
+This first slice adds `host`, bringing the shipped total to 20 AWX domains.
 
 ## Prioritized verified gaps
 

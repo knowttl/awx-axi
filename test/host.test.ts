@@ -146,6 +146,37 @@ describe("host domain", () => {
     expect(run.stdout).toContain("awx-axi host show 501");
   });
 
+  it("does not silently select the only ambiguous match returned on a partial page", async () => {
+    const run = await runCli(["host", "show", "web-01.example.com"], {
+      script: [
+        {
+          status: 200,
+          body: {
+            count: 2,
+            next: "/api/v2/hosts/?name=web-01.example.com&page=2",
+            previous: null,
+            results: [
+              {
+                id: 501,
+                name: "web-01.example.com",
+                inventory: 11,
+                summary_fields: {
+                  inventory: { id: 11, name: "Production inventory" },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: AMBIGUOUS_NAME");
+    expect(run.stdout).toContain("2 hosts are named");
+    expect(run.stdout).toContain("Only 1 of the 2 candidates are listed above");
+    expect(run.transport.requests).toHaveLength(1);
+  });
+
   it("redacts sensitive variables and facts", async () => {
     const run = await runCli(["host", "show", "501"], {
       script: [

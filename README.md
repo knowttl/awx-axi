@@ -109,6 +109,7 @@ automation - so read the preview before you opt in.
 | `ad-hoc` | `launch`, `list`, `show`, `events`, `stdout` |
 | `project` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync`, notification associations |
 | `inventory` | `create`, `edit`, `delete`, `sync`, host CRUD and bulk operations, group topology, source management, `list`, `show`, `groups`, `hosts`, `sources`, `updates`, `constructed-list`, `constructed-show` |
+| `host` | `list`, `show` across all visible inventories and organizations |
 | `schedule` | `create`, `edit`, `delete`, `list`, `show`, credential/label/instance-group associations |
 | `system-job` | `cancel`, `list`, `show`, `events`, `notifications` |
 | `system-job-template` | `launch`, `list`, `show` |
@@ -217,6 +218,8 @@ awx-axi inventory edit base-inventory --description "Updated description"
 awx-axi inventory sync base-inventory --wait
 awx-axi inventory host-create web-01 --inventory Production
 awx-axi inventory host-edit web-01 --disabled
+awx-axi host list --search web --inventory 11
+awx-axi host show web-01
 awx-axi inventory group-create web --inventory Production
 awx-axi inventory source-create cloud --inventory Production --source ec2
 awx-axi schedule list

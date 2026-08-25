@@ -209,11 +209,11 @@ function* resolveHost(value: string): Plan<number> {
     );
   }
 
-  if (page.matches.length === 1) {
+  const total = page.count ?? page.matches.length;
+  if (total === 1 && page.matches.length === 1) {
     return page.matches[0]!.id;
   }
 
-  const total = page.count ?? page.matches.length;
   const partial = total > page.matches.length;
   const first = page.matches[0]!;
   throw new AwxAxiError(
