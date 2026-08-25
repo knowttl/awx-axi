@@ -9,7 +9,6 @@
     "identifier": "build",
     "unified_job_template": 12,
     "inventory": 11,
-    "credentials": [7],
     "execution_environment": 5,
     "instance_groups": [2],
     "all_parents_must_converge": true,
@@ -38,7 +37,6 @@
       "workflow_job_template": { "id": 10, "name": "Release pipeline" },
       "unified_job_template": { "id": 12, "name": "Deploy web tier", "unified_job_type": "job" },
       "inventory": { "id": 11, "name": "Production inventory" },
-      "credentials": [ { "id": 7, "name": "SSH deploy", "kind": "ssh", "credential_type_id": 1 } ],
       "execution_environment": { "id": 5, "name": "Control EE", "image": "quay.io/example/control-ee" },
       "instance_groups": [ { "id": 2, "name": "default", "is_container_group": false } ]
     }

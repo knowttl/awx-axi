@@ -479,48 +479,19 @@ function relationReference(value: unknown): string | null {
   );
 }
 
-function relationValues(
-  node: RecordValue,
-  summary: RecordValue,
-  field: string,
-): readonly unknown[] {
-  const summaryValues = summary[field];
-  if (Array.isArray(summaryValues) && summaryValues.length > 0) {
-    return summaryValues;
-  }
-  const values = node[field];
-  return Array.isArray(values) ? values : [];
-}
-
-function relationList(
-  node: RecordValue,
-  summary: RecordValue,
-  field: string,
-): string | null {
-  const references = relationValues(node, summary, field)
-    .map(relationReference)
-    .filter((value): value is string => value !== null);
-  return references.length > 0 ? references.join(",") : null;
-}
-
-function relationDetails(
-  node: RecordValue,
-  summary: RecordValue,
-  field: string,
-): RecordValue[] {
-  return relationValues(node, summary, field).map((value) => {
-    const relation = record(value);
-    return {
-      id: numberOrNull(relation.id) ?? numberOrNull(value),
-      name: stringOrNull(relation.name),
-      ...(field === "credentials"
-        ? {
-            kind: stringOrNull(relation.kind),
-            credential_type_id: numberOrNull(relation.credential_type_id),
-          }
-        : {}),
-    };
-  });
+function toCredentialContext(raw: unknown): RecordValue {
+  const credential = record(raw);
+  const summary = record(credential.summary_fields);
+  return {
+    id: numberOrNull(credential.id),
+    name: stringOrNull(credential.name),
+    organization: relationReference(summary.organization ?? credential.organization),
+    credential_type: relationReference(
+      summary.credential_type ?? credential.credential_type,
+    ),
+    kind: stringOrNull(credential.kind),
+    managed: booleanOrNull(credential.managed),
+  };
 }
 
 function unifiedJobTemplate(
@@ -700,7 +671,6 @@ function toTemplateNodeRow(raw: unknown): Row {
       : null,
     approval_timeout: isApprovalNode(node, summary) ? numberOrNull(ujt.timeout) : null,
     inventory: relationReference(summary.inventory ?? node.inventory),
-    credentials: relationList(node, summary, "credentials"),
     execution_environment: relationReference(
       summary.execution_environment ?? node.execution_environment,
     ),
@@ -767,6 +737,11 @@ function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(detail, { subject: `workflow template node ${id}` });
   }
 
+  const credentials = yield* readPaged(
+    `workflow_job_template_nodes/${id}/credentials/`,
+    {},
+    limit,
+  );
   const success = yield* readPaged(
     `workflow_job_template_nodes/${id}/success_nodes/`,
     {},
@@ -804,7 +779,8 @@ function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
     ),
     approval: approvalDetails(node, summary),
     inventory: relationReference(summary.inventory ?? node.inventory),
-    credentials: relationDetails(node, summary, "credentials"),
+    credentials: credentials.rows.map(toCredentialContext),
+    credentials_total: credentials.count ?? credentials.rows.length,
     execution_environment: relationReference(
       summary.execution_environment ?? node.execution_environment,
     ),
@@ -1253,7 +1229,7 @@ export const workflowDomain: Domain = defineDomain({
         "  awx-axi workflow template-node 71 --limit 20",
       ].join("\n"),
       flags: [
-        { name: "limit", description: "edge targets to return per edge type", takesValue: true },
+        { name: "limit", description: "credentials or edge targets to return per relation", takesValue: true },
       ],
       positionals: { names: ["<id>"], required: 1 },
       schema: { label: "workflow_template_node", defaultFields: [], fieldAllowlist: [] },

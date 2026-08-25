@@ -118,6 +118,7 @@ describe("workflow template-node inspection", () => {
       {
         script: [
           "workflow-template-node-detail",
+          "workflow-template-node-credentials",
           "workflow-template-node-success",
           "workflow-template-node-failure",
           "workflow-template-node-always",
@@ -128,6 +129,7 @@ describe("workflow template-node inspection", () => {
     expect(run.exitCode).toBe(0);
     expect(run.transport.requests.map((request) => request.route)).toEqual([
       "workflow_job_template_nodes/71/",
+      "workflow_job_template_nodes/71/credentials/",
       "workflow_job_template_nodes/71/success_nodes/",
       "workflow_job_template_nodes/71/failure_nodes/",
       "workflow_job_template_nodes/71/always_nodes/",
@@ -179,6 +181,7 @@ describe("workflow template-node inspection", () => {
           { status: 200, body: { count: 0, next: null, results: [] } },
           { status: 200, body: { count: 0, next: null, results: [] } },
           { status: 200, body: { count: 0, next: null, results: [] } },
+          { status: 200, body: { count: 0, next: null, results: [] } },
         ],
       },
     );
@@ -188,6 +191,8 @@ describe("workflow template-node inspection", () => {
     expect(run.stdout).toContain("approval:");
     expect(run.stdout).toContain("Prod release gate");
     expect(run.stdout).toContain("timeout: 3600");
+    expect(run.stdout).toContain("credentials: []");
+    expect(run.stdout).toContain("credentials_total: 0");
     expect(run.transport.requests.every((request) => !request.route.includes("workflow_jobs/"))).toBe(true);
   });
 
@@ -197,6 +202,7 @@ describe("workflow template-node inspection", () => {
       {
         script: [
           "workflow-template-node-detail",
+          "workflow-template-node-credentials",
           "workflow-template-node-success",
           "workflow-template-node-failure",
           "workflow-template-node-always",
@@ -234,7 +240,7 @@ describe("workflow template-node inspection", () => {
 
     const run = await runCli(
       ["workflow", "template-node", "71"],
-      { script: [detail, empty, empty, empty] },
+      { script: [detail, empty, empty, empty, empty] },
     );
 
     expect(run.exitCode).toBe(0);
@@ -265,7 +271,7 @@ describe("workflow template-node inspection", () => {
 
     const run = await runCli(
       ["workflow", "template-node", "71"],
-      { script: [detail, empty, empty, empty] },
+      { script: [detail, empty, empty, empty, empty] },
     );
 
     expect(run.exitCode).toBe(0);
@@ -327,23 +333,24 @@ describe("workflow template-node inspection", () => {
     expect(run.transport.requests).toHaveLength(1);
   });
 
-  it("uses the shared page-size limit for each edge relation", async () => {
+  it("uses the shared page-size limit for each node relation", async () => {
     const empty = { status: 200, body: { count: 0, next: null, results: [] } };
     const run = await runCli(
       ["workflow", "template-node", "71", "--limit", "7"],
-      { script: ["workflow-template-node-detail", empty, empty, empty] },
+      { script: ["workflow-template-node-detail", empty, empty, empty, empty] },
     );
 
     expect(run.exitCode).toBe(0);
     expect(run.transport.requests.slice(1).every((request) => request.query.page_size === 7)).toBe(true);
   });
 
-  it("is available in read-only mode and emits only GET requests", async () => {
+  it("is available in read-only mode and reads safe credential context with GET requests", async () => {
     const run = await runCli(
       ["workflow", "template-node", "71"],
       {
         script: [
           "workflow-template-node-detail",
+          "workflow-template-node-credentials",
           "workflow-template-node-success",
           "workflow-template-node-failure",
           "workflow-template-node-always",
@@ -358,7 +365,15 @@ describe("workflow template-node inspection", () => {
     );
 
     expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[1]?.route).toBe(
+      "workflow_job_template_nodes/71/credentials/",
+    );
     expect(run.transport.requests.every((request) => request.method === "GET")).toBe(true);
+    expect(run.stdout).toContain("SSH deploy");
+    expect(run.stdout).toContain("credential_type: 1 (Machine)");
+    expect(run.stdout).toContain("credentials_total: 1");
+    expect(run.stdout).not.toContain("credential-password-do-not-print");
+    expect(run.stdout).not.toContain("credential-private-key-do-not-print");
   });
 
   it("documents the template graph commands separately from run-node inspection", async () => {
