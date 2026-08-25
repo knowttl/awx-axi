@@ -600,16 +600,20 @@ function parseSafePromptValue(value: unknown): unknown {
   }
 }
 
+function safePromptString(value: unknown): string | null {
+  return typeof value === "string" ? safePromptValue(value) as string : null;
+}
+
 function promptFields(node: RecordValue): RecordValue {
   return {
     extra_data: parseSafePromptValue(node.extra_data),
     survey_passwords: parseSafePromptValue(node.survey_passwords),
     char_prompts: parseSafePromptValue(node.char_prompts),
-    limit: stringOrNull(node.limit),
-    scm_branch: stringOrNull(node.scm_branch),
-    job_type: stringOrNull(node.job_type),
-    job_tags: stringOrNull(node.job_tags),
-    skip_tags: stringOrNull(node.skip_tags),
+    limit: safePromptString(node.limit),
+    scm_branch: safePromptString(node.scm_branch),
+    job_type: safePromptString(node.job_type),
+    job_tags: safePromptString(node.job_tags),
+    skip_tags: safePromptString(node.skip_tags),
     diff_mode: booleanOrNull(node.diff_mode),
     verbosity: numberOrNull(node.verbosity),
     forks: numberOrNull(node.forks),

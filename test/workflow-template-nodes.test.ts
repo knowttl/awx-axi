@@ -281,6 +281,37 @@ describe("workflow template-node inspection", () => {
     expect(run.stdout.length).toBeLessThan(5_000);
   });
 
+  it("redacts and bounds every scalar string prompt", async () => {
+    const oversized = "x".repeat(5_000);
+    const detail = {
+      status: 200,
+      body: {
+        id: 71,
+        workflow_job_template: 10,
+        limit: `https://user:scalar-secret@example.test/${oversized}`,
+        scm_branch: `$encrypted$branch-secret ${oversized}`,
+        job_type: oversized,
+        job_tags: oversized,
+        skip_tags: oversized,
+        summary_fields: {},
+      },
+    };
+    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+
+    const run = await runCli(
+      ["workflow", "template-node", "71"],
+      { script: [detail, empty, empty, empty, empty] },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout.match(/\.\.\. \(truncated, \d+ chars total\)/g)).toHaveLength(5);
+    expect(run.stdout).toContain("https://***@example.test/");
+    expect(run.stdout).toContain("$encrypted$");
+    expect(run.stdout).not.toContain("scalar-secret");
+    expect(run.stdout).not.toContain("branch-secret");
+    expect(run.stdout.length).toBeLessThan(7_500);
+  });
+
   it("rejects an invalid node limit before contacting the controller", async () => {
     const run = await runCli(
       ["workflow", "template-nodes", "10", "--limit", "0"],
