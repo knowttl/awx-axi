@@ -14,7 +14,12 @@ import {
   listOutput,
   type Row,
 } from "../../core/output.js";
-import { REDACTION, redactValue } from "../../core/redact.js";
+import {
+  REDACTION,
+  isSensitiveKey,
+  redact,
+  redactValue,
+} from "../../core/redact.js";
 import { pollUntilTerminal, succeeded } from "../../core/poll.js";
 import {
   defineDomain,
@@ -523,17 +528,21 @@ function approvalDetails(node: RecordValue, summary: RecordValue): RecordValue |
   };
 }
 
-function boundPromptValue(
+function safePromptValue(
   value: unknown,
-  state: { remaining: number },
+  state = { remaining: PROMPT_MAX_ITEMS },
   depth = 0,
 ): unknown {
   if (typeof value === "string") {
-    return value.length <= PROMPT_MAX_STRING_LENGTH
-      ? value
-      : `${value.slice(0, PROMPT_MAX_STRING_LENGTH)}... (truncated, ${value.length} chars total)`;
+    const safe = redact(value);
+    return safe.length <= PROMPT_MAX_STRING_LENGTH
+      ? safe
+      : `${safe.slice(0, PROMPT_MAX_STRING_LENGTH)}... (truncated, ${safe.length} chars total)`;
   }
-  if (value === null || typeof value !== "object") {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "object") {
     return value;
   }
   if (depth >= PROMPT_MAX_DEPTH) {
@@ -553,7 +562,7 @@ function boundPromptValue(
         break;
       }
       state.remaining -= 1;
-      output.push(boundPromptValue(value[index], state, depth + 1));
+      output.push(safePromptValue(value[index], state, depth + 1));
     }
     return output;
   }
@@ -573,33 +582,29 @@ function boundPromptValue(
     const boundedKey = key.length <= PROMPT_MAX_KEY_LENGTH
       ? key
       : `${key.slice(0, PROMPT_MAX_KEY_LENGTH)}... (truncated, ${key.length} chars total, item ${index})`;
-    output[boundedKey] = boundPromptValue(child, state, depth + 1);
+    output[boundedKey] = isSensitiveKey(key)
+      ? REDACTION
+      : safePromptValue(child, state, depth + 1);
   }
   return output;
 }
 
-function safePromptValue(value: unknown): unknown {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  let safe: unknown;
+function parseSafePromptValue(value: unknown): unknown {
   if (typeof value !== "string") {
-    safe = redactValue(value);
-  } else {
-    try {
-      safe = redactValue(JSON.parse(value) as unknown);
-    } catch {
-      return REDACTION;
-    }
+    return safePromptValue(value);
   }
-  return boundPromptValue(safe, { remaining: PROMPT_MAX_ITEMS });
+  try {
+    return safePromptValue(JSON.parse(value) as unknown);
+  } catch {
+    return REDACTION;
+  }
 }
 
 function promptFields(node: RecordValue): RecordValue {
   return {
-    extra_data: safePromptValue(node.extra_data),
-    survey_passwords: safePromptValue(node.survey_passwords),
-    char_prompts: safePromptValue(node.char_prompts),
+    extra_data: parseSafePromptValue(node.extra_data),
+    survey_passwords: parseSafePromptValue(node.survey_passwords),
+    char_prompts: parseSafePromptValue(node.char_prompts),
     limit: stringOrNull(node.limit),
     scm_branch: stringOrNull(node.scm_branch),
     job_type: stringOrNull(node.job_type),

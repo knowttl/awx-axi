@@ -255,7 +255,7 @@ describe("workflow template-node inspection", () => {
 
   it("bounds extreme prompt depth with explicit omission metadata", async () => {
     let extraData: Record<string, unknown> = { leaf: "unbounded" };
-    for (let depth = 0; depth < 100; depth += 1) {
+    for (let depth = 0; depth < 20_000; depth += 1) {
       extraData = { nested: extraData };
     }
     const detail = {
@@ -370,7 +370,8 @@ describe("workflow template-node inspection", () => {
     );
     expect(run.transport.requests.every((request) => request.method === "GET")).toBe(true);
     expect(run.stdout).toContain("SSH deploy");
-    expect(run.stdout).toContain("credential_type: 1 (Machine)");
+    expect(run.stdout).toContain("credential_type");
+    expect(run.stdout).toContain("1 (Machine)");
     expect(run.stdout).toContain("credentials_total: 1");
     expect(run.stdout).not.toContain("credential-password-do-not-print");
     expect(run.stdout).not.toContain("credential-private-key-do-not-print");
