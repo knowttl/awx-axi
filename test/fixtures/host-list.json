@@ -1,0 +1,45 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py:1865-1905",
+  "$note": "Host list rows expose identity, enabled state, inventory summary, and inventory-source/failure indicators used by the top-level host list.",
+  "status": 200,
+  "body": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 501,
+        "name": "web-01.example.com",
+        "description": "Primary application host",
+        "enabled": true,
+        "instance_id": "web-01",
+        "has_active_failures": false,
+        "has_inventory_sources": true,
+        "summary_fields": {
+          "inventory": {
+            "id": 11,
+            "name": "Datacenter inventory",
+            "organization_id": 1
+          }
+        }
+      },
+      {
+        "id": 502,
+        "name": "db-01.example.com",
+        "description": "Primary database host",
+        "enabled": false,
+        "instance_id": "db-01",
+        "has_active_failures": true,
+        "has_inventory_sources": false,
+        "summary_fields": {
+          "inventory": {
+            "id": 12,
+            "name": "Staging inventory",
+            "organization_id": 2
+          }
+        }
+      }
+    ]
+  }
+}

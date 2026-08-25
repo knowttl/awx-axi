@@ -1,0 +1,24 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/__init__.py:2330-2340",
+  "$note": "An exact host name query returns one visible host, regardless of which inventory contains it.",
+  "status": 200,
+  "body": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 501,
+        "name": "web-01.example.com",
+        "summary_fields": {
+          "inventory": {
+            "id": 11,
+            "name": "Datacenter inventory",
+            "organization_id": 1
+          }
+        }
+      }
+    ]
+  }
+}
