@@ -4,9 +4,11 @@
  * Source creation, updates, and associations remain under `inventory`; this
  * noun exposes only GET-backed inspection.
  */
+import { parse } from "yaml";
+
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
-import { redact, redactValue } from "../../core/redact.js";
+import { REDACTION, redactValue } from "../../core/redact.js";
 import {
   defineDomain,
   read,
@@ -161,29 +163,17 @@ function toUpdateRow(raw: unknown): RecordValue {
   };
 }
 
-/**
- * Source variables are stored as JSON or YAML text by AWX. Parse JSON so the
- * recursive redactor can protect nested keys; for YAML, redact sensitive
- * key/value lines without pretending to parse an unsupported format.
- */
+/** Source variables are stored as JSON or YAML text by AWX. */
 function safeSourceVars(value: unknown): unknown {
   if (typeof value !== "string") {
     return redactValue(value);
   }
 
   try {
-    const parsed: unknown = JSON.parse(value);
-    if (parsed !== null && typeof parsed === "object") {
-      return redactValue(parsed);
-    }
+    return redactValue(parse(value) as unknown);
   } catch {
-    // AWX also accepts YAML, which remains text here.
+    return REDACTION;
   }
-
-  return redact(value).replace(
-    /(^|\n)(\s*["']?(?:password|passphrase|secret|token|api[-_]?key|access[-_]?key|private[-_]?key)["']?\s*:\s*)([^\n,}]+)/gi,
-    "$1$2***",
-  );
 }
 
 function relationUpdate(value: unknown): string | null {

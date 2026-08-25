@@ -79,11 +79,30 @@ describe("inventory-source domain", () => {
     expect(run.stdout).toContain("total_updates: 2");
     expect(run.stdout).toContain("updates");
     expect(run.stdout).toContain("current sync");
+    expect(run.stdout).toContain("regions[1]: us-east-1");
     expect(run.stdout).toContain("password: ***");
+    expect(run.stdout).toContain("accounts[1]{name,token,access_key}");
+    expect(run.stdout).toContain("deployment,***,***");
     expect(run.stdout).toContain("api_key: ***");
+    expect(run.stdout).toContain("private_key: ***");
     expect(run.stdout).not.toContain("do-not-print");
     expect(run.stdout).not.toContain("access-do-not-print");
     expect(run.stdout).not.toContain("also-do-not-print");
+    expect(run.stdout).not.toContain("block-do-not-print");
+  });
+
+  it("omits malformed source variables rather than exposing their contents", async () => {
+    const run = await runCli(["inventory-source", "show", "21"], {
+      script: [
+        "inventory-source-detail-invalid-vars",
+        "inventory-source-updates-detail",
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("source_vars: ***");
+    expect(run.stdout).not.toContain("malformed-do-not-print");
+    expect(run.stdout).not.toContain("us-east-1");
   });
 
   it("resolves names case-insensitively and refuses duplicate names across inventories", async () => {
