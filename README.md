@@ -104,7 +104,7 @@ automation - so read the preview before you opt in.
 | `auth` | `login`, `status`, `logout` |
 | `job` | `list`, `show`, `stdout`, `events`, `hosts`, `launch`, `cancel`, `relaunch`, `watch` |
 | `template` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `object-roles`, `survey`, `launch`, credential/instance-group/label/notification associations |
-| `workflow` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `object-roles`, `survey`, `launch`, `nodes`, template labels and notifications, node and edge management |
+| `workflow` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `object-roles`, `survey`, `launch`, `nodes` (workflow runs), `template-nodes`/`template-node` (editable templates), template labels and notifications, node and edge management |
 | `approval` | `list`, `show`, `approve`, `deny` |
 | `ad-hoc` | `launch`, `list`, `show`, `events`, `stdout` |
 | `project` | `create`, `edit`, `copy`, `delete`, `list`, `show`, `playbooks`, `updates`, `roles`, `sync`, notification associations |
@@ -160,6 +160,8 @@ awx-axi workflow launch workflow-template --wait
 awx-axi workflow create "Release Workflow"
 awx-axi workflow edit workflow-template --description "My workflow"
 awx-axi workflow node-create workflow-template --template deployment-template
+awx-axi workflow template-nodes workflow-template
+awx-axi workflow template-node 71
 awx-axi workflow nodes 2048
 
 # ad-hoc commands
