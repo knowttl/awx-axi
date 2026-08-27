@@ -455,7 +455,7 @@ describe("schedule list (design.md §7.10?)", () => {
     expect(run.stdout).toContain("code: CONFIG_WRITES_DISABLED");
   });
 
-  it("sanitizes echoed extra-vars in schedule create controller errors", async () => {
+  it("suppresses schedule create controller error bodies after submitting extra-vars", async () => {
     const run = await runCli(
       [
         "schedule",
@@ -464,7 +464,7 @@ describe("schedule list (design.md §7.10?)", () => {
         "--template",
         "57",
         "--extra-vars",
-        '{"db_password":"s3cr3t-value","nested":{"token":"nested-secret"}}',
+        '{"db_pwd":"s3cr3t-value","nested":{"label":"nested-secret"}}',
         "--confirm",
       ],
       {
@@ -473,8 +473,8 @@ describe("schedule list (design.md §7.10?)", () => {
           {
             status: 400,
             body: {
-              extra_data: ["db_password=s3cr3t-value is invalid"],
-              reason: ["nested-secret was rejected"],
+              "s3cr3t-value": ["nested-secret is invalid"],
+              reason: "echoed s3cr3t-value and nested-secret",
             },
           },
         ],
@@ -483,14 +483,14 @@ describe("schedule list (design.md §7.10?)", () => {
     );
 
     expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("schedule Nightly Deploy");
+    expect(run.stdout).toContain("controller answered 400 with no explanation");
     expect(run.stdout).toContain("code: VALIDATION_ERROR");
-    expect(run.stdout).toContain("extra_data: ***");
-    expect(run.stdout).toContain("reason: *** was rejected");
     expect(run.stdout).not.toContain("s3cr3t-value");
     expect(run.stdout).not.toContain("nested-secret");
   });
 
-  it("sanitizes echoed nested extra-vars in schedule edit controller errors", async () => {
+  it("suppresses schedule edit controller error bodies after submitting extra-vars", async () => {
     const run = await runCli(
       [
         "schedule",
@@ -499,7 +499,7 @@ describe("schedule list (design.md §7.10?)", () => {
         "--template",
         "57",
         "--extra-vars",
-        '{"nested":{"token":"nested-secret"}}',
+        '{"nested":{"label":"nested-secret"}}',
         "--confirm",
       ],
       {
@@ -512,29 +512,35 @@ describe("schedule list (design.md §7.10?)", () => {
     );
 
     expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("schedule 30");
     expect(run.stdout).toContain("code: FORBIDDEN");
-    expect(run.stdout).toContain("*** is not permitted");
     expect(run.stdout).toContain("awx-axi auth status");
     expect(run.stdout).not.toContain("nested-secret");
+    expect(run.stdout).not.toContain("is not permitted");
   });
 
-  it("redacts secret-looking extra-vars keys in the dry-run preview and never prints them raw", async () => {
-    const run = await runCli(
-      [
-        "schedule",
-        "create",
-        "Nightly Deploy",
-        "--template",
-        "57",
-        "--extra-vars",
-        '{"db_password":"s3cr3t-value","env":"prod"}',
-      ],
-      { script: [templateDetail(57, { ask_variables_on_launch: true })] },
-    );
+  it("redacts the entire extra-vars value in create and edit dry-run previews", async () => {
+    const commands = [
+      ["schedule", "create", "Nightly Deploy", "--template", "57"],
+      ["schedule", "edit", "30", "--template", "57"],
+    ];
 
-    expect(run.exitCode).toBe(0);
-    expect(run.stdout).toContain("dry_run:");
-    expect(run.stdout).not.toContain("s3cr3t-value");
-    expect(run.stdout).toContain("env: prod");
+    for (const command of commands) {
+      const run = await runCli(
+        [
+          ...command,
+          "--extra-vars",
+          '{"db_pwd":"arbitrary-secret","nested":{"label":"nested-secret"},"env":"prod"}',
+        ],
+        { script: [templateDetail(57, { ask_variables_on_launch: true })] },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("dry_run:");
+      expect(run.stdout).toContain("extra_data: ***");
+      expect(run.stdout).not.toContain("arbitrary-secret");
+      expect(run.stdout).not.toContain("nested-secret");
+      expect(run.stdout).not.toContain("env: prod");
+    }
   });
 });

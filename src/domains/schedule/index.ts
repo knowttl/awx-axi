@@ -125,49 +125,13 @@ function parseScheduleExtraVars(raw: string): Record<string, unknown> {
   ]);
 }
 
-function submittedScalarStrings(value: unknown): string[] {
-  if (typeof value === "string") {
-    return value.length > 0 ? [value] : [];
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return [String(value)];
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap(submittedScalarStrings);
-  }
-  if (value !== null && typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).flatMap(submittedScalarStrings);
-  }
-  return [];
-}
-
-function sanitizeScheduleWriteErrorBody(
-  body: unknown,
-  extraData: Record<string, unknown>,
-): unknown {
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return undefined;
-  }
-
-  const submitted = [...new Set(submittedScalarStrings(extraData))]
-    .sort((left, right) => right.length - left.length);
-  const sanitizeMessage = (message: string): string =>
-    submitted.reduce((safe, scalar) => safe.split(scalar).join(REDACTION), message);
-  const safeBody: Record<string, unknown> = {};
-
-  for (const [field, value] of Object.entries(body as Record<string, unknown>)) {
-    if (field === "extra_data") {
-      safeBody[field] = REDACTION;
-    } else if (typeof value === "string") {
-      safeBody[field] = sanitizeMessage(value);
-    } else if (Array.isArray(value)) {
-      safeBody[field] = value
-        .filter((item): item is string => typeof item === "string")
-        .map(sanitizeMessage);
-    }
-  }
-
-  return redactValue(safeBody);
+function redactSchedulePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [
+      key,
+      key === "extra_data" ? REDACTION : redactValue(value),
+    ]),
+  );
 }
 
 function scheduleWriteError(
@@ -176,15 +140,7 @@ function scheduleWriteError(
   extraData: unknown,
 ): Error {
   return errorForResponse(
-    extraData === undefined
-      ? response
-      : {
-          ...response,
-          body: sanitizeScheduleWriteErrorBody(
-            response.body,
-            extraData as Record<string, unknown>,
-          ),
-        },
+    extraData === undefined ? response : { ...response, body: undefined },
     { subject },
   );
 }
@@ -460,7 +416,7 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
         type: "schedule",
         name,
         would_send: "POST schedules/",
-        payload: redactValue(payload),
+        payload: redactSchedulePayload(payload),
       },
       help: ["Re-run with --confirm to create"],
     });
@@ -528,7 +484,7 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
         action: "edit",
         schedule: id,
         would_send: `PATCH schedules/${id}/`,
-        payload: redactValue(payload),
+        payload: redactSchedulePayload(payload),
       },
       help: ["Re-run with --confirm to edit"],
     });
