@@ -213,9 +213,10 @@ describe("schedule list (design.md §7.10?)", () => {
     });
   });
 
-  it("fails unambiguously when an --inventory name matches more than one inventory", async () => {
+  it("fails unambiguously with shell-safe help when an --inventory name is ambiguous", async () => {
+    const scheduleName = "Nightly $HOME's $(deploy)";
     const run = await runCli(
-      ["schedule", "create", "Nightly Deploy", "--template", "57", "--inventory", "Prod", "--confirm"],
+      ["schedule", "create", scheduleName, "--template", "57", "--inventory", "Prod", "--confirm"],
       {
         script: [
           templateDetail(57, { ask_inventory_on_launch: true }),
@@ -237,7 +238,7 @@ describe("schedule list (design.md §7.10?)", () => {
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toContain("code: AMBIGUOUS_NAME");
     expect(run.stdout).toContain(
-      'awx-axi schedule create "Nightly Deploy" --template 57 --inventory 9',
+      `awx-axi schedule create 'Nightly $HOME'"'"'s $(deploy)' --template 57 --inventory 9`,
     );
     expect(run.stdout).not.toContain("awx-axi schedule create 9");
   });

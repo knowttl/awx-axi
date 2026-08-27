@@ -96,6 +96,10 @@ function parseTemplateId(raw: string | undefined): number {
   return value;
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
 function readExtraVarsFile(filePath: string): string {
   try {
     return readFileSync(filePath, "utf8");
@@ -380,7 +384,7 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
     undefined,
     "schedule create",
     (resolvedTemplateId) =>
-      `schedule create ${JSON.stringify(name)} --template ${resolvedTemplateId} --inventory`,
+      `schedule create ${shellQuote(name)} --template ${resolvedTemplateId} --inventory`,
   );
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
