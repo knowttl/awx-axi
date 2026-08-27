@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { decode } from "@toon-format/toon";
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "./support/run.js";
@@ -237,10 +238,11 @@ describe("schedule list (design.md §7.10?)", () => {
 
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toContain("code: AMBIGUOUS_NAME");
-    expect(run.stdout).toContain(
+    const output = decode(run.stdout) as { help: string[] };
+    expect(output.help[0]).toContain(
       `awx-axi schedule create --name='--nightly-$HOME'"'"'s-$(deploy)' --template 57 --inventory 9`,
     );
-    expect(run.stdout).not.toContain("awx-axi schedule create 9");
+    expect(output.help[0]).not.toContain("awx-axi schedule create 9");
   });
 
   it("includes the schedule id in ambiguous --inventory help for edit", async () => {
@@ -505,7 +507,7 @@ describe("schedule list (design.md §7.10?)", () => {
       {
         script: [
           templateDetail(57, { ask_variables_on_launch: true }),
-          { status: 403, body: { detail: "nested-secret is not permitted" } },
+          { status: 403, body: { detail: "controller-echo nested-secret is not permitted" } },
         ],
         env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
       },
@@ -516,7 +518,7 @@ describe("schedule list (design.md §7.10?)", () => {
     expect(run.stdout).toContain("code: FORBIDDEN");
     expect(run.stdout).toContain("awx-axi auth status");
     expect(run.stdout).not.toContain("nested-secret");
-    expect(run.stdout).not.toContain("is not permitted");
+    expect(run.stdout).not.toContain("controller-echo");
   });
 
   it("redacts the entire extra-vars value in create and edit dry-run previews", async () => {
