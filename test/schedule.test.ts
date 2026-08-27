@@ -455,6 +455,69 @@ describe("schedule list (design.md §7.10?)", () => {
     expect(run.stdout).toContain("code: CONFIG_WRITES_DISABLED");
   });
 
+  it("sanitizes echoed extra-vars in schedule create controller errors", async () => {
+    const run = await runCli(
+      [
+        "schedule",
+        "create",
+        "Nightly Deploy",
+        "--template",
+        "57",
+        "--extra-vars",
+        '{"db_password":"s3cr3t-value","nested":{"token":"nested-secret"}}',
+        "--confirm",
+      ],
+      {
+        script: [
+          templateDetail(57, { ask_variables_on_launch: true }),
+          {
+            status: 400,
+            body: {
+              extra_data: ["db_password=s3cr3t-value is invalid"],
+              reason: ["nested-secret was rejected"],
+            },
+          },
+        ],
+        env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+      },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("extra_data: ***");
+    expect(run.stdout).toContain("reason: *** was rejected");
+    expect(run.stdout).not.toContain("s3cr3t-value");
+    expect(run.stdout).not.toContain("nested-secret");
+  });
+
+  it("sanitizes echoed nested extra-vars in schedule edit controller errors", async () => {
+    const run = await runCli(
+      [
+        "schedule",
+        "edit",
+        "30",
+        "--template",
+        "57",
+        "--extra-vars",
+        '{"nested":{"token":"nested-secret"}}',
+        "--confirm",
+      ],
+      {
+        script: [
+          templateDetail(57, { ask_variables_on_launch: true }),
+          { status: 403, body: { detail: "nested-secret is not permitted" } },
+        ],
+        env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1" },
+      },
+    );
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("code: FORBIDDEN");
+    expect(run.stdout).toContain("*** is not permitted");
+    expect(run.stdout).toContain("awx-axi auth status");
+    expect(run.stdout).not.toContain("nested-secret");
+  });
+
   it("redacts secret-looking extra-vars keys in the dry-run preview and never prints them raw", async () => {
     const run = await runCli(
       [

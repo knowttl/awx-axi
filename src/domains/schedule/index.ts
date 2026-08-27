@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
-import { redactValue } from "../../core/redact.js";
+import { REDACTION, redactValue } from "../../core/redact.js";
 import {
   defineDomain,
   read,
@@ -123,6 +123,70 @@ function parseScheduleExtraVars(raw: string): Record<string, unknown> {
     `Provide extra vars as a JSON object string, e.g. --extra-vars '{"env":"prod"}'`,
     `Or a file reference, e.g. --extra-vars @vars.json`,
   ]);
+}
+
+function submittedScalarStrings(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.length > 0 ? [value] : [];
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return [String(value)];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(submittedScalarStrings);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).flatMap(submittedScalarStrings);
+  }
+  return [];
+}
+
+function sanitizeScheduleWriteErrorBody(
+  body: unknown,
+  extraData: Record<string, unknown>,
+): unknown {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+
+  const submitted = [...new Set(submittedScalarStrings(extraData))]
+    .sort((left, right) => right.length - left.length);
+  const sanitizeMessage = (message: string): string =>
+    submitted.reduce((safe, scalar) => safe.split(scalar).join(REDACTION), message);
+  const safeBody: Record<string, unknown> = {};
+
+  for (const [field, value] of Object.entries(body as Record<string, unknown>)) {
+    if (field === "extra_data") {
+      safeBody[field] = REDACTION;
+    } else if (typeof value === "string") {
+      safeBody[field] = sanitizeMessage(value);
+    } else if (Array.isArray(value)) {
+      safeBody[field] = value
+        .filter((item): item is string => typeof item === "string")
+        .map(sanitizeMessage);
+    }
+  }
+
+  return redactValue(safeBody);
+}
+
+function scheduleWriteError(
+  response: { readonly status: number; readonly body: unknown },
+  subject: string,
+  extraData: unknown,
+): Error {
+  return errorForResponse(
+    extraData === undefined
+      ? response
+      : {
+          ...response,
+          body: sanitizeScheduleWriteErrorBody(
+            response.body,
+            extraData as Record<string, unknown>,
+          ),
+        },
+    { subject },
+  );
 }
 
 /** The launch-time prompt flags a schedule can carry, and the job-template setting each requires. */
@@ -404,7 +468,7 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
 
   const res = yield* write("schedules/", payload, { method: "POST", tag: "config" });
   if (res.status !== 201 && res.status !== 200) {
-    throw errorForResponse(res, { subject: `schedule ${name}` });
+    throw scheduleWriteError(res, `schedule ${name}`, payload.extra_data);
   }
 
   const body = (res.body ?? {}) as Record<string, unknown>;
@@ -472,7 +536,7 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
 
   const res = yield* write(`schedules/${id}/`, payload, { method: "PATCH", tag: "config" });
   if (res.status !== 200) {
-    throw errorForResponse(res, { subject: `schedule ${id}` });
+    throw scheduleWriteError(res, `schedule ${id}`, payload.extra_data);
   }
 
   const body = (res.body ?? {}) as Record<string, unknown>;
