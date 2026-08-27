@@ -384,7 +384,7 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
     undefined,
     "schedule create",
     (resolvedTemplateId) =>
-      `schedule create ${shellQuote(name)} --template ${resolvedTemplateId} --inventory`,
+      `schedule create --name=${shellQuote(name)} --template ${resolvedTemplateId} --inventory`,
   );
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
