@@ -236,6 +236,40 @@ describe("schedule list (design.md §7.10?)", () => {
 
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toContain("code: AMBIGUOUS_NAME");
+    expect(run.stdout).toContain(
+      'awx-axi schedule create "Nightly Deploy" --template 57 --inventory 9',
+    );
+    expect(run.stdout).not.toContain("awx-axi schedule create 9");
+  });
+
+  it("includes the schedule id in ambiguous --inventory help for edit", async () => {
+    const run = await runCli(
+      ["schedule", "edit", "30", "--inventory", "Prod"],
+      {
+        script: [
+          {
+            status: 200,
+            body: { id: 30, unified_job_template: 57 },
+          },
+          templateDetail(57, { ask_inventory_on_launch: true }),
+          {
+            status: 200,
+            body: {
+              count: 2,
+              results: [
+                { id: 9, name: "Prod" },
+                { id: 10, name: "Prod" },
+              ],
+            },
+          },
+        ],
+      },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: AMBIGUOUS_NAME");
+    expect(run.stdout).toContain("awx-axi schedule edit 30 --inventory 9");
+    expect(run.stdout).not.toContain("awx-axi schedule edit 9");
   });
 
   it("rejects each new prompt flag when its template setting is disabled", async () => {

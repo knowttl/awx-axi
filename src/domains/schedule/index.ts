@@ -209,14 +209,14 @@ function* validateLaunchPromptFlags(
 function* applyPromptPayload(
   payload: Record<string, unknown>,
   flags: Readonly<Record<string, string | true>>,
-  command: string,
+  inventoryCommand: string,
 ): Plan<void> {
   if (typeof flags.inventory === "string") {
     payload.inventory = yield* resolveId(flags.inventory, {
       listRoute: "inventories/",
       noun: "inventory",
       listCommand: "inventory list",
-      command,
+      command: inventoryCommand,
     });
   }
   if (typeof flags.limit === "string") {
@@ -240,13 +240,14 @@ function* applyLaunchPromptFlags(
   currentTemplateId: number | undefined,
   scheduleId: number | undefined,
   command: string,
+  inventoryCommand: (templateId: number) => string,
 ): Plan<void> {
   if (suppliedPromptFlags(flags).length === 0) {
     return;
   }
   const templateId = yield* resolveTemplateForPromptCheck(currentTemplateId, scheduleId, command);
   yield* validateLaunchPromptFlags(templateId, flags, command);
-  yield* applyPromptPayload(payload, flags, command);
+  yield* applyPromptPayload(payload, flags, inventoryCommand(templateId));
 }
 
 function schedulePreview(body: Record<string, unknown>): string {
@@ -372,7 +373,15 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
   if (input.flags.enabled === true) payload.enabled = true;
   if (input.flags.disabled === true) payload.enabled = false;
 
-  yield* applyLaunchPromptFlags(payload, input.flags, templateId, undefined, "schedule create");
+  yield* applyLaunchPromptFlags(
+    payload,
+    input.flags,
+    templateId,
+    undefined,
+    "schedule create",
+    (resolvedTemplateId) =>
+      `schedule create ${JSON.stringify(name)} --template ${resolvedTemplateId} --inventory`,
+  );
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
   if (!isLive) {
@@ -433,7 +442,15 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
   if (input.flags.enabled === true) payload.enabled = true;
   if (input.flags.disabled === true) payload.enabled = false;
 
-  yield* applyLaunchPromptFlags(payload, input.flags, templateId, id, "schedule edit");
+  yield* applyLaunchPromptFlags(
+    payload,
+    input.flags,
+    templateId,
+    id,
+    "schedule edit",
+    (resolvedTemplateId) =>
+      `schedule edit ${id}${templateId === undefined ? "" : ` --template ${resolvedTemplateId}`} --inventory`,
+  );
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
   if (!isLive) {
