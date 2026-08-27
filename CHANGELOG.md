@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.4](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.3...awx-axi-v0.1.4) (2026-08-27)
+
+
+### Features
+
+* **domains:** add group and inventory source inspection ([#36](https://github.com/knowttl/awx-axi/issues/36)) ([7d09cb4](https://github.com/knowttl/awx-axi/commit/7d09cb4ebad12089659126452be37b05ae3f2a8a))
+* **domains:** add top-level host inspection ([#34](https://github.com/knowttl/awx-axi/issues/34)) ([f6bd6a8](https://github.com/knowttl/awx-axi/commit/f6bd6a8dfe6c0a675dad42b7115f2f734bd53ab1))
+* **schedule:** add prompt-on-launch fields to schedule mutations ([#38](https://github.com/knowttl/awx-axi/issues/38)) ([431675f](https://github.com/knowttl/awx-axi/commit/431675ff87501064d17c06bcd035d3ea3ffadbf7))
+* **workflow:** inspect workflow template nodes ([#37](https://github.com/knowttl/awx-axi/issues/37)) ([be48e27](https://github.com/knowttl/awx-axi/commit/be48e275c2827c972761e8474ece25eef00bfe1f))
+
 ## [0.1.3](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.2...awx-axi-v0.1.3) (2026-08-24)
 
 
