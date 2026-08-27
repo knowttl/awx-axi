@@ -1,6 +1,6 @@
 export const SKILL_AUTHOR = "Kun Chen (kunchenguid)";
 export const SKILL_DESCRIPTION =
-  "Manage AWX 24.6.1 automation from the shell - inspect, create, edit, copy, delete, launch, cancel, associate, and configure controller resources with dry-run previews and gated writes. Use for AWX or Ansible Tower jobs, templates, workflows, hosts, inventories, projects, schedules, organizations, credentials, notifications, execution environments, teams, users, roles, and maintenance runs.";
+  "Manage AWX 24.6.1 automation from the shell - inspect, create, edit, copy, delete, launch, cancel, associate, and configure controller resources with dry-run previews and gated writes. Use for AWX or Ansible Tower jobs, templates, workflows, hosts, inventories, projects, schedules and their launch-time prompt overrides, organizations, credentials, notifications, execution environments, teams, users, roles, and maintenance runs.";
 export const HERMES_TAGS = [
   "awx",
   "ansible",
@@ -126,7 +126,8 @@ Run \`npx -y awx-axi --help\` for top-level usage, or \`npx -y awx-axi <command>
 - Use \`group list\` and \`group show <id|name>\` for direct host and child-group membership with parsed variables.
 - Use \`inventory-source list\` and \`inventory-source show <id|name>\` for source configuration, update state, and direct update history.
 - Use \`workflow template-nodes <id|name>\` and \`workflow template-node <id>\` for editable workflow-template nodes, prompts, runtime context, convergence, and success/failure/always edges. These are distinct from \`workflow nodes <run-id>\`, which reads a workflow job run.
-- \`notification list\` and \`activity-stream list\` remain read-only because AWX does not expose object mutation endpoints for those generated records.`;
+- \`notification list\` and \`activity-stream list\` remain read-only because AWX does not expose object mutation endpoints for those generated records.
+- Use \`schedule create\`/\`schedule edit\` with \`--inventory\`, \`--limit\`, \`--extra-vars <json|@file>\`, \`--job-tags\`, and \`--skip-tags\` to set a schedule's launch-time prompt overrides; each is rejected before the write if the job template's matching \`ask_*_on_launch\` setting is disabled.`;
 
   return `${frontmatter}\n\n${body}\n`;
 }
