@@ -1,9 +1,12 @@
 /**
  * The `schedule` domain: scheduled unified-job runs (design.md §7.9).
  */
-import { errorForResponse, validationError } from "../../core/errors.js";
+import { readFileSync } from "node:fs";
+
+import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
+import { REDACTION, redactValue } from "../../core/redact.js";
 import {
   defineDomain,
   read,
@@ -91,6 +94,184 @@ function parseTemplateId(raw: string | undefined): number {
     throw validationError(`--template must be a positive integer, got ${raw}`);
   }
   return value;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function readExtraVarsFile(filePath: string): string {
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch {
+    throw validationError(`--extra-vars file "${filePath}" could not be read`);
+  }
+}
+
+/** Parses `--extra-vars`: a JSON object string, or `@<file>` for a JSON object file. */
+function parseScheduleExtraVars(raw: string): Record<string, unknown> {
+  const content = raw.startsWith("@") ? readExtraVarsFile(raw.slice(1)) : raw;
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // translated below
+  }
+  throw validationError("--extra-vars must be a JSON object, or @<file> naming a file containing one", [
+    `Provide extra vars as a JSON object string, e.g. --extra-vars '{"env":"prod"}'`,
+    `Or a file reference, e.g. --extra-vars @vars.json`,
+  ]);
+}
+
+function redactSchedulePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [
+      key,
+      key === "extra_data" ? REDACTION : redactValue(value),
+    ]),
+  );
+}
+
+function scheduleWriteError(
+  response: { readonly status: number; readonly body: unknown },
+  subject: string,
+  extraData: unknown,
+): Error {
+  return errorForResponse(
+    extraData === undefined ? response : { ...response, body: undefined },
+    { subject },
+  );
+}
+
+/** The launch-time prompt flags a schedule can carry, and the job-template setting each requires. */
+const PROMPT_REQUIREMENTS: readonly { flag: string; promptKey: string }[] = [
+  { flag: "inventory", promptKey: "ask_inventory_on_launch" },
+  { flag: "limit", promptKey: "ask_limit_on_launch" },
+  { flag: "extra-vars", promptKey: "ask_variables_on_launch" },
+  { flag: "job-tags", promptKey: "ask_tags_on_launch" },
+  { flag: "skip-tags", promptKey: "ask_skip_tags_on_launch" },
+];
+
+function suppliedPromptFlags(flags: Readonly<Record<string, string | true>>) {
+  return PROMPT_REQUIREMENTS.filter((r) => typeof flags[r.flag] === "string");
+}
+
+/**
+ * The job template a schedule's prompt flags must be validated against: the one
+ * named by `--template` on this call, or - for `schedule edit` with no
+ * `--template` - the schedule's existing `unified_job_template`.
+ */
+function* resolveTemplateForPromptCheck(
+  currentTemplateId: number | undefined,
+  scheduleId: number | undefined,
+  command: string,
+): Plan<number> {
+  if (currentTemplateId !== undefined) {
+    return currentTemplateId;
+  }
+  if (scheduleId === undefined) {
+    throw validationError(
+      `\`awx-axi ${command}\` needs --template to validate --inventory, --limit, --extra-vars, --job-tags, or --skip-tags`,
+      [`Run \`awx-axi ${command} <id|name> --template <id|name> ...\``],
+    );
+  }
+
+  const detail = yield* read(`schedules/${scheduleId}/`);
+  if (detail.status !== 200) {
+    throw errorForResponse(detail, { subject: `schedule ${scheduleId}` });
+  }
+  const body = (detail.body ?? {}) as Record<string, unknown>;
+  const summary = (body.summary_fields ?? {}) as Record<string, unknown>;
+  const templateSummary = (summary.unified_job_template ?? {}) as Record<string, unknown>;
+  const templateId =
+    typeof body.unified_job_template === "number"
+      ? body.unified_job_template
+      : typeof templateSummary.id === "number"
+        ? templateSummary.id
+        : undefined;
+
+  if (templateId === undefined) {
+    throw validationError(`schedule ${scheduleId} has no job template to validate prompt flags against`);
+  }
+  return templateId;
+}
+
+/** Rejects any supplied prompt flag whose matching `ask_*_on_launch` setting is off on the template. */
+function* validateLaunchPromptFlags(
+  templateId: number,
+  flags: Readonly<Record<string, string | true>>,
+  command: string,
+): Plan<void> {
+  const supplied = suppliedPromptFlags(flags);
+  if (supplied.length === 0) {
+    return;
+  }
+
+  const detail = yield* read(`job_templates/${templateId}/`);
+  if (detail.status !== 200) {
+    throw errorForResponse(detail, { subject: `job template ${templateId}` });
+  }
+  const template = (detail.body ?? {}) as Record<string, unknown>;
+
+  const rejected = supplied.filter((r) => template[r.promptKey] !== true);
+  if (rejected.length > 0) {
+    throw new AwxAxiError(
+      `job template ${templateId} does not accept ${rejected.map((r) => `--${r.flag}`).join(", ")} at \`awx-axi ${command}\`: ${rejected.map((r) => r.promptKey).join(", ")} is disabled on the template`,
+      "LAUNCH_WOULD_IGNORE_INPUT",
+      [
+        `Run \`awx-axi template show ${templateId}\` to see which prompts this template accepts`,
+        `Re-run \`awx-axi ${command}\` without ${rejected.map((r) => `--${r.flag}`).join(", ")}`,
+      ],
+      { rejected: rejected.map((r) => ({ flag: `--${r.flag}`, requires: r.promptKey })) },
+    );
+  }
+}
+
+/** Applies the supplied prompt flags to `payload`, resolving `--inventory` by id or name. */
+function* applyPromptPayload(
+  payload: Record<string, unknown>,
+  flags: Readonly<Record<string, string | true>>,
+  inventoryCommand: string,
+): Plan<void> {
+  if (typeof flags.inventory === "string") {
+    payload.inventory = yield* resolveId(flags.inventory, {
+      listRoute: "inventories/",
+      noun: "inventory",
+      listCommand: "inventory list",
+      command: inventoryCommand,
+    });
+  }
+  if (typeof flags.limit === "string") {
+    payload.limit = flags.limit;
+  }
+  if (typeof flags["job-tags"] === "string") {
+    payload.job_tags = flags["job-tags"];
+  }
+  if (typeof flags["skip-tags"] === "string") {
+    payload.skip_tags = flags["skip-tags"];
+  }
+  if (typeof flags["extra-vars"] === "string") {
+    payload.extra_data = parseScheduleExtraVars(flags["extra-vars"]);
+  }
+}
+
+/** Validates and applies every supplied prompt-on-launch flag, fetching the job template only if needed. */
+function* applyLaunchPromptFlags(
+  payload: Record<string, unknown>,
+  flags: Readonly<Record<string, string | true>>,
+  currentTemplateId: number | undefined,
+  scheduleId: number | undefined,
+  command: string,
+  inventoryCommand: (templateId: number) => string,
+): Plan<void> {
+  if (suppliedPromptFlags(flags).length === 0) {
+    return;
+  }
+  const templateId = yield* resolveTemplateForPromptCheck(currentTemplateId, scheduleId, command);
+  yield* validateLaunchPromptFlags(templateId, flags, command);
+  yield* applyPromptPayload(payload, flags, inventoryCommand(templateId));
 }
 
 function schedulePreview(body: Record<string, unknown>): string {
@@ -200,26 +381,31 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
 
   const payload: Record<string, unknown> = { name };
 
+  let templateId: number | undefined;
   if (typeof input.flags.template === "string") {
-    payload.unified_job_template = yield* resolveId(input.flags.template, {
+    templateId = yield* resolveId(input.flags.template, {
       listRoute: "unified_job_templates/",
       noun: "unified job template",
       listCommand: "template list",
       command: "schedule create",
     });
+    payload.unified_job_template = templateId;
   }
 
   if (typeof input.flags.rrule === "string") payload.rrule = input.flags.rrule;
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (input.flags.enabled === true) payload.enabled = true;
   if (input.flags.disabled === true) payload.enabled = false;
-  if (typeof input.flags["extra-vars"] === "string") {
-    try {
-      payload.extra_data = JSON.parse(input.flags["extra-vars"]);
-    } catch {
-      payload.extra_data = input.flags["extra-vars"];
-    }
-  }
+
+  yield* applyLaunchPromptFlags(
+    payload,
+    input.flags,
+    templateId,
+    undefined,
+    "schedule create",
+    (resolvedTemplateId) =>
+      `schedule create --name=${shellQuote(name)} --template ${resolvedTemplateId} --inventory`,
+  );
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
   if (!isLive) {
@@ -230,7 +416,7 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
         type: "schedule",
         name,
         would_send: "POST schedules/",
-        payload,
+        payload: redactSchedulePayload(payload),
       },
       help: ["Re-run with --confirm to create"],
     });
@@ -238,7 +424,7 @@ function* createSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
 
   const res = yield* write("schedules/", payload, { method: "POST", tag: "config" });
   if (res.status !== 201 && res.status !== 200) {
-    throw errorForResponse(res, { subject: `schedule ${name}` });
+    throw scheduleWriteError(res, `schedule ${name}`, payload.extra_data);
   }
 
   const body = (res.body ?? {}) as Record<string, unknown>;
@@ -265,25 +451,30 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
 
   const payload: Record<string, unknown> = {};
   if (typeof input.flags.name === "string") payload.name = input.flags.name;
+  let templateId: number | undefined;
   if (typeof input.flags.template === "string") {
-    payload.unified_job_template = yield* resolveId(input.flags.template, {
+    templateId = yield* resolveId(input.flags.template, {
       listRoute: "unified_job_templates/",
       noun: "unified job template",
       listCommand: "template list",
       command: "schedule edit",
     });
+    payload.unified_job_template = templateId;
   }
   if (typeof input.flags.rrule === "string") payload.rrule = input.flags.rrule;
   if (typeof input.flags.description === "string") payload.description = input.flags.description;
   if (input.flags.enabled === true) payload.enabled = true;
   if (input.flags.disabled === true) payload.enabled = false;
-  if (typeof input.flags["extra-vars"] === "string") {
-    try {
-      payload.extra_data = JSON.parse(input.flags["extra-vars"]);
-    } catch {
-      payload.extra_data = input.flags["extra-vars"];
-    }
-  }
+
+  yield* applyLaunchPromptFlags(
+    payload,
+    input.flags,
+    templateId,
+    id,
+    "schedule edit",
+    (resolvedTemplateId) =>
+      `schedule edit ${id}${templateId === undefined ? "" : ` --template ${resolvedTemplateId}`} --inventory`,
+  );
 
   const isLive = input.flags.confirm === true && input.flags["dry-run"] !== true;
   if (!isLive) {
@@ -293,7 +484,7 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
         action: "edit",
         schedule: id,
         would_send: `PATCH schedules/${id}/`,
-        payload,
+        payload: redactSchedulePayload(payload),
       },
       help: ["Re-run with --confirm to edit"],
     });
@@ -301,7 +492,7 @@ function* editSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
 
   const res = yield* write(`schedules/${id}/`, payload, { method: "PATCH", tag: "config" });
   if (res.status !== 200) {
-    throw errorForResponse(res, { subject: `schedule ${id}` });
+    throw scheduleWriteError(res, `schedule ${id}`, payload.extra_data);
   }
 
   const body = (res.body ?? {}) as Record<string, unknown>;
@@ -383,8 +574,8 @@ export const scheduleDomain: Domain = defineDomain({
     "schedule: scheduled unified-job runs",
     "",
     "Subcommands:",
-    "  create  [<name>] [--template <id|name>] [--rrule <rrule>] [--confirm] [--dry-run]",
-    "  edit    <id|name> [--name <n>] [--confirm] [--dry-run]",
+    "  create  [<name>] [--template <id|name>] [--rrule <rrule>] [--inventory <id|name>] [--limit <value>] [--extra-vars <json|@file>] [--job-tags <tags>] [--skip-tags <tags>] [--confirm] [--dry-run]",
+    "  edit    <id|name> [--name <n>] [--inventory <id|name>] [--limit <value>] [--extra-vars <json|@file>] [--job-tags <tags>] [--skip-tags <tags>] [--confirm] [--dry-run]",
     "  delete  <id|name> [--confirm] [--dry-run]",
     "  list    [--search <s>] [--template <id>] [--enabled] [--disabled] [--limit <n>]",
     "  show    <id|name>",
@@ -401,13 +592,17 @@ export const scheduleDomain: Domain = defineDomain({
     ...Object.entries(SCHEDULE_ASSOCIATIONS).map(([name, spec]) => ({ name, help: `awx-axi schedule ${name} <id|name> --${spec.flag} <${spec.flag === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} ${spec.flag === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "schedule_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name) })),
     {
       name: "create",
-      help: "awx-axi schedule create [<name>] [--template <id|name>] [--rrule <rrule>] [--confirm] [--dry-run]",
+      help: "awx-axi schedule create [<name>] [--template <id|name>] [--rrule <rrule>] [--inventory <id|name>] [--limit <value>] [--extra-vars <json|@file>] [--job-tags <tags>] [--skip-tags <tags>] [--confirm] [--dry-run]",
       flags: [
         { name: "name", description: "schedule name", takesValue: true },
         { name: "template", description: "unified job template id or name", takesValue: true },
         { name: "rrule", description: "recurrence rule string", takesValue: true },
         { name: "description", description: "description", takesValue: true },
-        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "inventory", description: "inventory id or name (needs ask_inventory_on_launch)", takesValue: true },
+        { name: "limit", description: "host limit pattern (needs ask_limit_on_launch)", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON object or @file (needs ask_variables_on_launch)", takesValue: true },
+        { name: "job-tags", description: "job tags (needs ask_tags_on_launch)", takesValue: true },
+        { name: "skip-tags", description: "skip tags (needs ask_skip_tags_on_launch)", takesValue: true },
         { name: "enabled", description: "enable schedule", takesValue: false },
         { name: "disabled", description: "disable schedule", takesValue: false },
         { name: "confirm", description: "confirm live execution", takesValue: false },
@@ -420,13 +615,17 @@ export const scheduleDomain: Domain = defineDomain({
     },
     {
       name: "edit",
-      help: "awx-axi schedule edit <id|name> [--name <n>] [--confirm] [--dry-run]",
+      help: "awx-axi schedule edit <id|name> [--name <n>] [--inventory <id|name>] [--limit <value>] [--extra-vars <json|@file>] [--job-tags <tags>] [--skip-tags <tags>] [--confirm] [--dry-run]",
       flags: [
         { name: "name", description: "schedule name", takesValue: true },
         { name: "template", description: "unified job template id or name", takesValue: true },
         { name: "rrule", description: "recurrence rule string", takesValue: true },
         { name: "description", description: "description", takesValue: true },
-        { name: "extra-vars", description: "extra vars JSON/YAML", takesValue: true },
+        { name: "inventory", description: "inventory id or name (needs ask_inventory_on_launch)", takesValue: true },
+        { name: "limit", description: "host limit pattern (needs ask_limit_on_launch)", takesValue: true },
+        { name: "extra-vars", description: "extra vars JSON object or @file (needs ask_variables_on_launch)", takesValue: true },
+        { name: "job-tags", description: "job tags (needs ask_tags_on_launch)", takesValue: true },
+        { name: "skip-tags", description: "skip tags (needs ask_skip_tags_on_launch)", takesValue: true },
         { name: "enabled", description: "enable schedule", takesValue: false },
         { name: "disabled", description: "disable schedule", takesValue: false },
         { name: "confirm", description: "confirm live execution", takesValue: false },
