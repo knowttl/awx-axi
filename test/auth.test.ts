@@ -257,7 +257,7 @@ describe("authentication through the CLI", () => {
     [["notification-template", "edit", "3"], "config-file", secretInputs, [], 2],
     [["notification-template", "edit", "3"], "messages-file", secretInputs, [], 2],
   ] as const)("redacts command secrets echoed in errors for %j", async (argv, flag, content, preflight, exitCode) => {
-    const env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "true" };
+    const env: Env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "true" };
     const path = join(env.XDG_STATE_HOME!, "input");
     files.write(path, content);
     const run = await runCli([...argv, `--${flag}`, path, "--confirm"], {
@@ -272,7 +272,7 @@ describe("authentication through the CLI", () => {
   });
 
   it("redacts a user password echoed in successful output", async () => {
-    const env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
+    const env: Env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
     const path = join(env.XDG_STATE_HOME!, "password");
     files.write(path, commandSecret);
     const run = await runCli(["user", "edit", "3", "--password-file", path, "--confirm"], {
@@ -349,7 +349,7 @@ describe("authentication through the CLI", () => {
   });
 
   it.each(["template", "job"])("%s launch accepts true for credential password authorization", async (domain) => {
-    const env = { ...environment(), AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "TrUe" };
+    const env: Env = { ...environment(), AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "TrUe" };
     const path = join(env.XDG_STATE_HOME!, "passwords.json");
     files.write(path, JSON.stringify({ ssh_password: "synthetic-password" }));
     const run = await runCli([domain, "launch", "12", "--credential-passwords-file", path, "--confirm"], {
