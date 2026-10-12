@@ -62,6 +62,22 @@ async function concurrent(env: Env, commands: readonly string[]): Promise<void> 
 }
 
 describe("state transactions across CLI processes", () => {
+  it("retains credentials and journals from thirty simultaneous logins", async () => {
+    const env = environment();
+    const names = Array.from({ length: 30 }, (_, index) => `login-${index}`);
+    files.write(configPath(env), JSON.stringify({ version: 1, profiles: Object.fromEntries(
+      names.map((name) => [name, { origin: "https://awx.example.com" }]),
+    ) }));
+    await concurrent(env, names.map((name) => `login:${name}`));
+    expect(loadCredentials(env).profiles).toEqual(Object.fromEntries(
+      names.map((name) => [name, { origin: "https://awx.example.com", token: `synthetic-pat-${name}`, id: 1 }]),
+    ));
+    const entries = readFileSync(writeLogPath(env), "utf8").trim().split("\n")
+      .map((line) => JSON.parse(line) as { method: string; status: number });
+    expect(entries.map(({ method, status }) => ({ method, status })))
+      .toEqual(Array.from({ length: 30 }, () => ({ method: "POST", status: 201 })));
+  }, 15000);
+
   it("serializes two stale-lock reclaimers with complete owner records", async () => {
     const env = environment();
     const path = join(env.XDG_STATE_HOME!, "reclamation");

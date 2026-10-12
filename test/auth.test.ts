@@ -246,24 +246,24 @@ describe("authentication through the CLI", () => {
   });
 
   it.each([
-    [["template", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight],
-    [["job", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight],
-    [["user", "create", "example"], "password-file", commandSecret, []],
-    [["user", "edit", "3"], "password-file", commandSecret, []],
-    [["credential", "create", "example", "--credential-type", "2"], "inputs-file", secretInputs, []],
-    [["credential", "edit", "3"], "inputs-file", secretInputs, []],
-    [["team", "credential-create", "3", "--name", "example", "--credential-type", "2"], "inputs-file", secretInputs, []],
-    [["notification-template", "create", "example", "--organization", "2", "--notification-type", "webhook"], "configuration-file", secretInputs, []],
-    [["notification-template", "edit", "3"], "config-file", secretInputs, []],
-    [["notification-template", "edit", "3"], "messages-file", secretInputs, []],
-  ] as const)("redacts command secrets echoed in errors for %j", async (argv, flag, content, preflight) => {
+    [["template", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight, 1],
+    [["job", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight, 1],
+    [["user", "create", "example"], "password-file", commandSecret, [], 2],
+    [["user", "edit", "3"], "password-file", commandSecret, [], 2],
+    [["credential", "create", "example", "--credential-type", "2"], "inputs-file", secretInputs, [], 2],
+    [["credential", "edit", "3"], "inputs-file", secretInputs, [], 2],
+    [["team", "credential-create", "3", "--name", "example", "--credential-type", "2"], "inputs-file", secretInputs, [], 2],
+    [["notification-template", "create", "example", "--organization", "2", "--notification-type", "webhook"], "configuration-file", secretInputs, [], 2],
+    [["notification-template", "edit", "3"], "config-file", secretInputs, [], 2],
+    [["notification-template", "edit", "3"], "messages-file", secretInputs, [], 2],
+  ] as const)("redacts command secrets echoed in errors for %j", async (argv, flag, content, preflight, exitCode) => {
     const env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "true" };
     const path = join(env.XDG_STATE_HOME!, "input");
     files.write(path, content);
     const run = await runCli([...argv, `--${flag}`, path, "--confirm"], {
       env, script: [...preflight, { status: 400, body: { detail: `denied ${commandSecret} ${JSON.stringify(commandSecret)} ${encodeURIComponent(commandSecret)}` } }],
     });
-    expect(run.exitCode).toBe(1);
+    expect(run.exitCode).toBe(exitCode);
     expect(run.stdout).toContain("denied");
     expect(run.stdout).toContain("***");
     expect(run.stdout).not.toContain(commandSecret);

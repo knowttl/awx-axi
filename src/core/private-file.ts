@@ -38,6 +38,10 @@ export class PrivateFiles {
   }
 
   read(path: string, secret = false, verifyAcl = false): string | undefined {
+    return this.#read(path, secret, verifyAcl);
+  }
+
+  #read(path: string, secret: boolean, verifyAcl: boolean, lock = false): string | undefined {
     let fd: number | undefined;
     try {
       let info;
@@ -55,12 +59,17 @@ export class PrivateFiles {
       }
       fd = openSync(path, constants.O_RDONLY | (this.#windows ? 0 : constants.O_NOFOLLOW));
       const opened = fstatSync(fd);
-      if (opened.ino !== info.ino || opened.dev !== info.dev) throw this.#insecure(path);
+      if (opened.ino !== info.ino || opened.dev !== info.dev) {
+        // Lock owners routinely remove or replace the inspected directory entry.
+        if (lock) return undefined;
+        throw this.#insecure(path);
+      }
       if (!this.#windows && (opened.uid !== (this.#options.uid ?? process.getuid?.()) ||
         (opened.mode & (secret ? 0o077 : 0o022)) !== 0)) throw this.#insecure(path);
       return readFileSync(fd, "utf8");
     } catch (error) {
       if (error instanceof AxiError) throw error;
+      if (lock && (error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw this.#insecure(path);
     } finally {
       if (fd !== undefined) closeSync(fd);
@@ -127,7 +136,7 @@ export class PrivateFiles {
   }
 
   #ownerGone(path: string): boolean {
-    const record = JSON.parse(this.read(path, true) ?? "null") as { pid?: number; startTime?: number } | null;
+    const record = JSON.parse(this.#read(path, true, false, true) ?? "null") as { pid?: number; startTime?: number } | null;
     if (!record || !Number.isSafeInteger(record.pid) || record.pid! <= 0 || !Number.isFinite(record.startTime)) return false;
     try { process.kill(record.pid!, 0); } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ESRCH") return true;

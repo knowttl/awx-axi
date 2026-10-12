@@ -29,6 +29,16 @@ if (input.command === "reclaim") {
     fetch: async () => new globalThis.Response(null, { status: 204 }),
   });
   for (let index = 0; index < 20; index += 1) await transport.post("jobs/1/launch/");
+} else if (input.command.startsWith("login:")) {
+  const profile = input.command.slice("login:".length);
+  const transport = new HttpTransport({
+    baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: false, env: input.env,
+    fetch: async () => new globalThis.Response(JSON.stringify({ id: 1, token: `synthetic-pat-${profile}` }), { status: 201 }),
+  });
+  await authCommand(["login"], {
+    env: input.env, selection: { profile },
+    createTransport: () => transport, createBasicAuthTransport: () => transport,
+  });
 } else {
   for (let index = 0; index < 20; index += 1) {
     const profile = `${input.command}-${index}`;

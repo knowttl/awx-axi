@@ -16,6 +16,26 @@ function directory(): string {
 afterEach(() => { directories.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("private-file transaction locks", () => {
+  it.each(["removed", "replaced"])("retries when an inspected lock is %s before opening", (change) => {
+    const path = join(directory(), "state");
+    const lock = `${path}.lock`;
+    const writer = new PrivateFiles();
+    const owner = JSON.stringify({ pid: process.pid, startTime: Date.now() });
+    writer.write(lock, owner);
+    let changed = false;
+    const files = new PrivateFiles({ platform: "win32", acl: (target, action) => {
+      if (target === lock && action === "check" && !changed) {
+        changed = true;
+        if (change === "removed") rmSync(lock);
+        else writer.write(lock, owner);
+      }
+    }, wait: () => { rmSync(lock, { force: true }); } });
+    files.withLock(path, () => files.write(path, "committed"));
+    expect(changed).toBe(true);
+    expect(files.read(path, true)).toBe("committed");
+    expect(readdirSync(join(path, ".."))).toEqual(["state"]);
+  });
+
   it("releases the lock when a transaction fails", () => {
     const path = join(directory(), "state");
     const files = new PrivateFiles();
@@ -73,6 +93,19 @@ describe("private-file transaction locks", () => {
 });
 
 describe("private files on POSIX", () => {
+  it.each(["removed", "replaced"])("rejects a credential file %s during inspection", (change) => {
+    const path = join(directory(), "credentials.json");
+    const writer = new PrivateFiles();
+    writer.write(path, "original");
+    const files = new PrivateFiles({ platform: "win32", acl: (target, action) => {
+      if (action === "check") {
+        if (change === "removed") rmSync(target);
+        else writer.write(target, "replacement");
+      }
+    } });
+    expect(() => files.read(path, true)).toThrow(expect.objectContaining({ code: "CONFIG_INSECURE" }));
+  });
+
   it("writes atomically and tightens an existing directory", () => {
     const parent = directory();
     const path = join(parent, "credentials.json");
