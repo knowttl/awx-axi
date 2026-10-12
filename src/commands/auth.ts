@@ -3,6 +3,7 @@ import { AxiError } from "axi-sdk-js";
 import { resolveBasicAuth, resolveController, resolveCredential, type Credential, type Env } from "../core/auth.js";
 import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
+import { PrivateFiles } from "../core/private-file.js";
 import { credentialsPath, deleteToken, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
 import { registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
@@ -20,10 +21,12 @@ export const AUTH_HELP = `auth: authenticate against the controller
 usage: awx-axi auth login|status|logout [--config <path>] [--profile <name>]
 
   login    mint a PAT using AWX_AXI_USERNAME and AWX_AXI_PASSWORD and store it privately
+           --allow-http opts this profile into unencrypted HTTP and saves allowHttp: true
   status   report selected profile, origin, credential source, and identity
   logout   revoke the stored PAT upstream before deleting it locally
 
-Global non-secret overrides: --origin <https-origin>, --verify-ssl <true|false>.
+Global non-secret overrides: --origin <origin>, --verify-ssl <true|false>.
+HTTPS is the default; HTTP requires profile allowHttp: true or AWX_AXI_ALLOW_HTTP=1 for the env profile.
 Secrets come from environment variables or SecretRefs, never arguments.
 Logout respects read-only, delete and security gates; set AWX_AXI_ALLOW_DELETES=1 and AWX_AXI_ALLOW_SECURITY_WRITES=1 to revoke.
 
@@ -36,7 +39,8 @@ examples:
 export async function authCommand(args: string[], context: AuthContext): Promise<Renderable> {
   const name = args[0];
   if (!name || !["login", "status", "logout"].includes(name)) throw validationError("auth needs login, status, logout");
-  parseFlags(`auth ${name}`, args.slice(1), [], { names: [], required: 0 });
+  const { flags } = parseFlags(`auth ${name}`, args.slice(1), name === "login" ? [{ name: "allow-http", takesValue: false, description: "Allow unencrypted HTTP for this profile" }] : [], { names: [], required: 0 });
+  if (flags["allow-http"]) context.selection.allowHttp = true;
   if (name === "login") return login(context);
   if (name === "logout") return logout(context);
   return status(context);
@@ -59,9 +63,13 @@ async function login(context: AuthContext): Promise<Renderable> {
   registerSecret(body.token);
   if (!Number.isSafeInteger(body.id) || (body.id as number) <= 0) throw new AxiError("controller returned no PAT id; credential was not stored", "AUTH_REQUIRED");
   saveToken(context.env, selected, { origin: selected.profile.origin, token: body.token, id: body.id as number }, undefined, implicit);
+  if (context.selection.allowHttp) {
+    selected.config.profiles[selected.name] = { ...selected.profile, token: selected.config.profiles[selected.name]?.token ?? { stored: true }, allowHttp: true };
+    new PrivateFiles().write(selected.path, `${JSON.stringify(selected.config, null, 2)}\n`);
+  }
   return { auth: { profile: selected.name, origin: selected.profile.origin, user: basic.username, credential: `stored in ${credentialsPath(context.env)}`, scope: body.scope ?? "write" },
     help: [
-      ...(Object.hasOwn(selected.config.profiles, selected.name) ? [] : [`Add profile ${selected.name} with origin ${selected.profile.origin} to ${selected.path}; login never writes config`]),
+      ...(Object.hasOwn(selected.config.profiles, selected.name) ? [] : [`Add profile ${selected.name} with origin ${selected.profile.origin} to ${selected.path}`]),
       `Run \`awx-axi auth status --profile ${selected.name}\` to check the configured profile`,
     ] };
 }

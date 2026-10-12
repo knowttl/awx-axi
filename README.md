@@ -281,8 +281,7 @@ Home paths use the operating system's home directory.
 An omitted token ref uses the stored credential keyed by that profile's name, equivalent to `{"stored":true}`.
 Use an explicit `{"env":"AWX_AXI_TOKEN"}` ref for a file profile that should read its token from that variable.
 Inline tokens are rejected without printing their values.
-Origins must use HTTPS without userinfo, a path, query or fragment.
-Plain-HTTP controllers are refused pending a decision about an explicit exception.
+Origins must have no userinfo, path, query or fragment.
 
 Select config with `--config`, then `AWX_AXI_CONFIG`, then the default path.
 Select a profile with `--profile`, then `AWX_AXI_PROFILE`, then a complete environment profile, then `defaultProfile`, then the only profile.
@@ -290,16 +289,22 @@ An environment profile requires `AWX_AXI_ORIGIN` plus `AWX_AXI_TOKEN`, or both l
 An incomplete environment profile fails instead of falling back to another profile.
 File-selected profiles use their own settings and SecretRefs.
 Non-secret flags `--origin` and `--verify-ssl true|false` override the selected profile.
+HTTPS is the default.
+Plain HTTP requires `"allowHttp": true` on the selected profile, or `AWX_AXI_ALLOW_HTTP=1` for the environment profile.
+`auth login --allow-http` explicitly permits HTTP for that login and saves `allowHttp: true` in the selected profile after successful login.
+This is the only login option that writes profile config; for an environment login it creates the `env` profile with a stored token ref.
+The opt-in applies only to that profile and never permits paths, userinfo, queries or fragments in an origin.
+Every use of a plain HTTP controller prints a one-line stderr warning because credentials and traffic are unencrypted.
 
 `awx-axi config path` prints the config location.
 `awx-axi profile list` lists names and origins without resolving secrets.
 `awx-axi auth status` reports profile, origin, credential source and identity using one live read.
 `awx-axi doctor` performs the same bounded identity and credential permission check.
 `awx-axi auth login` mints a PAT and saves its id, origin and token in protected state `credentials.json`, keyed by profile name.
-Login never writes config, for local or hosted execution.
-Configure a named profile with an HTTPS origin and omit its token ref before running `auth login --profile <name>`.
+Login leaves config unchanged unless `--allow-http` is explicitly passed.
+Configure a named profile with its controller origin and omit its token ref before running `auth login --profile <name>`.
 After login, that profile uses its origin-bound stored PAT; explicit SecretRefs continue to select their declared sources.
-An environment login stores under `env`; add that profile to config yourself and select it with `--profile env` for subsequent commands while login environment variables remain set.
+An environment login stores under `env`; unless using `--allow-http`, add that profile to config yourself and select it with `--profile env` for subsequent commands while login environment variables remain set.
 If an implicit environment login would replace a configured or stored `env` identity bound to another controller, it fails before minting and requires an explicit configured profile name.
 `awx-axi auth logout` revokes that PAT upstream before removing it locally, requiring `AWX_AXI_ALLOW_DELETES=1` and `AWX_AXI_ALLOW_SECURITY_WRITES=1` and respecting read-only mode.
 Revocation failures preserve the local PAT for retry.
@@ -316,7 +321,8 @@ When only a legacy token exists, `CONFIG_MOVED` names the new path and profile f
 | Variable | Meaning |
 | --- | --- |
 | `AWX_AXI_CONFIG` / `AWX_AXI_PROFILE` | Config file path / selected profile |
-| `AWX_AXI_ORIGIN` | HTTPS origin for the environment profile |
+| `AWX_AXI_ORIGIN` | Controller origin for the environment profile, HTTPS by default |
+| `AWX_AXI_ALLOW_HTTP` | Environment profile HTTP opt-in, default false; accepts `1`/`true` or `0`/`false`, rejects other values |
 | `AWX_AXI_API_BASE_PATH` | API path override, default `/api/v2/` |
 | `AWX_AXI_TOKEN` | Direct token used by the environment profile or an explicit env SecretRef |
 | `AWX_AXI_USERNAME` / `AWX_AXI_PASSWORD` | Used only by `auth login` |

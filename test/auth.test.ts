@@ -2,9 +2,9 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, sym
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBasicAuthTransport, resolveController, resolveCredential } from "../src/core/auth.js";
+import { createBasicAuthTransport, createTransport, resolveController, resolveCredential } from "../src/core/auth.js";
 import { authCommand } from "../src/commands/auth.js";
 import { RecordedTransport } from "../src/core/transport.js";
 import { PrivateFiles } from "../src/core/private-file.js";
@@ -28,6 +28,79 @@ const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["s
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
+  it.each([
+    ["https://awx.example.com", false],
+    ["https://awx.example.com", true],
+    ["http://awx.example.com", true],
+  ])("accepts origin %s with allowHttp=%s", (origin, allowHttp) => {
+    expect(validateOrigin(origin, allowHttp)).toBe(origin);
+  });
+
+  it.each(["http://awx.example.com/path", "http://awx.example.com/..", "http://user@awx.example.com", "http://awx.example.com/?query", "http://awx.example.com/#fragment"])("refuses unsafe HTTP origins even with consent: %s", (origin) => {
+    expect(() => validateOrigin(origin, true)).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it.each([undefined, false, "true"])("refuses HTTP without a boolean profile opt-in: %s", (allowHttp) => {
+    const env = environment();
+    configure(env, { production: { origin: "http://awx.example.com", allowHttp, token: { env: "PRODUCTION_PAT" } } });
+    expect(() => createTransport({ ...env, PRODUCTION_PAT: "synthetic-token" })).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it.each(["1", "true", "TRUE"])("allows HTTP env profile with AWX_AXI_ALLOW_HTTP=%s", (value) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "http://awx.example.com", AWX_AXI_TOKEN: "synthetic-token", AWX_AXI_ALLOW_HTTP: value };
+    expect(selectProfile(env).profile).toMatchObject({ origin: env.AWX_AXI_ORIGIN, allowHttp: true });
+  });
+
+  it.each([undefined, "0", "false", "yes", ""])("refuses HTTP env profile with AWX_AXI_ALLOW_HTTP=%s", (value) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "http://awx.example.com", AWX_AXI_TOKEN: "synthetic-token", AWX_AXI_ALLOW_HTTP: value };
+    expect(() => createTransport(env)).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it("rejects a malformed HTTP opt-in even for HTTPS env profiles", () => {
+    expect(() => selectProfile({ ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_TOKEN: "synthetic-token", AWX_AXI_ALLOW_HTTP: "yes" })).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it("keeps HTTP consent scoped to the selected profile", () => {
+    const env = { ...environment(), AWX_AXI_ALLOW_HTTP: "1", PRODUCTION_PAT: "synthetic-token" };
+    configure(env, { allowed: { origin: "http://awx.example.com", allowHttp: true }, production });
+    expect(selectProfile(env, { profile: "allowed" }).profile.origin).toBe("http://awx.example.com");
+    expect(() => createTransport(env, { profile: "production", origin: "http://awx.example.com" })).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it("warns on stderr when constructing an HTTP transport", () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "http://awx.example.com", AWX_AXI_TOKEN: "synthetic-token", AWX_AXI_ALLOW_HTTP: "1" };
+    const warning = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      createTransport(env);
+      expect(warning).toHaveBeenCalledExactlyOnceWith("warning: plain HTTP controller traffic, including credentials, is unencrypted\n");
+    } finally { warning.mockRestore(); }
+  });
+
+  it("refuses HTTP token minting before creating a Basic auth transport", () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "http://awx.example.com", AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
+    expect(() => createBasicAuthTransport(env)).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it.each(["named", "env"])("persists login HTTP consent only for the %s profile", async (name) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "http://awx.example.com", AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
+    configure(env, { named: { origin: env.AWX_AXI_ORIGIN }, production });
+    const argv = name === "named" ? ["--profile", "named"] : [];
+    const run = await runCli(["auth", "login", "--allow-http", ...argv], { env, script: [{ status: 201, body: { id: 9, token: "synthetic-minted-token" } }] });
+    expect(run.exitCode).toBe(0);
+    expect(loadConfig(env).profiles[name]).toMatchObject({ allowHttp: true, origin: env.AWX_AXI_ORIGIN });
+    expect(loadConfig(env).profiles.production).toEqual(production);
+    expect(resolveCredential(env, { profile: name })).toMatchObject({ token: "synthetic-minted-token" });
+  });
+
+  it("does not persist HTTP consent after a failed login", async () => {
+    const env = { ...environment(), AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
+    configure(env, { production: { origin: "http://awx.example.com" } });
+    const run = await runCli(["auth", "login", "--allow-http"], { env, script: [{ status: 401 }] });
+    expect(run.exitCode).not.toBe(0);
+    expect(loadConfig(env).profiles.production?.allowHttp).toBeUndefined();
+    expect(loadCredentials(env).profiles).toEqual({});
+  });
+
   it.each(["https://awx.example.com/controller/..", "https://awx.example.com/.", "https://awx.example.com/%2e", "https://awx.example.com/controller/%2e%2e", "https://awx.example.com\\controller\\..", "https://awx.example.com/\n"])("rejects paths before origin normalization: %s", (origin) => {
     expect(() => validateOrigin(origin)).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
   });

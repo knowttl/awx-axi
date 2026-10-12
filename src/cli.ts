@@ -209,7 +209,7 @@ function topLevelHelp(): string {
     description: DESCRIPTION,
     usage: "awx-axi <command> [args] [flags]",
     commands: "auth, profile list, config path, doctor, setup",
-    globals: "--config <path>, --profile <name>, --origin <https-origin>, --verify-ssl <true|false>",
+    globals: "--config <path>, --profile <name>, --origin <origin>, --verify-ssl <true|false>",
     domains:
       DOMAINS.length === 0
         ? "none yet: this build is the core"
