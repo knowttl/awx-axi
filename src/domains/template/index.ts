@@ -5,6 +5,7 @@ import { statSync, readFileSync } from "node:fs";
 
 import { AxiError } from "axi-sdk-js";
 import { booleanEnv } from "../../core/profiles.js";
+import { registerSecretValues } from "../../core/redact.js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
@@ -272,6 +273,7 @@ export function readPasswordsFile(filePath: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(content);
     if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      registerSecretValues(parsed);
       return parsed as Record<string, unknown>;
     }
   } catch {

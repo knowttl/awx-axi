@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,6 +19,31 @@ const journals: string[] = [];
 afterEach(() => journals.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));
 
 describe("mutation journal failures", () => {
+  it.each(["post", "put", "patch", "delete"] as const)("keeps both journal entries for overlapping %s operations", async (method) => {
+    const directory = mkdtempSync(join(tmpdir(), "awx-journal-"));
+    journals.push(directory);
+    const path = join(directory, "writes.log");
+    const fixture = fixtureFetch(["job-detail-terminal", "job-detail-terminal"]);
+    const pending: (() => void)[] = [];
+    const http = new HttpTransport({ baseUrl: BASE, apiBasePath: "/api/v2/", readOnly: false,
+      env: { AWX_AXI_WRITE_LOG: path, AWX_AXI_ALLOW_CONFIG_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1" },
+      fetch: async (url, init) => {
+        await new Promise<void>((resolve) => pending.push(resolve));
+        return fixture.fetch(url, init);
+      } });
+    const first = http[method]("jobs/1/");
+    const second = http[method]("jobs/2/");
+    pending[0]!();
+    await first;
+    pending[1]!();
+    await second;
+    const entries = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line) as unknown);
+    expect(entries).toEqual([
+      { at: expect.any(String), method: method.toUpperCase(), status: 200 },
+      { at: expect.any(String), method: method.toUpperCase(), status: 200 },
+    ]);
+  });
+
   it.each(["post", "put", "patch", "delete"] as const)("refuses %s before sending when the journal is insecure", async (method) => {
     const directory = mkdtempSync(join(tmpdir(), "awx-journal-"));
     journals.push(directory);

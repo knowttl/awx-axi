@@ -74,16 +74,25 @@ describe("private files on POSIX", () => {
     expect(files.read(target)).toBe("original");
   });
 
-  it("rejects symlink ancestors before creating or reading child files", () => {
+  it.each(["linux", "win32"] as const)("accepts private targets beneath symlink ancestors on %s", (platform) => {
     const parent = directory();
     const target = join(parent, "target");
-    const files = new PrivateFiles();
+    const files = new PrivateFiles({ platform, acl: () => {} });
     files.write(join(target, "secret"), "original");
     const link = join(parent, "link");
     symlinkSync(target, link);
-    expect(() => files.read(join(link, "secret"))).toThrow(expect.objectContaining({ code: "CONFIG_INSECURE" }));
-    expect(() => files.write(join(link, "secret"), "replacement")).toThrow(expect.objectContaining({ code: "CONFIG_INSECURE" }));
-    expect(files.read(join(target, "secret"))).toBe("original");
+    expect(files.read(join(link, "secret"), true)).toBe("original");
+    files.write(join(link, "secret"), "replacement");
+    expect(files.read(join(target, "secret"), true)).toBe("replacement");
+  });
+
+  it.each(["linux", "win32"] as const)("rejects dangling target symlinks on %s", (platform) => {
+    const parent = directory();
+    const link = join(parent, "link");
+    symlinkSync(join(parent, "missing"), link);
+    const files = new PrivateFiles({ platform, acl: () => {} });
+    expect(() => files.read(link, true)).toThrow(expect.objectContaining({ code: "CONFIG_INSECURE" }));
+    expect(() => files.write(link, "replacement")).toThrow(expect.objectContaining({ code: "CONFIG_INSECURE" }));
   });
 });
 

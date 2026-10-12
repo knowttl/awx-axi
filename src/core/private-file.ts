@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync, closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync,
-  mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync,
+  mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -37,17 +37,9 @@ export class PrivateFiles {
     ]);
   }
 
-  #checkAncestors(path: string): void {
-    for (let current = dirname(resolve(path)); ; current = dirname(current)) {
-      if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw this.#insecure(current);
-      if (dirname(current) === current) break;
-    }
-  }
-
   read(path: string, secret = false, verifyAcl = false): string | undefined {
     let fd: number | undefined;
     try {
-      this.#checkAncestors(path);
       let info;
       try { info = lstatSync(path); } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
@@ -84,20 +76,23 @@ export class PrivateFiles {
   }
 
   #write(path: string, content: string): void {
-    this.#checkAncestors(path);
     const directory = dirname(resolve(path));
     const missing: string[] = [];
     for (let current = directory; !existsSync(current); current = dirname(current)) missing.push(current);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     for (const current of [...missing.reverse(), directory]) {
-      if (lstatSync(current).isSymbolicLink()) throw this.#insecure(current);
-      if (this.#windows) this.#acl(current, "restrict", true);
+      if (this.#windows) this.#acl(realpathSync(current), "restrict", true);
       else chmodSync(current, 0o700);
     }
     // Reject a hostile existing target before replacing it, without reading its value.
-    if (existsSync(path) && (!lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())) {
+    let target;
+    try { target = lstatSync(path); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (target && (!target.isFile() || target.isSymbolicLink())) {
       throw this.#insecure(path);
     }
+    if (this.#windows && target) this.#acl(path, "check");
     const temporary = join(directory, `.credentials-${randomUUID()}.tmp`);
     let fd: number | undefined;
     try {
@@ -135,10 +130,6 @@ function windowsAcl(path: string, action: AclAction, directory: boolean): void {
 $path = ${literal}
 $item = Get-Item -LiteralPath $path -Force
 if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse point' }
-$parent = if ($item.PSIsContainer) { $item.Parent } else { $item.Directory }
-for (; $null -ne $parent; $parent = $parent.Parent) {
-  if (($parent.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse ancestor' }
-}
 ${action === "check" ? "" : `
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 $allowed = @($sid.Value, 'S-1-5-18', 'S-1-5-32-544')

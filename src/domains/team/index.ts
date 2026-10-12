@@ -16,6 +16,7 @@ import {
   type SubcommandInput,
 } from "../../core/registry.js";
 import { resolveId } from "../../core/resolve.js";
+import { registerSecretValues } from "../../core/redact.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 
@@ -338,7 +339,7 @@ function teamInputs(input: SubcommandInput): Record<string, unknown> {
   if (typeof input.flags["inputs-file"] !== "string") return {};
   const path = input.flags["inputs-file"];
   try { if ((statSync(path).mode & 0o077) !== 0) throw validationError("team credential inputs file must have 0600 permissions"); } catch (error) { if (error instanceof Error && error.message.includes("permissions")) throw error; throw validationError("team credential inputs file could not be read"); }
-  try { const parsed: unknown = JSON.parse(readFileSync(path, "utf8")); if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>; } catch { /* translated below */ }
+  try { const parsed: unknown = JSON.parse(readFileSync(path, "utf8")); if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) { registerSecretValues(parsed); return parsed as Record<string, unknown>; } } catch { /* translated below */ }
   throw validationError("team credential inputs file must contain a JSON object");
 }
 

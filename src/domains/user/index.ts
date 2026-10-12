@@ -2,6 +2,7 @@
  * The `user` domain: list, show, create, edit, and delete AWX users.
  */
 import { readFileSync, statSync } from "node:fs";
+import { registerSecret } from "../../core/redact.js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive } from "../../core/mutations.js";
@@ -247,7 +248,9 @@ function readSecretContent(filePath: string): string {
 
 function parseUserPassword(input: SubcommandInput): string | undefined {
   if (typeof input.flags["password-file"] === "string") {
-    return readSecretContent(input.flags["password-file"]).trim();
+    const password = readSecretContent(input.flags["password-file"]).trim();
+    registerSecret(password);
+    return password;
   }
   return undefined;
 }

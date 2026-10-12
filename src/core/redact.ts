@@ -28,6 +28,13 @@ export function registerSecret(secret: string): void {
   secrets.add(encodeURIComponent(secret));
 }
 
+export function registerSecretValues(value: unknown): void {
+  if (typeof value === "string") registerSecret(value);
+  else if (value !== null && typeof value === "object") {
+    for (const entry of Object.values(value)) registerSecretValues(entry);
+  }
+}
+
 export function clearSecrets(): void { secrets.clear(); }
 
 /** Redact one log body. Applied to every log body awx-axi prints. */

@@ -187,7 +187,7 @@ export function selectProfile(envInput: Env, selection: Selection = {}, files = 
   } };
 }
 
-function loadCredentials(env: Env, files: PrivateFiles, verifyAcl = false): Credentials {
+export function loadCredentials(env: Env, files = new PrivateFiles(), verifyAcl = false): Credentials {
   const raw = files.read(credentialsPath(env), true, verifyAcl);
   if (raw === undefined) return { version: 1, profiles: Object.create(null) as Record<string, StoredToken> };
   let parsed: unknown;

@@ -2,6 +2,7 @@
  * The `credential` domain: list, show, create, edit, and delete AWX credentials.
  */
 import { readFileSync, statSync } from "node:fs";
+import { registerSecretValues } from "../../core/redact.js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive } from "../../core/mutations.js";
@@ -204,6 +205,7 @@ function parseInputs(input: SubcommandInput): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(content);
     if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      registerSecretValues(parsed);
       return parsed as Record<string, unknown>;
     }
   } catch {

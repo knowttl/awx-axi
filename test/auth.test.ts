@@ -20,6 +20,9 @@ function configure(env: Env, profiles: Record<string, unknown>, defaultProfile?:
   files.write(configPath(env), JSON.stringify({ version: 1, profiles, ...(defaultProfile ? { defaultProfile } : {}) }));
 }
 const production = { origin: "https://awx.example.com", token: { env: "PRODUCTION_PAT" } };
+const commandSecret = 'synthetic-command/password"value';
+const secretInputs = JSON.stringify({ ssh_password: commandSecret, nested: [{ value: commandSecret }] });
+const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["ssh_password"] } }];
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
@@ -142,6 +145,72 @@ describe("credential profiles", () => {
 });
 
 describe("authentication through the CLI", () => {
+  it.each([
+    [["template", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight],
+    [["job", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight],
+    [["user", "create", "example"], "password-file", commandSecret, []],
+    [["user", "edit", "3"], "password-file", commandSecret, []],
+    [["credential", "create", "example", "--credential-type", "2"], "inputs-file", secretInputs, []],
+    [["credential", "edit", "3"], "inputs-file", secretInputs, []],
+    [["team", "credential-create", "3", "--name", "example", "--credential-type", "2"], "inputs-file", secretInputs, []],
+    [["notification-template", "create", "example", "--organization", "2", "--notification-type", "webhook"], "configuration-file", secretInputs, []],
+    [["notification-template", "edit", "3"], "config-file", secretInputs, []],
+    [["notification-template", "edit", "3"], "messages-file", secretInputs, []],
+  ] as const)("redacts command secrets echoed in errors for %j", async (argv, flag, content, preflight) => {
+    const env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "true" };
+    const path = join(env.XDG_STATE_HOME!, "input");
+    files.write(path, content);
+    const run = await runCli([...argv, `--${flag}`, path, "--confirm"], {
+      env, script: [...preflight, { status: 400, body: { detail: `denied ${commandSecret} ${JSON.stringify(commandSecret)} ${encodeURIComponent(commandSecret)}` } }],
+    });
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("denied");
+    expect(run.stdout).toContain("***");
+    expect(run.stdout).not.toContain(commandSecret);
+    expect(run.stdout).not.toContain(JSON.stringify(commandSecret).slice(1, -1));
+    expect(run.stdout).not.toContain(encodeURIComponent(commandSecret));
+  });
+
+  it("redacts a user password echoed in successful output", async () => {
+    const env = { ...environment(), AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
+    const path = join(env.XDG_STATE_HOME!, "password");
+    files.write(path, commandSecret);
+    const run = await runCli(["user", "edit", "3", "--password-file", path, "--confirm"], {
+      env, script: [{ status: 200, body: { username: `echo ${commandSecret}` } }],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("echo ***");
+    expect(run.stdout).not.toContain(commandSecret);
+    expect(run.transport.requests[0]?.body).toMatchObject({ password: commandSecret });
+  });
+
+  it.each([
+    ["{", 0o600, "CONFIG_INVALID"],
+    [JSON.stringify({ version: 1, profiles: {} }), 0o640, "CONFIG_INSECURE"],
+  ])("rejects an invalid credential store before minting: %s", async (content, mode, code) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    files.write(credentialsPath(env), content);
+    chmodSync(credentialsPath(env), mode);
+    const run = await runCli(["auth", "login"], { env });
+    expect(run.stdout).toContain(code);
+    expect(run.transport.requests).toHaveLength(0);
+    expect(readFileSync(credentialsPath(env), "utf8")).toBe(content);
+  });
+
+  it("reads and writes profiles and credentials beneath symlinked XDG directories", () => {
+    const env = environment();
+    configure(env, { production });
+    saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
+    const configLink = `${env.XDG_CONFIG_HOME!}-link`;
+    const stateLink = `${env.XDG_STATE_HOME!}-link`;
+    symlinkSync(env.XDG_CONFIG_HOME!, configLink);
+    symlinkSync(env.XDG_STATE_HOME!, stateLink);
+    const linked = { ...env, XDG_CONFIG_HOME: configLink, XDG_STATE_HOME: stateLink };
+    expect(resolveCredential(linked)?.token).toBe("bound-token");
+    saveToken(linked, selectProfile(linked), { origin: production.origin, token: "replacement-token", id: 10 });
+    expect(resolveCredential(env)?.token).toBe("replacement-token");
+  });
+
   it("mints a PAT, persists the stored ref, and never prints the secret", async () => {
     const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
     const run = await runCli(["auth", "login"], { env, script: [{ status: 201, body: { id: 9, token: "minted-token", scope: "write" } }] });

@@ -3,7 +3,7 @@ import { AxiError } from "axi-sdk-js";
 import { resolveBasicAuth, resolveController, resolveCredential, type Credential, type Env } from "../core/auth.js";
 import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
-import { booleanEnv, credentialsPath, deleteToken, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
+import { booleanEnv, credentialsPath, deleteToken, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
 import { registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
 import type { AwxTransport } from "../core/transport.js";
@@ -47,6 +47,7 @@ async function login(context: AuthContext): Promise<Renderable> {
   const basic = resolveBasicAuth(context.env);
   if (!basic) throw validationError("auth login needs AWX_AXI_USERNAME and AWX_AXI_PASSWORD in the environment");
   const selected = selectProfile(context.env, context.selection, undefined, false, true);
+  loadCredentials(context.env);
   const response = await context.createBasicAuthTransport().post("tokens/", { description: "awx-axi", scope: "write" });
   if (response.status !== 201) throw errorForResponse(response, { subject: selected.profile.origin });
   const body = (response.body ?? {}) as Record<string, unknown>;
