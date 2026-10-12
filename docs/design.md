@@ -77,8 +77,10 @@ the boundary matters more than the heading's symmetry.
 
 ### 3.1 Decision
 
-**awx-axi speaks the AWX REST API v2 directly over HTTPS from Node.
+**awx-axi speaks the AWX REST API v2 directly from Node, using HTTPS by default.
 It does not shell out to the `awx` CLI (awxkit).**
+
+Plain HTTP is supported only with explicit per-profile opt-in, as configured in [README configuration](../README.md#configuration).
 
 The commission permits either.
 This section is the justification, and §3.4 is the honest statement of what that choice costs.
@@ -1324,10 +1326,11 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
 - **`@toon-format/toon`** pinned to exactly `2.3.1`, matching the version the other installed AXI tools use.
   Pinned, not caret-ranged, for the §8 reason: the encoder's emitted syntax is part of awx-axi's observable
   output, and the published spec has already moved ahead of this version.
-- **Node's `https` module** for HTTP with a scoped agent for the selected transport's TLS verification setting.
+- **Node's `https` and `http` modules** with scoped agents.
+  HTTPS uses the selected transport's TLS verification setting; the HTTP adapter serves only controllers permitted by the consent policy in [README configuration](../README.md#configuration).
   Redirects are not followed, and requests outside the configured origin are refused before credentials are sent.
   No axios or undici dependency.
-  AWX's API is plain JSON over HTTPS and a client library would add weight plus a second error vocabulary
+  AWX's API is plain JSON and a client library would add weight plus a second error vocabulary
   without removing work.
 - **`vitest`** for tests, with fixtures as plain JSON and no mocking framework, since `RecordedTransport` is
   the only seam any test needs.
@@ -1516,6 +1519,9 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
     Proving it live would require launching a real playbook with a deliberately wrong scope.
     The benchmark reports it as offline evidence and says so, rather than quietly omitting the strongest claim in
     the design. §14.3.
+25. **Plain-HTTP controller support was accepted by maintainer decision on 2026-10-12.**
+    This is an approved awx-axi exception to the [AXI credential standard](https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md), because some controllers use unencrypted HTTP.
+    The consent contract is owned by [README configuration](../README.md#configuration); the transport implementation is described in §12.
 
 ## 16. Sources consulted
 
