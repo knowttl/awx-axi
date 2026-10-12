@@ -111,6 +111,9 @@ describe("write-management coverage", () => {
     });
     expect(token.transport.requests[0]).toMatchObject({ method: "POST", route: "users/3/personal_tokens/", tag: "security" });
     expect(token.stdout).not.toContain("must-not-print");
+    expect(token.stdout).toContain("id: 55");
+    expect(token.stdout).toContain("scope: write");
+    expect(token.stdout).toContain("status: created");
   });
 
   it("keeps new mutations dry-run by default", async () => {
@@ -131,6 +134,8 @@ describe("write-management coverage", () => {
       route: "tokens/55/",
       tag: "security",
     });
+    expect(run.stdout).toContain("id: 55");
+    expect(run.stdout).toContain("status: revoked");
   });
 
   it("serializes inventory source variables and security-gates credentials", async () => {

@@ -3,10 +3,11 @@ import { AxiError } from "axi-sdk-js";
 import { resolveBasicAuth, resolveController, resolveCredential, type Credential, type Env } from "../core/auth.js";
 import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
-import { credentialsPath, deleteToken, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
+import { booleanEnv, credentialsPath, deleteToken, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
 import { registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
 import type { AwxTransport } from "../core/transport.js";
+import { assertWritable } from "../core/transport.js";
 
 export interface AuthContext {
   readonly env: Env;
@@ -24,7 +25,7 @@ usage: awx-axi auth login|status|logout [--config <path>] [--profile <name>]
 
 Global non-secret overrides: --origin <https-origin>, --verify-ssl <true|false>.
 Secrets come from environment variables or SecretRefs, never arguments.
-Logout respects read-only and delete gates; set AWX_AXI_ALLOW_DELETES=1 to revoke.
+Logout respects read-only, delete and security gates; set AWX_AXI_ALLOW_DELETES=1 and AWX_AXI_ALLOW_SECURITY_WRITES=1 to revoke.
 
 examples:
   awx-axi auth login --profile production
@@ -42,9 +43,10 @@ export async function authCommand(args: string[], context: AuthContext): Promise
 }
 
 async function login(context: AuthContext): Promise<Renderable> {
+  booleanEnv(context.env, "AWX_AXI_HOSTED");
   const basic = resolveBasicAuth(context.env);
   if (!basic) throw validationError("auth login needs AWX_AXI_USERNAME and AWX_AXI_PASSWORD in the environment");
-  const selected = selectProfile(context.env, context.selection);
+  const selected = selectProfile(context.env, context.selection, undefined, false, true);
   const response = await context.createBasicAuthTransport().post("tokens/", { description: "awx-axi", scope: "write" });
   if (response.status !== 201) throw errorForResponse(response, { subject: selected.profile.origin });
   const body = (response.body ?? {}) as Record<string, unknown>;
@@ -71,7 +73,8 @@ async function logout(context: AuthContext): Promise<Renderable> {
   const selected = selectProfile(context.env, context.selection);
   const stored = storedToken(context.env, selected);
   if (!stored) return { auth: "no stored PAT for the selected profile (no-op)" };
-  const response = await context.createTransport({ token: stored.token, source: "stored" }).delete(`tokens/${stored.id}/`);
+  assertWritable(context.env, "DELETE", `tokens/${stored.id}/`);
+  const response = await context.createTransport({ token: stored.token, source: "stored" }).delete(`tokens/${stored.id}/`, "security");
   if (response.status !== 204 && response.status !== 404) throw errorForResponse(response, { subject: "PAT revocation" });
   deleteToken(context.env, selected);
   return { auth: `PAT revoked and removed for profile ${selected.name}` };

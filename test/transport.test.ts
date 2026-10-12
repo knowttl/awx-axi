@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
+import { PrivateFiles } from "../src/core/private-file.js";
 
 import {
   HttpTransport,
@@ -9,6 +14,43 @@ import { assertNoCountDisabled } from "../src/core/paginate.js";
 import { exchange, fixtureFetch, loadFixture } from "./support/fixtures.js";
 
 const BASE = "https://awx.example.com";
+
+const journals: string[] = [];
+afterEach(() => journals.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));
+
+describe("mutation journal failures", () => {
+  it.each(["post", "put", "patch", "delete"] as const)("refuses %s before sending when the journal is insecure", async (method) => {
+    const directory = mkdtempSync(join(tmpdir(), "awx-journal-"));
+    journals.push(directory);
+    const path = join(directory, "writes.log");
+    new PrivateFiles().write(path, "");
+    chmodSync(path, 0o640);
+    const { fetch, calls } = fixtureFetch([]);
+    const http = new HttpTransport({ baseUrl: BASE, apiBasePath: "/api/v2/", readOnly: false, fetch,
+      env: { AWX_AXI_WRITE_LOG: path, AWX_AXI_ALLOW_CONFIG_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1" } });
+    await expect(http[method]("jobs/1/")).rejects.toMatchObject({ code: "CONFIG_INSECURE" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each(["post", "put", "patch", "delete"] as const)("preserves %s response when journal writing fails after sending", async (method) => {
+    const directory = mkdtempSync(join(tmpdir(), "awx-journal-"));
+    journals.push(directory);
+    const path = join(directory, "writes.log");
+    const fixture = fixtureFetch(["job-detail-terminal"]);
+    const http = new HttpTransport({ baseUrl: BASE, apiBasePath: "/api/v2/", readOnly: false,
+      env: { AWX_AXI_WRITE_LOG: path, AWX_AXI_ALLOW_CONFIG_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1" },
+      fetch: async (url, init) => {
+        const response = await fixture.fetch(url, init);
+        rmSync(path);
+        mkdirSync(path);
+        return response;
+      } });
+    const result = await http[method]("jobs/1/");
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual(loadFixture("job-detail-terminal").body);
+    expect(fixture.calls).toHaveLength(1);
+  });
+});
 
 function transport(
   fixtures: readonly string[],

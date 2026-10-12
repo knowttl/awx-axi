@@ -15,7 +15,7 @@ import {
 } from "./core/auth.js";
 import { formatError, validationError } from "./core/errors.js";
 import { configPath, loadConfig, normalizeEnv, type Selection } from "./core/profiles.js";
-import { clearSecrets, redact, redactValue } from "./core/redact.js";
+import { clearSecrets, redact } from "./core/redact.js";
 import {
   splitResult,
   type Domain,
@@ -132,12 +132,6 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
   };
   const commands = buildCommands(context);
-  for (const [name, command] of Object.entries(commands)) {
-    commands[name] = async (args, commandContext) => {
-      const output = await command(args, commandContext);
-      return typeof output === "string" ? redact(output) : redactValue(output) as Record<string, unknown>;
-    };
-  }
 
   await runAxiCli({
     argv,

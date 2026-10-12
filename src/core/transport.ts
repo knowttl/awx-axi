@@ -10,6 +10,7 @@ import { networkError } from "./errors.js";
 import { walkPages } from "./paginate.js";
 import { booleanEnv, writeLogPath } from "./profiles.js";
 import { PrivateFiles } from "./private-file.js";
+import { redact } from "./redact.js";
 import { createTlsFetch } from "./tls-fetch.js";
 
 /** Query parameters for a read. Values are serialized by the implementation. */
@@ -320,6 +321,11 @@ export class HttpTransport implements AwxTransport {
       headers["Content-Type"] = "application/json";
     }
 
+    const journal = method !== "GET" && this.#options.env !== undefined
+      ? { files: new PrivateFiles(), path: writeLogPath(this.#options.env) } : undefined;
+    const previous = journal?.files.read(journal.path, true) ?? "";
+    if (journal) journal.files.write(journal.path, previous);
+
     let response: Response;
     try {
       response = await this.#fetch(url.toString(), {
@@ -331,11 +337,12 @@ export class HttpTransport implements AwxTransport {
       throw networkError(cause, url.host);
     }
 
-    if (method !== "GET" && this.#options.env !== undefined) {
-      const files = new PrivateFiles();
-      const path = writeLogPath(this.#options.env);
-      const previous = files.read(path, true) ?? "";
-      files.write(path, `${previous}${JSON.stringify({ at: new Date().toISOString(), method, status: response.status })}\n`);
+    if (journal) {
+      try {
+        journal.files.write(journal.path, `${previous}${JSON.stringify({ at: new Date().toISOString(), method, status: response.status })}\n`);
+      } catch (error) {
+        process.stderr.write(redact(`Write journal failed after ${method} returned ${response.status}: ${String(error)}\n`));
+      }
     }
     return {
       status: response.status,

@@ -19,8 +19,8 @@ export interface Credential {
   readonly path?: string;
 }
 
-export function resolveController(env: Env, selection: Selection = {}): ControllerConfig {
-  const { profile } = selectProfile(env, selection);
+export function resolveController(env: Env, selection: Selection = {}, login = false): ControllerConfig {
+  const { profile } = selectProfile(env, selection, undefined, false, login);
   const path = env.AWX_AXI_API_BASE_PATH ?? "/api/v2/";
   if (!/^\/[^?#]*$/.test(path) || path.startsWith("//")) throw new AxiError("AWX_AXI_API_BASE_PATH must be an absolute API path", "CONFIG_INVALID");
   return {
@@ -88,7 +88,7 @@ export function createTransport(env: Env, selection: Selection = {}, override?: 
 }
 
 export function createBasicAuthTransport(env: Env, selection: Selection = {}): AwxTransport {
-  const config = resolveController(env, selection);
+  const config = resolveController(env, selection, true);
   const basic = resolveBasicAuth(env);
   if (!basic) throw new AxiError("AWX_AXI_USERNAME and AWX_AXI_PASSWORD are required to mint a token", "AUTH_REQUIRED");
   return new HttpTransport({

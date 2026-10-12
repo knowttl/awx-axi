@@ -135,7 +135,7 @@ describe("credential profiles", () => {
   it("keeps insecure TLS scoped to the transport", () => {
     const before = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_VERIFY_SSL: "false", AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
-    expect(resolveController(env).verifySsl).toBe(false);
+    expect(resolveController(env, {}, true).verifySsl).toBe(false);
     expect(createBasicAuthTransport(env)).toBeDefined();
     expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe(before);
   });
@@ -160,6 +160,56 @@ describe("authentication through the CLI", () => {
     expect(run.transport.requests).toHaveLength(0);
   });
 
+  it("keeps hosted login config unchanged while storing the PAT", async () => {
+    const env = { ...environment(), AWX_AXI_HOSTED: "true", AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    configure(env, { hosted: { origin: production.origin, token: { stored: true } } });
+    const before = readFileSync(configPath(env), "utf8");
+    const run = await runCli(["auth", "login"], { env, script: [{ status: 201, body: { id: 9, token: "hosted-token" } }] });
+    expect(run.exitCode).toBe(0);
+    expect(readFileSync(configPath(env), "utf8")).toBe(before);
+    expect(resolveCredential(env)?.token).toBe("hosted-token");
+  });
+
+  it("rejects login-only env credentials for status before any request", async () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    const run = await runCli(["auth", "status"], { env });
+    expect(run.stdout).toContain("CONFIG_INVALID");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it.each(["template", "job"])("%s launch accepts true for credential password authorization", async (domain) => {
+    const env = { ...environment(), AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "TrUe" };
+    const path = join(env.XDG_STATE_HOME!, "passwords.json");
+    files.write(path, JSON.stringify({ ssh_password: "synthetic-password" }));
+    const run = await runCli([domain, "launch", "12", "--credential-passwords-file", path, "--confirm"], {
+      env, script: [{ status: 200, body: { passwords_needed_to_start: ["ssh_password"] } }, { status: 201, body: { id: 7, status: "pending" } }],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[1]?.body).toMatchObject({ credential_passwords: { ssh_password: "synthetic-password" } });
+  });
+
+  it.each(["template", "job"])("%s launch rejects malformed password authorization before launching", async (domain) => {
+    const env = { ...environment(), AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS: "yes" };
+    const run = await runCli([domain, "launch", "12", "--confirm"], {
+      env, script: [{ status: 200, body: { passwords_needed_to_start: ["ssh_password"] } }],
+    });
+    expect(run.stdout).toContain("CONFIG_INVALID");
+    expect(run.transport.requests).toHaveLength(1);
+  });
+
+  it.each([
+    ["0", "1", "DELETE_WRITES_DISABLED"],
+    ["1", "0", "SECURITY_WRITES_DISABLED"],
+  ])("retains the stored PAT when logout gates are %s and %s", async (deletes, security, code) => {
+    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: deletes, AWX_AXI_ALLOW_SECURITY_WRITES: security };
+    configure(env, { production });
+    saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
+    const run = await runCli(["auth", "logout"], { env });
+    expect(run.stdout).toContain(code);
+    expect(run.transport.requests).toHaveLength(0);
+    expect(resolveCredential(env)?.token).toBe("bound-token");
+  });
+
   it("reports the selected profile, source and cheap identity", async () => {
     const env = { ...environment(), PRODUCTION_PAT: "profile-token" };
     configure(env, { production });
@@ -173,7 +223,7 @@ describe("authentication through the CLI", () => {
 
   it("redacts resolved secrets and their encoded forms in upstream errors", async () => {
     const token = "synthetic-token/with-encoding";
-    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1" };
+    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
     configure(env, { production });
     saveToken(env, selectProfile(env), { origin: production.origin, token, id: 9 });
     const run = await runCli(["auth", "logout"], { env, script: [{ status: 403, body: { detail: `denied ${token} ${encodeURIComponent(token)}` } }] });
@@ -192,7 +242,7 @@ describe("authentication through the CLI", () => {
   });
 
   it("revokes the stored PAT before deleting it locally", async () => {
-    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1" };
+    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
     configure(env, { production });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const run = await runCli(["auth", "logout"], { env, script: [{ status: 204 }] });
@@ -202,7 +252,7 @@ describe("authentication through the CLI", () => {
   });
 
   it("keeps the local PAT when revocation fails", async () => {
-    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1" };
+    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
     configure(env, { production });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const run = await runCli(["auth", "logout"], { env, script: [{ status: 403 }] });

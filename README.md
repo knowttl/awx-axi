@@ -295,8 +295,11 @@ Non-secret flags `--origin` and `--verify-ssl true|false` override the selected 
 `awx-axi auth status` reports profile, origin, credential source and identity using one live read.
 `awx-axi doctor` performs the same bounded identity and credential permission check.
 `awx-axi auth login` mints a PAT, saves its id and origin in protected `credentials.json`, and writes a stored SecretRef into the selected profile.
+Hosted runners must set `AWX_AXI_HOSTED=1` (or `true`): login writes only state credentials and never changes config.
+The host owns profiles and must supply `{"stored":true}` for subsequent use of the saved PAT.
+Local login may update config with that SecretRef; the token itself is stored only in protected state credentials.
 When logging in with an environment profile, select the saved profile explicitly afterwards with `--profile env` while the environment variables remain set.
-`awx-axi auth logout` revokes that PAT upstream before removing it locally, requiring `AWX_AXI_ALLOW_DELETES=1` and respecting read-only mode.
+`awx-axi auth logout` revokes that PAT upstream before removing it locally, requiring `AWX_AXI_ALLOW_DELETES=1` and `AWX_AXI_ALLOW_SECURITY_WRITES=1` and respecting read-only mode.
 Revocation failures preserve the local PAT for retry.
 Stored tokens cannot be used after an origin change.
 

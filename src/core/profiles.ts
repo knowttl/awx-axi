@@ -158,7 +158,7 @@ export function loadConfig(env: Env, selection: Selection = {}, files = new Priv
   return { version: 1, profiles, ...(data.defaultProfile === undefined ? {} : { defaultProfile: data.defaultProfile as string }) };
 }
 
-export function selectProfile(envInput: Env, selection: Selection = {}, files = new PrivateFiles(), verifyAcl = false): SelectedProfile {
+export function selectProfile(envInput: Env, selection: Selection = {}, files = new PrivateFiles(), verifyAcl = false, login = false): SelectedProfile {
   const env = normalizeEnv(envInput);
   const config = loadConfig(env, selection, files, verifyAcl);
   const path = configPath(env, selection);
@@ -169,9 +169,8 @@ export function selectProfile(envInput: Env, selection: Selection = {}, files = 
     if (!Object.hasOwn(config.profiles, name)) throw new AxiError("selected profile was not found", "PROFILE_NOT_FOUND");
     profile = config.profiles[name]!;
   } else if (env.AWX_AXI_ORIGIN !== undefined) {
-    // A complete login environment can select the env profile before a PAT exists.
-    if (!env.AWX_AXI_TOKEN && !(env.AWX_AXI_USERNAME && env.AWX_AXI_PASSWORD)) {
-      invalid("env profile is incomplete: AWX_AXI_ORIGIN requires AWX_AXI_TOKEN or login credentials");
+    if (!env.AWX_AXI_TOKEN && !(login && env.AWX_AXI_USERNAME && env.AWX_AXI_PASSWORD)) {
+      invalid("env profile is incomplete: AWX_AXI_ORIGIN requires AWX_AXI_TOKEN (or login credentials for auth login)");
     }
     name = "env";
     profile = { origin: validateOrigin(env.AWX_AXI_ORIGIN), verifySsl: booleanEnv(env, "AWX_AXI_VERIFY_SSL", true), token: { env: "AWX_AXI_TOKEN" } };
@@ -215,9 +214,11 @@ export function storedToken(env: Env, selected: SelectedProfile, files = new Pri
 }
 
 export function saveToken(env: Env, selected: SelectedProfile, token: StoredToken, files = new PrivateFiles()): void {
+  const hosted = booleanEnv(env, "AWX_AXI_HOSTED");
   const credentials = loadCredentials(env, files);
   credentials.profiles[selected.name] = token;
   files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
+  if (hosted) return;
   selected.config.profiles[selected.name] = { ...selected.profile, token: { stored: true } };
   selected.config.defaultProfile ??= selected.name;
   files.write(selected.path, `${JSON.stringify(selected.config, null, 2)}\n`);

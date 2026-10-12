@@ -4,6 +4,7 @@
 import { statSync, readFileSync } from "node:fs";
 
 import { AxiError } from "axi-sdk-js";
+import { booleanEnv } from "../../core/profiles.js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
@@ -330,7 +331,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   let credentialPasswords: Record<string, unknown> | undefined;
 
   if (Array.isArray(passwordsNeeded) && passwordsNeeded.length > 0) {
-    const allowPasswords = input.context.env.AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS === "1";
+    const allowPasswords = booleanEnv(input.context.env, "AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS");
     const passFile = typeof input.flags["credential-passwords-file"] === "string"
       ? input.flags["credential-passwords-file"]
       : undefined;
