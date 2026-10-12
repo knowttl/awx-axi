@@ -191,6 +191,10 @@ export function selectProfile(envInput: Env, selection: Selection = {}, files = 
 }
 
 export function loadCredentials(env: Env, files = new PrivateFiles(), verifyAcl = false): Credentials {
+  return files.withLock(credentialsPath(env), () => readCredentials(env, files, verifyAcl));
+}
+
+function readCredentials(env: Env, files: PrivateFiles, verifyAcl = false): Credentials {
   const raw = files.read(credentialsPath(env), true, verifyAcl);
   if (raw === undefined) return { version: 1, profiles: Object.create(null) as Record<string, StoredToken> };
   let parsed: unknown;
@@ -218,7 +222,7 @@ export function storedToken(env: Env, selected: SelectedProfile, files = new Pri
 
 export function saveToken(env: Env, selected: SelectedProfile, token: StoredToken, files = new PrivateFiles(), implicit = false): void {
   files.withLock(credentialsPath(env), () => {
-    const credentials = loadCredentials(env, files);
+    const credentials = readCredentials(env, files);
     const current = credentials.profiles[selected.name];
     if (implicit && current && current.origin !== token.origin) {
       invalid("environment login would replace an env profile bound to another controller; select a configured profile explicitly with --profile or AWX_AXI_PROFILE");
@@ -231,7 +235,7 @@ export function saveToken(env: Env, selected: SelectedProfile, token: StoredToke
 export function deleteToken(env: Env, selected: SelectedProfile, revoked: StoredToken, files = new PrivateFiles()): boolean {
   let removed = true;
   files.withLock(credentialsPath(env), () => {
-    const credentials = loadCredentials(env, files);
+    const credentials = readCredentials(env, files);
     const current = credentials.profiles[selected.name];
     if (current && (current.id !== revoked.id || current.origin !== revoked.origin || current.token !== revoked.token)) {
       removed = false;

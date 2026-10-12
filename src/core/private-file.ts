@@ -96,7 +96,7 @@ export class PrivateFiles {
     return directory;
   }
 
-  withLock(path: string, transaction: () => void): void {
+  withLock<T>(path: string, transaction: () => T): T {
     let lock: string;
     try { lock = join(realpathSync(this.#directory(path)), `${basename(path)}.lock`); } catch { throw this.#insecure(path); }
     const owner = `${lock}.${randomUUID()}.owner`;
@@ -127,7 +127,7 @@ export class PrivateFiles {
           (this.#options.wait ?? wait)(20);
         }
       }
-      try { transaction(); } finally {
+      try { return transaction(); } finally {
         const current = existsSync(lock) ? lstatSync(lock) : undefined;
         const original = lstatSync(owner);
         if (current?.ino === original.ino && current.dev === original.dev) rmSync(lock, { force: true });
