@@ -5,8 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createBasicAuthTransport, resolveController, resolveCredential } from "../src/core/auth.js";
+import { authCommand } from "../src/commands/auth.js";
+import { RecordedTransport } from "../src/core/transport.js";
 import { PrivateFiles } from "../src/core/private-file.js";
-import { booleanEnv, configPath, credentialsPath, loadConfig, normalizeEnv, saveToken, selectProfile, toolDirectory, validateOrigin, validateRef, type Env } from "../src/core/profiles.js";
+import { booleanEnv, configPath, credentialsPath, deleteToken, loadConfig, loadCredentials, normalizeEnv, saveToken, selectProfile, toolDirectory, validateOrigin, validateRef, type Env } from "../src/core/profiles.js";
 import { runCli } from "./support/run.js";
 
 const homes: string[] = [];
@@ -14,7 +16,7 @@ const files = new PrivateFiles();
 function environment(): Env {
   const path = mkdtempSync(join(tmpdir(), "awx-axi-auth-"));
   homes.push(path);
-  return { XDG_CONFIG_HOME: join(path, "config"), XDG_STATE_HOME: join(path, "state"), AWX_AXI_HOME: join(path, "legacy") };
+  return { HOME: path, XDG_CONFIG_HOME: join(path, "config"), XDG_STATE_HOME: join(path, "state"), XDG_CACHE_HOME: join(path, "cache"), APPDATA: join(path, "appdata"), LOCALAPPDATA: join(path, "localappdata"), AWX_AXI_HOME: join(path, "legacy") };
 }
 function configure(env: Env, profiles: Record<string, unknown>, defaultProfile?: string): void {
   files.write(configPath(env), JSON.stringify({ version: 1, profiles, ...(defaultProfile ? { defaultProfile } : {}) }));
@@ -26,6 +28,54 @@ const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["s
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
+  it.each(["https://awx.example.com/controller/..", "https://awx.example.com/.", "https://awx.example.com/%2e", "https://awx.example.com/controller/%2e%2e", "https://awx.example.com\\controller\\..", "https://awx.example.com/\n"])("rejects paths before origin normalization: %s", (origin) => {
+    expect(() => validateOrigin(origin)).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
+  });
+
+  it.each(["https://awx.example.com", "https://awx.example.com/"])("accepts root origins: %s", (origin) => {
+    expect(validateOrigin(origin)).toBe(production.origin);
+  });
+
+  it("rejects a competing implicit login after both pre-mint checks pass", async () => {
+    const env = { ...environment(), AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
+    const first = new RecordedTransport([{ status: 201, body: { id: 1, token: "first-token" } }], { env });
+    const second = new RecordedTransport([{ status: 201, body: { id: 2, token: "second-token" } }], { env });
+    const outcomes = await Promise.allSettled([
+      authCommand(["login"], { env: { ...env, AWX_AXI_ORIGIN: production.origin }, selection: {}, createTransport: () => first, createBasicAuthTransport: () => first }),
+      authCommand(["login"], { env: { ...env, AWX_AXI_ORIGIN: "https://other.example.com" }, selection: {}, createTransport: () => second, createBasicAuthTransport: () => second }),
+    ]);
+    expect(outcomes).toMatchObject([{ status: "fulfilled" }, { status: "rejected", reason: { code: "CONFIG_INVALID" } }]);
+    expect(loadCredentials(env).profiles.env).toEqual({ origin: production.origin, token: "first-token", id: 1 });
+    expect(first.requests).toHaveLength(1);
+    expect(second.requests).toHaveLength(1);
+  });
+
+  it("retains a replacement saved while logout revokes the old PAT", async () => {
+    const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
+    configure(env, { production: { origin: production.origin } });
+    const selected = selectProfile(env);
+    saveToken(env, selected, { origin: production.origin, token: "old-token", id: 1 });
+    const transport = new RecordedTransport([{ status: 204 }], { env });
+    const pending = authCommand(["logout"], { env, selection: {}, createTransport: () => transport, createBasicAuthTransport: () => transport });
+    const replacement = { origin: production.origin, token: "new-token", id: 2 };
+    saveToken(env, selected, replacement);
+    expect(await pending).toEqual({ auth: "PAT revoked for profile production; replacement credential retained" });
+    expect(loadCredentials(env).profiles.production).toEqual(replacement);
+  });
+
+  it.each([
+    { origin: production.origin, token: "old-token", id: 2 },
+    { origin: "https://other.example.com", token: "old-token", id: 1 },
+    { origin: production.origin, token: "new-token", id: 1 },
+  ])("retains a credential differing from the revoked PAT: %j", (replacement) => {
+    const env = environment();
+    configure(env, { production: { origin: production.origin } });
+    const selected = selectProfile(env);
+    saveToken(env, selected, replacement);
+    expect(deleteToken(env, selected, { origin: production.origin, token: "old-token", id: 1 })).toBe(false);
+    expect(loadCredentials(env).profiles.production).toEqual(replacement);
+  });
+
   it("selects the only profile and resolves its named SecretRef without mixing the env profile", () => {
     const env: Env = { ...environment(), AWX_AXI_TOKEN: "unrelated-token", PRODUCTION_PAT: "profile-token" };
     configure(env, { production });

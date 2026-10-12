@@ -1,4 +1,6 @@
 import { once } from "node:events";
+import assert from "node:assert/strict";
+import { closeSync, openSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -6,9 +8,22 @@ import { pathToFileURL } from "node:url";
 const compiled = process.argv[2];
 const { HttpTransport, RecordedTransport } = await import(pathToFileURL(join(compiled, "core/transport.js")));
 const { authCommand } = await import(pathToFileURL(join(compiled, "commands/auth.js")));
+const { PrivateFiles } = await import(pathToFileURL(join(compiled, "core/private-file.js")));
 process.send("ready");
 const [input] = await once(process, "message");
-if (input.command === "journal") {
+if (input.command === "reclaim") {
+  const path = join(input.env.XDG_STATE_HOME, "reclamation");
+  const files = new PrivateFiles();
+  for (let index = 0; index < 20; index += 1) files.withLock(path, () => {
+    const owner = JSON.parse(files.read(`${path}.lock`, true));
+    assert.equal(owner.pid, process.pid);
+    assert.ok(Number.isFinite(owner.startTime));
+    const marker = `${path}.active`;
+    const fd = openSync(marker, "wx");
+    try { files.write(path, `${files.read(path, true) ?? ""}${process.pid}\n`); }
+    finally { closeSync(fd); rmSync(marker); }
+  });
+} else if (input.command === "journal") {
   const transport = new HttpTransport({
     baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: false, env: input.env,
     fetch: async () => new globalThis.Response(null, { status: 204 }),

@@ -1,4 +1,4 @@
-import { fork } from "node:child_process";
+import { execFileSync, fork } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,6 +62,17 @@ async function concurrent(env: Env, commands: readonly string[]): Promise<void> 
 }
 
 describe("state transactions across CLI processes", () => {
+  it("serializes two stale-lock reclaimers with complete owner records", async () => {
+    const env = environment();
+    const path = join(env.XDG_STATE_HOME!, "reclamation");
+    const owner = execFileSync(process.execPath, ["-e", "process.stdout.write(JSON.stringify({pid:process.pid,startTime:Date.now()}))"], { encoding: "utf8", env: { ...process.env, ...env } });
+    files.write(`${path}.lock`, owner);
+    await concurrent(env, ["reclaim", "reclaim"]);
+    const entries = readFileSync(path, "utf8").trim().split("\n");
+    expect(entries).toHaveLength(40);
+    expect(new Set(entries).size).toBe(2);
+  }, 15000);
+
   it("retains every journal entry from two concurrent processes", async () => {
     const env = environment();
     await concurrent(env, ["journal", "journal"]);

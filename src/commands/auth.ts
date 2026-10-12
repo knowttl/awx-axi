@@ -47,7 +47,8 @@ async function login(context: AuthContext): Promise<Renderable> {
   if (!basic) throw validationError("auth login needs AWX_AXI_USERNAME and AWX_AXI_PASSWORD in the environment");
   const selected = selectProfile(context.env, context.selection, undefined, false, true);
   const credentials = loadCredentials(context.env);
-  if (selected.name === "env" && context.selection.profile === undefined && context.env.AWX_AXI_PROFILE === undefined &&
+  const implicit = selected.name === "env" && context.selection.profile === undefined && context.env.AWX_AXI_PROFILE === undefined;
+  if (implicit &&
     [selected.config.profiles.env?.origin, credentials.profiles.env?.origin].some((origin) => origin !== undefined && origin !== selected.profile.origin)) {
     throw new AxiError("environment login would replace an env profile bound to another controller; select a configured profile explicitly with --profile or AWX_AXI_PROFILE", "CONFIG_INVALID");
   }
@@ -57,7 +58,7 @@ async function login(context: AuthContext): Promise<Renderable> {
   if (typeof body.token !== "string" || !body.token) throw new AxiError("controller returned no token", "AUTH_REQUIRED");
   registerSecret(body.token);
   if (!Number.isSafeInteger(body.id) || (body.id as number) <= 0) throw new AxiError("controller returned no PAT id; credential was not stored", "AUTH_REQUIRED");
-  saveToken(context.env, selected, { origin: selected.profile.origin, token: body.token, id: body.id as number });
+  saveToken(context.env, selected, { origin: selected.profile.origin, token: body.token, id: body.id as number }, undefined, implicit);
   return { auth: { profile: selected.name, origin: selected.profile.origin, user: basic.username, credential: `stored in ${credentialsPath(context.env)}`, scope: body.scope ?? "write" },
     help: [
       ...(Object.hasOwn(selected.config.profiles, selected.name) ? [] : [`Add profile ${selected.name} with origin ${selected.profile.origin} to ${selected.path}; login never writes config`]),
@@ -83,6 +84,6 @@ async function logout(context: AuthContext): Promise<Renderable> {
   assertWritable(context.env, "DELETE", `tokens/${stored.id}/`);
   const response = await context.createTransport({ token: stored.token, source: "stored" }).delete(`tokens/${stored.id}/`, "security");
   if (response.status !== 204 && response.status !== 404) throw errorForResponse(response, { subject: "PAT revocation" });
-  deleteToken(context.env, selected);
-  return { auth: `PAT revoked and removed for profile ${selected.name}` };
+  const removed = deleteToken(context.env, selected, stored);
+  return { auth: removed ? `PAT revoked and removed for profile ${selected.name}` : `PAT revoked for profile ${selected.name}; replacement credential retained` };
 }

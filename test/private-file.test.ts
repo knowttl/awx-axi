@@ -31,7 +31,7 @@ describe("private-file transaction locks", () => {
     files.withLock(path, () => {
       expect(() => files.withLock(path, () => files.write(path, "unexpected")))
         .toThrow(/timed out waiting for file lock/);
-      expect(files.read(`${path}.lock`, true)).toBe(String(process.pid));
+      expect(JSON.parse(files.read(`${path}.lock`, true)!)).toEqual({ pid: process.pid, startTime: expect.any(Number) });
     });
     expect(existsSync(path)).toBe(false);
   });
@@ -40,7 +40,7 @@ describe("private-file transaction locks", () => {
     const path = join(directory(), "state");
     const owner = execFileSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" });
     const files = new PrivateFiles();
-    files.write(`${path}.lock`, owner);
+    files.write(`${path}.lock`, JSON.stringify({ pid: Number(owner), startTime: 1 }));
     files.withLock(path, () => files.write(path, "recovered"));
     expect(files.read(path, true)).toBe("recovered");
     expect(existsSync(`${path}.lock`)).toBe(false);
@@ -50,12 +50,25 @@ describe("private-file transaction locks", () => {
     const parent = directory();
     const path = join(parent, "state");
     const files = new PrivateFiles({ platform: "win32", acl: (target, action, isDirectory) => {
-      if (!isDirectory && action === "restrict") expect(readFileSync(target, "utf8")).toBe("");
+      if (!isDirectory && action === "restrict") {
+        expect(readFileSync(target, "utf8")).toBe("");
+        expect(existsSync(`${path}.lock`)).toBe(false);
+      }
     } });
     files.withLock(path, () => {
-      expect(files.read(`${path}.lock`, true)).toBe(String(process.pid));
+      expect(JSON.parse(files.read(`${path}.lock`, true)!)).toEqual({ pid: process.pid, startTime: expect.any(Number) });
     });
     expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  it("never publishes an ownerless lock when owner preparation fails", () => {
+    const parent = directory();
+    const path = join(parent, "state");
+    const files = new PrivateFiles({ platform: "win32", acl: (_target, action, isDirectory) => {
+      if (!isDirectory && action === "restrict") throw new Error("ACL failure");
+    } });
+    expect(() => files.withLock(path, () => {})).toThrow(expect.objectContaining({ code: "CONFIG_INSECURE" }));
+    expect(readdirSync(parent)).toEqual([]);
   });
 });
 

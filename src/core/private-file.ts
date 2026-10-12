@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync, closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync,
+  chmodSync, closeSync, constants, existsSync, fstatSync, fsyncSync, linkSync, lstatSync,
   mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -90,45 +90,49 @@ export class PrivateFiles {
   withLock(path: string, transaction: () => void): void {
     let lock: string;
     try { lock = join(realpathSync(this.#directory(path)), `${basename(path)}.lock`); } catch { throw this.#insecure(path); }
-    let fd: number | undefined;
-    for (let attempt = 0; fd === undefined; attempt += 1) {
-      if (attempt >= 100) throw new AxiError(`timed out waiting for file lock: ${lock}`, "CONFIG_INVALID");
-      try {
-        fd = openSync(lock, "wx", this.#windows ? undefined : 0o600);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw this.#insecure(lock);
-        try {
-          const identity = lstatSync(lock);
-          const owner = Number(this.read(lock, true));
-          if (Number.isSafeInteger(owner) && owner > 0) {
-            try { process.kill(owner, 0); } catch (cause) {
-              if ((cause as NodeJS.ErrnoException).code === "ESRCH") {
-                const current = lstatSync(lock);
-                if (current.ino === identity.ino && current.dev === identity.dev) rmSync(lock, { force: true });
-                continue;
-              }
-            }
-          }
-        } catch (cause) {
-          if ((cause as NodeJS.ErrnoException).code === "ENOENT") continue;
-          throw cause;
-        }
-        (this.#options.wait ?? wait)(20);
-      }
-    }
+    const owner = `${lock}.${randomUUID()}.owner`;
+    this.write(owner, JSON.stringify({ pid: process.pid, startTime: Date.now() - process.uptime() * 1000 }));
     try {
-      try {
-        if (this.#windows) this.#acl(lock, "restrict");
-        writeFileSync(fd, String(process.pid), "utf8");
-        fsyncSync(fd);
-        closeSync(fd);
-        fd = undefined;
-      } catch { throw this.#insecure(lock); }
-      transaction();
-    } finally {
-      if (fd !== undefined) closeSync(fd);
-      rmSync(lock, { force: true });
+      for (let attempt = 0; ; attempt += 1) {
+        if (attempt >= 100) throw new AxiError(`timed out waiting for file lock: ${lock}`, "CONFIG_INVALID");
+        try { linkSync(owner, lock); break; } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw this.#insecure(lock);
+          try {
+            if (this.#ownerGone(lock)) {
+              const reclaimed = `${lock}.${randomUUID()}.stale`;
+              renameSync(lock, reclaimed);
+              if (this.#ownerGone(reclaimed)) rmSync(reclaimed);
+              else {
+                // A live replacement may be renamed during reclamation; another contender can publish before restoration.
+                try { linkSync(reclaimed, lock); } catch (cause) {
+                  if ((cause as NodeJS.ErrnoException).code !== "EEXIST") throw cause;
+                }
+                rmSync(reclaimed);
+              }
+              continue;
+            }
+          } catch (cause) {
+            if ((cause as NodeJS.ErrnoException).code === "ENOENT") continue;
+            throw cause;
+          }
+          (this.#options.wait ?? wait)(20);
+        }
+      }
+      try { transaction(); } finally {
+        const current = existsSync(lock) ? lstatSync(lock) : undefined;
+        const original = lstatSync(owner);
+        if (current?.ino === original.ino && current.dev === original.dev) rmSync(lock, { force: true });
+      }
+    } finally { rmSync(owner, { force: true }); }
+  }
+
+  #ownerGone(path: string): boolean {
+    const record = JSON.parse(this.read(path, true) ?? "null") as { pid?: number; startTime?: number } | null;
+    if (!record || !Number.isSafeInteger(record.pid) || record.pid! <= 0 || !Number.isFinite(record.startTime)) return false;
+    try { process.kill(record.pid!, 0); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return true;
     }
+    return false;
   }
 
   #write(path: string, content: string): void {

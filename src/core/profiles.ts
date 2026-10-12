@@ -88,9 +88,12 @@ export function writeLogPath(env: Env): string {
 
 export function validateOrigin(value: unknown): string {
   if (typeof value !== "string") return invalid("origin must be an HTTPS origin");
+  if (!/^https:\/\/[^/\\\s@?#]+\/?$/i.test(value)) {
+    return invalid("origin must use https:// with no path, userinfo, query or fragment; plain HTTP controllers are refused");
+  }
   let url: URL;
   try { url = new URL(value); } catch { return invalid("origin must be an HTTPS origin"); }
-  if (url.protocol !== "https:" || /[@?#]/.test(value) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+  if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
     return invalid("origin must use https:// with no path, userinfo, query or fragment; plain HTTP controllers are refused");
   }
   return url.origin;
@@ -213,18 +216,29 @@ export function storedToken(env: Env, selected: SelectedProfile, files = new Pri
   return stored;
 }
 
-export function saveToken(env: Env, selected: SelectedProfile, token: StoredToken, files = new PrivateFiles()): void {
+export function saveToken(env: Env, selected: SelectedProfile, token: StoredToken, files = new PrivateFiles(), implicit = false): void {
   files.withLock(credentialsPath(env), () => {
     const credentials = loadCredentials(env, files);
+    const current = credentials.profiles[selected.name];
+    if (implicit && current && current.origin !== token.origin) {
+      invalid("environment login would replace an env profile bound to another controller; select a configured profile explicitly with --profile or AWX_AXI_PROFILE");
+    }
     credentials.profiles[selected.name] = token;
     files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
   });
 }
 
-export function deleteToken(env: Env, selected: SelectedProfile, files = new PrivateFiles()): void {
+export function deleteToken(env: Env, selected: SelectedProfile, revoked: StoredToken, files = new PrivateFiles()): boolean {
+  let removed = true;
   files.withLock(credentialsPath(env), () => {
     const credentials = loadCredentials(env, files);
+    const current = credentials.profiles[selected.name];
+    if (current && (current.id !== revoked.id || current.origin !== revoked.origin || current.token !== revoked.token)) {
+      removed = false;
+      return;
+    }
     delete credentials.profiles[selected.name];
     files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
   });
+  return removed;
 }
