@@ -5,7 +5,7 @@
 Implement the agreed AXI credential standard for awx-axi.
 The migration closes I-01, I-02, I-04, I-05, I-06, I-09, I-10 and I-16 from the credential audit.
 The public contract is https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md.
-Plain HTTP remains refused pending an owner decision about an explicit exception.
+The awx-axi HTTP exception and consent contract are documented in [README configuration](../README.md#configuration).
 
 ## Verification
 
@@ -22,6 +22,17 @@ Never run live tests, contact a real controller, read real credentials, mint a r
 7. Verify isolated TLS agents and refusal to send credentials through cross-origin pagination links or followed redirects.
 8. Verify exact-secret and encoded-secret redaction in rendered output and errors.
 9. Pack and install the CLI into a temporary directory; verify the shipped credential schema and executable help.
+10. Verify HTTPS works with or without HTTP consent, HTTP fails by default, profile consent permits HTTP, and environment consent uses the shared boolean parser with `CONFIG_INVALID` for malformed values.
+11. Verify consent never crosses profiles, `--allow-http` persists only on the logged-in profile after successful login, and HTTP use emits a one-line stderr warning.
+12. Verify the HTTP adapter against a synthetic loopback controller without following redirects.
+
+## Delivery
+
+Open the PR against `knowttl/awx-axi` with explicit `--repo knowttl/awx-axi -B main`.
+The PR body must link the credential standard and describe the awx-axi exception documented in [README configuration](../README.md#configuration).
+This change follows the merged credential migration and closes no additional audit issue ids.
+Keep private task paths, secret values and supervisor details out of this public repository and PR.
+Use the normal environment for no-mistakes itself; all tool execution and tests must use the temporary home and application directories above.
 
 Windows DACL behavior is verified only with fakes on this Linux host.
 A native Windows config write and `auth status` run remain recommended before release.

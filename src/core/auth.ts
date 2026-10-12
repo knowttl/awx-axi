@@ -21,6 +21,7 @@ export interface Credential {
 
 export function resolveController(env: Env, selection: Selection = {}, login = false): ControllerConfig {
   const { profile } = selectProfile(env, selection, undefined, false, login);
+  if (profile.origin.startsWith("http://")) process.stderr.write("warning: plain HTTP controller traffic, including credentials, is unencrypted\n");
   const path = env.AWX_AXI_API_BASE_PATH ?? "/api/v2/";
   if (!/^\/[^?#]*$/.test(path) || path.startsWith("//")) throw new AxiError("AWX_AXI_API_BASE_PATH must be an absolute API path", "CONFIG_INVALID");
   return {

@@ -12,6 +12,7 @@ export type SecretRef = { env: string } | { file: string } | { stored: true };
 export interface Profile {
   origin: string;
   verifySsl?: boolean;
+  allowHttp?: boolean;
   token?: SecretRef;
 }
 export interface ProfileConfig {
@@ -24,6 +25,7 @@ export interface Selection {
   profile?: string;
   origin?: string;
   verifySsl?: boolean;
+  allowHttp?: boolean;
 }
 export interface SelectedProfile {
   name: string;
@@ -86,15 +88,15 @@ export function writeLogPath(env: Env): string {
   return env.AWX_AXI_WRITE_LOG ?? join(toolDirectory("state", env), "writes.log");
 }
 
-export function validateOrigin(value: unknown): string {
+export function validateOrigin(value: unknown, allowHttp = false): string {
   if (typeof value !== "string") return invalid("origin must be an HTTPS origin");
-  if (!/^https:\/\/[^/\\\s@?#]+\/?$/i.test(value)) {
-    return invalid("origin must use https:// with no path, userinfo, query or fragment; plain HTTP controllers are refused");
+  if (!/^https?:\/\/[^/\\\s@?#]+\/?$/i.test(value)) {
+    return invalid("origin must use https:// with no path, userinfo, query or fragment; HTTP requires allowHttp: true");
   }
   let url: URL;
   try { url = new URL(value); } catch { return invalid("origin must be an HTTPS origin"); }
-  if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
-    return invalid("origin must use https:// with no path, userinfo, query or fragment; plain HTTP controllers are refused");
+  if ((url.protocol !== "https:" && !(allowHttp && url.protocol === "http:")) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+    return invalid("origin must use https:// with no path, userinfo, query or fragment; HTTP requires allowHttp: true");
   }
   return url.origin;
 }
@@ -147,10 +149,13 @@ export function loadConfig(env: Env, selection: Selection = {}, files = new Priv
   for (const [name, value] of Object.entries(record(data.profiles, "profiles"))) {
     profileName(name);
     const input = record(value, "profile");
-    keys(input, ["origin", "verifySsl", "token"], "profile");
+    keys(input, ["origin", "verifySsl", "allowHttp", "token"], "profile");
     if (input.verifySsl !== undefined && typeof input.verifySsl !== "boolean") invalid("verifySsl must be a boolean");
+    if (input.allowHttp !== undefined && typeof input.allowHttp !== "boolean") invalid("allowHttp must be a boolean");
     profiles[name] = {
-      origin: validateOrigin(input.origin),
+      // Enforce HTTP consent after selection, including login's explicit opt-in.
+      origin: validateOrigin(input.origin, true),
+      ...(input.allowHttp === undefined ? {} : { allowHttp: input.allowHttp as boolean }),
       ...(input.verifySsl === undefined ? {} : { verifySsl: input.verifySsl as boolean }),
       ...(input.token === undefined ? {} : { token: validateRef(input.token) }),
     };
@@ -176,16 +181,19 @@ export function selectProfile(envInput: Env, selection: Selection = {}, files = 
       invalid("env profile is incomplete: AWX_AXI_ORIGIN requires AWX_AXI_TOKEN (or login credentials for auth login)");
     }
     name = "env";
-    profile = { origin: validateOrigin(env.AWX_AXI_ORIGIN), verifySsl: booleanEnv(env, "AWX_AXI_VERIFY_SSL", true), token: { env: "AWX_AXI_TOKEN" } };
+    const allowHttp = booleanEnv(env, "AWX_AXI_ALLOW_HTTP");
+    profile = { origin: validateOrigin(env.AWX_AXI_ORIGIN, allowHttp || (login && selection.allowHttp === true)), allowHttp, verifySsl: booleanEnv(env, "AWX_AXI_VERIFY_SSL", true), token: { env: "AWX_AXI_TOKEN" } };
   } else {
-    if (env.AWX_AXI_TOKEN !== undefined || env.AWX_AXI_VERIFY_SSL !== undefined) invalid("env profile is incomplete: AWX_AXI_ORIGIN is required");
+    if (env.AWX_AXI_TOKEN !== undefined || env.AWX_AXI_VERIFY_SSL !== undefined || env.AWX_AXI_ALLOW_HTTP !== undefined) invalid("env profile is incomplete: AWX_AXI_ORIGIN is required");
     const names = Object.keys(config.profiles);
     name = config.defaultProfile ?? (names.length === 1 ? names[0] : undefined);
     if (name === undefined) throw new AxiError("select a configured profile with --profile or AWX_AXI_PROFILE", names.length ? "PROFILE_AMBIGUOUS" : "PROFILE_REQUIRED");
     profile = config.profiles[name]!;
   }
+  const allowHttp = profile.allowHttp === true || (login && selection.allowHttp === true);
   return { name, config, path, profile: { ...profile,
-    ...(selection.origin === undefined ? {} : { origin: validateOrigin(selection.origin) }),
+    origin: validateOrigin(selection.origin ?? profile.origin, allowHttp),
+    ...(allowHttp ? { allowHttp: true } : {}),
     ...(selection.verifySsl === undefined ? {} : { verifySsl: selection.verifySsl }),
   } };
 }
@@ -208,7 +216,8 @@ function readCredentials(env: Env, files: PrivateFiles, verifyAcl = false): Cred
     const token = record(rawToken, "stored token");
     keys(token, ["origin", "token", "id"], "stored token");
     if (typeof token.token !== "string" || !token.token || !Number.isSafeInteger(token.id) || (token.id as number) <= 0) invalid("invalid stored token");
-    profiles[name] = { origin: validateOrigin(token.origin), token: token.token as string, id: token.id as number };
+    // Stored bindings grant no HTTP consent; selectProfile enforces that policy.
+    profiles[name] = { origin: validateOrigin(token.origin, true), token: token.token as string, id: token.id as number };
   }
   return { version: 1, profiles };
 }

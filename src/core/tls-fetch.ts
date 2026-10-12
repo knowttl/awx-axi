@@ -1,12 +1,14 @@
+import { Agent as HttpAgent, request as httpRequest } from "node:http";
 import { Agent, request } from "node:https";
 
 import type { FetchLike } from "./transport.js";
 
 /** A scoped agent never changes TLS verification for another transport. */
-export function createTlsFetch(verifySsl: boolean, send: typeof request = request): FetchLike {
+export function createTlsFetch(verifySsl: boolean, send?: typeof request): FetchLike {
   return (url, init) => new Promise((resolve, reject) => {
-  const agent = new Agent({ rejectUnauthorized: verifySsl });
-  const outgoing = send(url, { method: init.method, headers: init.headers, agent }, (incoming) => {
+  const plainHttp = new URL(url).protocol === "http:";
+  const agent = plainHttp ? new HttpAgent() : new Agent({ rejectUnauthorized: verifySsl });
+  const outgoing = (send ?? (plainHttp ? httpRequest : request))(url, { method: init.method, headers: init.headers, agent }, (incoming) => {
     const chunks: Buffer[] = [];
     incoming.on("data", (chunk: Buffer) => chunks.push(chunk));
     incoming.on("error", (error) => { agent.destroy(); reject(error); });

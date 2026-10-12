@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { createServer } from "node:http";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import { Agent, type request } from "node:https";
 
@@ -7,6 +8,20 @@ import { describe, expect, it } from "vitest";
 import { createTlsFetch } from "../src/core/tls-fetch.js";
 
 describe("request-scoped TLS", () => {
+  it("sends plain HTTP to a synthetic loopback controller without following redirects", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(302, { location: "https://other.example.com" });
+      response.end("synthetic HTTP response");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address() as { port: number };
+      const response = await createTlsFetch(true)(`http://127.0.0.1:${address.port}/api/v2/me/`, { method: "GET", headers: {} });
+      expect(response.status).toBe(302);
+      expect(await response.text()).toBe("synthetic HTTP response");
+    } finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
+  });
+
   it("keeps verified and unverified requests isolated and does not follow redirects", async () => {
     const agents: Agent[] = [];
     const send = ((_url: string, options: { agent: Agent }, callback: (response: IncomingMessage) => void) => {
