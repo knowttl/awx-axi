@@ -227,7 +227,7 @@ export interface HttpTransportOptions {
   readonly attempts?: number;
 }
 
-/** The production transport uses a scoped Node HTTPS agent. */
+/** The production transport uses a scoped Node HTTP or HTTPS agent. */
 export class HttpTransport implements AwxTransport {
   readonly #options: HttpTransportOptions;
   readonly #fetch: FetchLike;

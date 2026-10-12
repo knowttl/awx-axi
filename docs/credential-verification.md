@@ -5,8 +5,7 @@
 Implement the agreed AXI credential standard for awx-axi.
 The migration closes I-01, I-02, I-04, I-05, I-06, I-09, I-10 and I-16 from the credential audit.
 The public contract is https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md.
-HTTPS remains the default.
-Plain HTTP requires explicit consent on the selected profile through `allowHttp: true`, `auth login --allow-http`, or `AWX_AXI_ALLOW_HTTP=1` for the environment profile.
+The awx-axi HTTP exception and consent contract are documented in [README configuration](../README.md#configuration).
 
 ## Verification
 
@@ -30,7 +29,7 @@ Never run live tests, contact a real controller, read real credentials, mint a r
 ## Delivery
 
 Open the PR against `knowttl/awx-axi` with explicit `--repo knowttl/awx-axi -B main`.
-The PR body must link the credential standard and describe the awx-axi exception: HTTP requires per-profile consent, HTTPS stays the default, and origins still cannot contain paths, userinfo, queries or fragments.
+The PR body must link the credential standard and describe the awx-axi exception documented in [README configuration](../README.md#configuration).
 This change follows the merged credential migration and closes no additional audit issue ids.
 Keep private task paths, secret values and supervisor details out of this public repository and PR.
 Use the normal environment for no-mistakes itself; all tool execution and tests must use the temporary home and application directories above.

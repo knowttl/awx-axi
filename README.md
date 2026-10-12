@@ -292,16 +292,16 @@ Non-secret flags `--origin` and `--verify-ssl true|false` override the selected 
 HTTPS is the default.
 Plain HTTP requires `"allowHttp": true` on the selected profile, or `AWX_AXI_ALLOW_HTTP=1` for the environment profile.
 `auth login --allow-http` explicitly permits HTTP for that login and saves `allowHttp: true` in the selected profile after successful login.
-This is the only login option that writes profile config; for an environment login it creates the `env` profile with a stored token ref.
-The opt-in applies only to that profile and never permits paths, userinfo, queries or fragments in an origin.
-Every use of a plain HTTP controller prints a one-line stderr warning because credentials and traffic are unencrypted.
+This is the only login option that writes profile config; on an existing profile it changes only `allowHttp`, preserving the saved origin, TLS verification setting and token ref.
+For an environment login without a configured `env` profile, it creates that profile with the effective origin and settings and a stored token ref.
+The opt-in applies only to that profile.
+Constructing a transport for a plain HTTP controller prints a one-line stderr warning because credentials and traffic are unencrypted.
 
 `awx-axi config path` prints the config location.
 `awx-axi profile list` lists names and origins without resolving secrets.
 `awx-axi auth status` reports profile, origin, credential source and identity using one live read.
 `awx-axi doctor` performs the same bounded identity and credential permission check.
 `awx-axi auth login` mints a PAT and saves its id, origin and token in protected state `credentials.json`, keyed by profile name.
-Login leaves config unchanged unless `--allow-http` is explicitly passed.
 Configure a named profile with its controller origin and omit its token ref before running `auth login --profile <name>`.
 After login, that profile uses its origin-bound stored PAT; explicit SecretRefs continue to select their declared sources.
 An environment login stores under `env`; unless using `--allow-http`, add that profile to config yourself and select it with `--profile env` for subsequent commands while login environment variables remain set.
