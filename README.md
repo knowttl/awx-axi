@@ -318,7 +318,7 @@ When only a legacy token exists, `CONFIG_MOVED` names the new path and profile f
 | `AWX_AXI_CONFIG` / `AWX_AXI_PROFILE` | Config file path / selected profile |
 | `AWX_AXI_ORIGIN` | HTTPS origin for the environment profile |
 | `AWX_AXI_API_BASE_PATH` | API path override, default `/api/v2/` |
-| `AWX_AXI_TOKEN` | Direct token used by the environment profile or a default SecretRef |
+| `AWX_AXI_TOKEN` | Direct token used by the environment profile or an explicit env SecretRef |
 | `AWX_AXI_USERNAME` / `AWX_AXI_PASSWORD` | Used only by `auth login` |
 | `AWX_AXI_VERIFY_SSL` | Environment profile TLS verification, default `true` |
 | `AWX_AXI_WRITE_LOG` | Write journal path override |
