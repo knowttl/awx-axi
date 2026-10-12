@@ -24,7 +24,7 @@ describe("the CLI shell", () => {
     expect(stdout.text()).toContain(
       "domains: \"job, template, workflow, organization, system-job-template, system-job, credential, approval, ad-hoc, project, inventory, host, group, inventory-source, schedule, execution-environment, user, notification, notification-template, activity-stream, team, role\"",
     );
-    expect(stdout.text()).toContain('commands: "auth, setup"');
+    expect(stdout.text()).toContain('commands: "auth, profile list, config path, doctor, setup"');
   });
 
   it("renders the version for --version", async () => {

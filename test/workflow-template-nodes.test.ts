@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { decode } from "@toon-format/toon";
 
 import { runCli } from "./support/run.js";
 
 describe("workflow template-node inspection", () => {
+  it("omits empty survey passwords from the populated prompt fields", async () => {
+    const run = await runCli(["workflow", "template-nodes", "10"], { script: [{
+      status: 200, body: { count: 1, next: null, results: [{ id: 71, survey_passwords: {}, extra_data: { release: "next" } }] },
+    }] });
+    expect(run.exitCode).toBe(0);
+    const output = decode(run.stdout) as { workflow_template_nodes: { prompt_fields: string }[] };
+    expect(output.workflow_template_nodes[0]?.prompt_fields).toBe("extra_data");
+  });
+
   it("lists editable template nodes with topology and node-type context", async () => {
     const run = await runCli(
       ["workflow", "template-nodes", "10", "--limit", "3"],

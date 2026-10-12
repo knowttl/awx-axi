@@ -11,7 +11,7 @@ import {
   assertUsableArity,
   parseFlags,
 } from "../src/core/flags.js";
-import { countLine, listOutput, rawRegion, truncate } from "../src/core/output.js";
+import { countLine, detailOutput, listOutput, rawRegion, truncate } from "../src/core/output.js";
 import { redact, redactValue } from "../src/core/redact.js";
 import {
   defineDomain,
@@ -69,6 +69,11 @@ describe("error translation (design.md §9.3)", () => {
 
     expect(error.code).toBe("SERVER_ERROR");
     expect(error.message).not.toContain("views.py");
+  });
+
+  it("redacts secret fields when translating upstream validation errors", () => {
+    expect(describeAwxBody({ password: ["upstream-secret"], name: ["required"] }))
+      .toBe("password: ***; name: required");
   });
 
   it("recognizes only the three documented body shapes", () => {
@@ -330,6 +335,11 @@ describe("redaction (design.md §6.4)", () => {
 });
 
 describe("output helpers (design.md §8)", () => {
+  it("redacts nested detail values while preserving the token result envelope", () => {
+    expect(detailOutput({ label: "token", fields: { id: 55, payload: { password: "upstream-secret" } } }))
+      .toEqual({ token: { id: 55, payload: { password: "***" } } });
+  });
+
   it("states the total so an agent never paginates to find it", () => {
     expect(countLine(30, 847)).toBe("30 of 847 total");
     expect(countLine(3, 3)).toBe("3 total");

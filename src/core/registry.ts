@@ -7,6 +7,7 @@
  * `mcpEquivalents` - and the core owns everything else.
  */
 import { validationError } from "./errors.js";
+import { registerSecret } from "./redact.js";
 import {
   assertNoSecretFlags,
   assertUsableArity,
@@ -242,7 +243,14 @@ export async function runPlan<T>(
   let step = plan.next();
 
   while (!step.done) {
-    step = plan.next(await execute(step.value, runner));
+    const request = step.value;
+    const result = await execute(request, runner);
+    if (request.kind === "write") {
+      const response = result as AwxResponse;
+      if (response.body && typeof response.body === "object" &&
+        "token" in response.body && typeof response.body.token === "string") registerSecret(response.body.token);
+    }
+    step = plan.next(result);
   }
 
   return step.value;

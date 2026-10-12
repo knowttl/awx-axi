@@ -10,9 +10,12 @@ import { SETUP_HELP, setupCommand } from "./commands/setup.js";
 import {
   createBasicAuthTransport,
   createTransport,
+  type Credential,
   type Env,
 } from "./core/auth.js";
-import { formatError } from "./core/errors.js";
+import { formatError, validationError } from "./core/errors.js";
+import { configPath, loadConfig, normalizeEnv, type Selection } from "./core/profiles.js";
+import { clearSecrets, redact } from "./core/redact.js";
 import {
   splitResult,
   type Domain,
@@ -88,26 +91,55 @@ export interface MainOptions {
 }
 
 export async function main(options: MainOptions = {}): Promise<void> {
-  const argv = options.argv ?? process.argv.slice(2);
-  const env = options.env ?? process.env;
-  const buildTransport = options.createTransport ?? createTransport;
-  const buildBasicAuthTransport =
-    options.createBasicAuthTransport ?? createBasicAuthTransport;
-
+  clearSecrets();
+  let argv = options.argv ?? process.argv.slice(2);
+  const env = normalizeEnv(options.env ?? process.env);
+  const selection: Selection = {};
+  let globalError: unknown;
+  try {
+    const remaining: string[] = [];
+    for (let index = 0; index < argv.length; index += 1) {
+      const token = argv[index]!;
+      const [name] = token.split("=", 1);
+      if (!["--config", "--profile", "--origin", "--verify-ssl"].includes(name!)) { remaining.push(token); continue; }
+      const value = token.includes("=") ? token.slice(token.indexOf("=") + 1) : argv[++index];
+      if (!value || value.startsWith("--")) throw validationError(`${name} requires a value`);
+      if (name === "--config") selection.configPath = value;
+      if (name === "--profile") selection.profile = value;
+      if (name === "--origin") selection.origin = value;
+      if (name === "--verify-ssl") {
+        if (!["true", "false"].includes(value)) throw validationError("--verify-ssl requires true or false");
+        selection.verifySsl = value === "true";
+      }
+    }
+    argv = remaining;
+  } catch (error) { globalError = error; }
+  if (globalError) {
+    const error = formatError(globalError);
+    (options.stdout ?? process.stdout).write(redact(error.output));
+    process.exitCode = error.exitCode;
+    return;
+  }
   const context: DomainContext & AuthContext = {
     env,
-    createTransport: () => buildTransport(env),
-    createBasicAuthTransport: () => buildBasicAuthTransport(env),
+    selection,
+    createTransport: (credential?: Credential) => options.createTransport === undefined
+      ? createTransport(env, selection, credential)
+      : options.createTransport(env),
+    createBasicAuthTransport: () => options.createBasicAuthTransport === undefined
+      ? createBasicAuthTransport(env, selection)
+      : options.createBasicAuthTransport(env),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
   };
+  const commands = buildCommands(context);
 
   await runAxiCli({
     argv,
-    ...(options.stdout === undefined ? {} : { stdout: options.stdout }),
+    stdout: { write: (chunk) => (options.stdout ?? process.stdout).write(redact(chunk)) },
     description: DESCRIPTION,
     version: readPackageVersion(),
     topLevelHelp: topLevelHelp(),
-    commands: buildCommands(context),
+    commands,
     // `exitCodeForError` maps only the literal `VALIDATION_ERROR` to 2, and
     // three other codes must also exit 2 (§9).
     formatError,
@@ -124,6 +156,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
       if (command === "setup") {
         return SETUP_HELP;
       }
+      if (command === "doctor") return "usage: awx-axi doctor [--config <path>] [--profile <name>]\nVerify credential permissions and read the selected controller identity once.\n";
+      if (command === "config") return "usage: awx-axi config path [--config <path>]\nPrint the selected config path without reading secrets.\n";
+      if (command === "profile") return "usage: awx-axi profile list [--config <path>]\nList configured profile names and origins without resolving secrets.\n";
       const domain = DOMAINS.find((candidate) => candidate.name === command);
       const help =
         domain?.subcommands.find((subcommand) => subcommand.name === argv[1])
@@ -140,7 +175,17 @@ function buildCommands(
 ): Record<string, AxiCliCommand<undefined>> {
   const commands: Record<string, AxiCliCommand<undefined>> = {
     auth: (args) => authCommand(args, context),
-    setup: (args) => setupCommand(args, { env: context.env }),
+    doctor: (args) => authCommand(["status", ...args], context),
+    setup: (args) => setupCommand(args),
+    config: (args) => {
+      if (args.length !== 1 || args[0] !== "path") throw validationError("usage: awx-axi config path [--config <path>]");
+      return { config: configPath(context.env, context.selection) };
+    },
+    profile: (args) => {
+      if (args.length !== 1 || args[0] !== "list") throw validationError("usage: awx-axi profile list [--config <path>]");
+      const config = loadConfig(context.env, context.selection);
+      return { profiles: Object.entries(config.profiles).map(([name, profile]) => ({ name, origin: profile.origin, default: name === config.defaultProfile })) };
+    },
   };
   for (const domain of DOMAINS) {
     commands[domain.name] = async (args) => {
@@ -163,7 +208,8 @@ function topLevelHelp(): string {
     bin: "awx-axi",
     description: DESCRIPTION,
     usage: "awx-axi <command> [args] [flags]",
-    commands: "auth, setup",
+    commands: "auth, profile list, config path, doctor, setup",
+    globals: "--config <path>, --profile <name>, --origin <https-origin>, --verify-ssl <true|false>",
     domains:
       DOMAINS.length === 0
         ? "none yet: this build is the core"

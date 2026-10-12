@@ -19,9 +19,33 @@ const ENCRYPTED = /\$encrypted\$[^\s"'&]*/g;
 
 export const REDACTION = "***";
 
+const secrets = new Set<string>();
+
+export function registerSecret(secret: string): void {
+  if (!secret) return;
+  secrets.add(secret);
+  secrets.add(JSON.stringify(secret).slice(1, -1));
+  secrets.add(encodeURIComponent(secret));
+}
+
+export function registerSecretValues(value: unknown): void {
+  if (typeof value === "string") registerSecret(value);
+  else if (value !== null && typeof value === "object") {
+    for (const entry of Object.values(value)) registerSecretValues(entry);
+  }
+}
+
+export function clearSecrets(): void { secrets.clear(); }
+
 /** Redact one log body. Applied to every log body awx-axi prints. */
 export function redact(text: string): string {
-  return text
+  let safe = text;
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) safe = safe.replaceAll(secret, REDACTION);
+  return safe
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, REDACTION)
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, REDACTION)
+    .replace(/\bAccountKey=[^;\s]+/gi, `AccountKey=${REDACTION}`)
+    .replace(/([?&]sig=)[^&\s]+/gi, `$1${REDACTION}`)
     .replace(SCM_CREDENTIAL, `$1${REDACTION}@`)
     .replace(ENCRYPTED, "$encrypted$");
 }

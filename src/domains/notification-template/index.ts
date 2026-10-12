@@ -15,7 +15,7 @@ import {
   type Plan,
   type SubcommandInput,
 } from "../../core/registry.js";
-import { REDACTION, redact, redactValue } from "../../core/redact.js";
+import { REDACTION, redact, redactValue, registerSecretValues } from "../../core/redact.js";
 import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
@@ -140,7 +140,7 @@ function readJsonFile(path: string, label: string): Record<string, unknown> {
   if ((mode & 0o077) !== 0) throw validationError(`${label} must have 0600 permissions`);
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) { registerSecretValues(parsed); return parsed as Record<string, unknown>; }
   } catch { /* translated below */ }
   throw validationError(`${label} must contain a JSON object`);
 }

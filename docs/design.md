@@ -133,7 +133,8 @@ awx-axi consumes AWX's own mechanisms rather than inventing parallel ones:
 
 - **Auth** is AWX's OAuth2 personal access token, minted by AWX at `POST /api/v2/tokens/` and presented as a
   bearer token.
-  awx-axi does not implement a credential store, a token format, or a refresh protocol.
+  Protected credential storage now follows [the credential migration](credentials.md).
+  awx-axi does not implement a token format or a refresh protocol.
 - **Pagination** is AWX's `{count, next, previous, results}` envelope.
   awx-axi follows the server-provided `next` URL and reports the server-provided `count`.
   It does not compute offsets or guess at totals.
@@ -153,20 +154,9 @@ awx-axi also takes on version coupling to the API surface rather than to a CLI.
 
 ### 3.5 Configuration compatibility with the official CLI
 
-awx-axi reads the **same environment variables awxkit uses**, so an operator who already configured the
-official CLI needs no new setup:
-
-| Variable | Meaning |
-| --- | --- |
-| `CONTROLLER_HOST` | Controller base URL, e.g. `https://awx.example.com` |
-| `CONTROLLER_OAUTH_TOKEN` | Bearer token, preferred credential |
-| `CONTROLLER_USERNAME` | Basic-auth username, used by `auth login` and the read-only live suite (§5.1) |
-| `CONTROLLER_PASSWORD` | Basic-auth password, used by `auth login` and the read-only live suite (§5.1) |
-| `CONTROLLER_VERIFY_SSL` | `false` disables TLS verification |
-
-`AWX_AXI_*` variables cover what awxkit has no equivalent for: `AWX_AXI_HOME` for the token file location,
-`AWX_AXI_LIVE` and `AWX_AXI_RECORD` for tests, `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS` for the §6.3 gate, and
-`AWX_AXI_READ_ONLY` for the §6.5 boundary.
+The credential migration supersedes the original awxkit-compatible configuration.
+See [README configuration](../README.md#configuration) for supported environment variables and the deprecated vendor aliases.
+`AWX_AXI_LIVE` and `AWX_AXI_RECORD` remain test controls, and `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS` remains the §6.3 gate.
 The one exception is `AWX_AXI_API_BASE_PATH` for the §4.2 gateway case, which deliberately mirrors awxkit's own
 `AWXKIT_API_BASE_PATH` under our prefix rather than reading a variable named for another tool.
 
@@ -268,14 +258,10 @@ Each is a named offline test in §11.2.
 
 ### 5.1 Resolution order
 
-1. `CONTROLLER_OAUTH_TOKEN` from the environment.
-2. The token file at `$AWX_AXI_HOME/token` (default `~/.awx-axi/token`), mode `0600`, written only by
-   `auth login`.
-3. Nothing.
-   Every command then fails with `AUTH_REQUIRED` and the exact next command to run.
+The credential migration supersedes the original environment-then-token-file resolution order.
+See [README configuration](../README.md#configuration) for profile selection, SecretRefs and origin-bound storage.
 
-Basic auth is **never** used for ordinary requests, even when `CONTROLLER_USERNAME` and `CONTROLLER_PASSWORD`
-are set.
+Basic auth is **never** used for ordinary requests, even when login credentials are set.
 It is used by `auth login` alone, to mint a token.
 This keeps the password out of the request path of every other command, and it degrades gracefully on
 controllers where an administrator has disabled basic auth.
@@ -289,17 +275,7 @@ enforcement lives in the transport rather than in the auth layer.
 
 ### 5.2 `auth login` is non-interactive
 
-```
-$ awx-axi auth login
-auth:
-  controller: awx.example.com
-  user: btsai
-  token: stored in ~/.awx-axi/token
-  scope: write
-```
-
-It reads `CONTROLLER_USERNAME` and `CONTROLLER_PASSWORD` from the environment, POSTs to `/api/v2/tokens/`, and
-writes the returned token to the token file at `0600`.
+See [README configuration](../README.md#configuration) for login credentials, profile setup and state storage.
 It **never prompts**, per AXI §6.
 With the variables unset it exits 2 and says which ones are missing.
 
@@ -307,7 +283,7 @@ The token value is never echoed to stdout, not even truncated.
 
 Two version notes surface here as help text rather than silent failure: `ALLOW_OAUTH2_FOR_EXTERNAL_USERS` is
 false by default, so an SSO-provisioned user cannot mint a token and gets a 403 with an explanation pointing at
-`CONTROLLER_OAUTH_TOKEN` instead; and AWX's default token lifetime is effectively unbounded, so awx-axi does
+an externally supplied PAT instead; and AWX's default token lifetime is effectively unbounded, so awx-axi does
 not implement refresh.
 
 ### 5.3 No secret is ever a command-line argument
@@ -319,16 +295,7 @@ module load, so a future contributor cannot add `--token` without the CLI failin
 Secrets reach awx-axi through the environment or through a `0600` file, never through `argv`, because `argv` is
 visible in `ps` output, shell history, and agent transcripts.
 
-`auth status` reports whether a credential resolved and who it belongs to, never the value:
-
-```
-$ awx-axi auth status
-auth:
-  controller: awx.example.com
-  source: ~/.awx-axi/token
-  user: btsai
-  valid: true
-```
+See [README configuration](../README.md#configuration) for the current `auth status` contract.
 
 ## 6. Write surface and risk posture
 
@@ -1036,6 +1003,12 @@ stderr carries nothing an agent needs: progress and diagnostics only, per AXI §
 | `LAUNCH_WOULD_IGNORE_INPUT` | Preflight found a submitted field the template does not prompt for (§7.5) | 2 |
 | `LAUNCH_INPUT_REQUIRED` | Preflight found unsatisfied `variables_needed_to_start`, or a credential password is needed and the §6.3 gate is closed | 2 |
 | `AUTH_REQUIRED` | No credential resolved, or the controller returned 401 | 1 |
+| `CONFIG_INVALID` | Invalid profile configuration, origin, SecretRef, boolean setting or stored binding; private-file lock timeout | 1 |
+| `CONFIG_INSECURE` | Unsafe file ownership, permissions or type, or failure to protect a private file | 1 |
+| `CONFIG_MOVED` | Config is absent and a legacy token file exists; help points to the new profile format | 1 |
+| `PROFILE_REQUIRED` | No profile can be selected | 1 |
+| `PROFILE_AMBIGUOUS` | Multiple profiles exist without a selection or default | 1 |
+| `PROFILE_NOT_FOUND` | An explicitly selected profile is not configured | 1 |
 | `FORBIDDEN` | 403: authenticated but not permitted, including a user who cannot approve | 1 |
 | `NOT_FOUND` | 404 on a numeric id | 1 |
 | `NAME_NOT_FOUND` | A name matched zero objects; help notes that an invisible object is indistinguishable from a missing one | 1 |
@@ -1227,8 +1200,7 @@ It never sends `count_disabled` (§4.3 case 2).
 `getText` handles the stdout endpoints, including detecting the oversized-output apology (§4.3 case 4) and
 returning it as a typed condition rather than as content.
 
-There are exactly two implementations: `HttpTransport` on Node's native `fetch`, and `RecordedTransport` for
-tests.
+There are exactly two implementations: `HttpTransport` (see §12) and `RecordedTransport` for tests.
 That single interface is what makes §11 possible.
 
 ## 11. Offline testability and the live-smoke seam
@@ -1352,7 +1324,9 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
 - **`@toon-format/toon`** pinned to exactly `2.3.1`, matching the version the other installed AXI tools use.
   Pinned, not caret-ranged, for the §8 reason: the encoder's emitted syntax is part of awx-axi's observable
   output, and the published spec has already moved ahead of this version.
-- **Node's native `fetch`** for HTTP. No axios, no undici dependency.
+- **Node's `https` module** for HTTP with a scoped agent for the selected transport's TLS verification setting.
+  Redirects are not followed, and requests outside the configured origin are refused before credentials are sent.
+  No axios or undici dependency.
   AWX's API is plain JSON over HTTPS and a client library would add weight plus a second error vocabulary
   without removing work.
 - **`vitest`** for tests, with fixtures as plain JSON and no mocking framework, since `RecordedTransport` is

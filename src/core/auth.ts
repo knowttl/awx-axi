@@ -1,200 +1,100 @@
-/**
- * Credential resolution and token minting (design.md §5).
- *
- * awx-axi reads the same `CONTROLLER_*` environment variables awxkit uses
- * (§3.5), so an operator who already configured the official CLI needs no new
- * setup. Secrets arrive through the environment or through a `0600` file and
- * never through `argv` (§5.3).
- */
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-
 import { AxiError } from "axi-sdk-js";
 
+import { PrivateFiles } from "./private-file.js";
+import { credentialsPath, normalizeEnv, selectProfile, storedToken, type Env, type Selection } from "./profiles.js";
+import { registerSecret } from "./redact.js";
 import { HttpTransport, isReadOnly, type AwxTransport } from "./transport.js";
 
-export type Env = Record<string, string | undefined>;
+export type { Env } from "./profiles.js";
 
 export interface ControllerConfig {
-  /** Hostname alone, for output: no scheme, no path. */
   readonly host: string;
   readonly baseUrl: string;
   readonly verifySsl: boolean;
-  /** `/api/v2/` at 24.6.1; a gateway-fronted controller moves it (§4.2). */
   readonly apiBasePath: string;
 }
-
-/** Where a resolved credential came from, reported by `auth status` (§5.3). */
-export type CredentialSource = "CONTROLLER_OAUTH_TOKEN" | "token file";
-
 export interface Credential {
   readonly token: string;
-  readonly source: CredentialSource;
-  /** The token file path, when that is where the token came from. */
+  readonly source: string;
   readonly path?: string;
 }
 
-export function resolveController(env: Env): ControllerConfig {
-  const host = env.CONTROLLER_HOST;
-  if (host === undefined || host.trim().length === 0) {
-    throw new AxiError(
-      "no controller is configured",
-      "AUTH_REQUIRED",
-      ["Set CONTROLLER_HOST to the controller URL, e.g. https://awx.example.com"],
-    );
-  }
-
-  const baseUrl = /^https?:\/\//i.test(host) ? host : `https://${host}`;
+export function resolveController(env: Env, selection: Selection = {}, login = false): ControllerConfig {
+  const { profile } = selectProfile(env, selection, undefined, false, login);
+  const path = env.AWX_AXI_API_BASE_PATH ?? "/api/v2/";
+  if (!/^\/[^?#]*$/.test(path) || path.startsWith("//")) throw new AxiError("AWX_AXI_API_BASE_PATH must be an absolute API path", "CONFIG_INVALID");
   return {
-    host: new URL(baseUrl).host,
-    baseUrl,
-    verifySsl: env.CONTROLLER_VERIFY_SSL !== "false",
-    apiBasePath: withTrailingSlash(env.AWX_AXI_API_BASE_PATH ?? "/api/v2/"),
+    host: new URL(profile.origin).host,
+    baseUrl: profile.origin,
+    verifySsl: profile.verifySsl ?? true,
+    apiBasePath: path.endsWith("/") ? path : `${path}/`,
   };
 }
 
-/**
- * The API base path keeps its trailing slash, because a route is resolved
- * against it: `new URL("jobs/", ".../api/v2")` would drop the `v2` segment.
- */
-function withTrailingSlash(path: string): string {
-  return path.endsWith("/") ? path : `${path}/`;
+export function resolveCredential(envInput: Env, selection: Selection = {}, files = new PrivateFiles(), verifyAcl = false): Credential | undefined {
+  const env = normalizeEnv(envInput);
+  const selected = selectProfile(env, selection, files, verifyAcl);
+  const ref = selected.profile.token ?? { stored: true };
+  let token: string | undefined;
+  let source: string;
+  let path: string | undefined;
+  if ("env" in ref) {
+    token = env[ref.env];
+    source = ref.env;
+  } else if ("file" in ref) {
+    token = files.read(ref.file, true, verifyAcl)?.replace(/^\uFEFF/, "").trimEnd();
+    source = "file";
+    path = ref.file;
+  } else {
+    token = storedToken(env, selected, files, verifyAcl)?.token;
+    source = "stored";
+    path = credentialsPath(env);
+  }
+  if (!token) return undefined;
+  registerSecret(token);
+  return { token, source, ...(path === undefined ? {} : { path }) };
 }
 
-/** `$AWX_AXI_HOME/token`, default `~/.awx-axi/token` (§5.1). */
-export function tokenFilePath(env: Env): string {
-  return join(env.AWX_AXI_HOME ?? join(homedir(), ".awx-axi"), "token");
-}
-
-/**
- * Resolution order (§5.1): the environment token, then the token file, then
- * nothing.
- *
- * Basic auth is **never** used for ordinary requests even when
- * `CONTROLLER_USERNAME` and `CONTROLLER_PASSWORD` are set. It is used by
- * `auth login` alone, to mint a token, which keeps the password out of the
- * request path of every other command.
- */
-export function resolveCredential(env: Env): Credential | undefined {
-  const fromEnv = env.CONTROLLER_OAUTH_TOKEN;
-  if (fromEnv !== undefined && fromEnv.trim().length > 0) {
-    return { token: fromEnv.trim(), source: "CONTROLLER_OAUTH_TOKEN" };
-  }
-
-  const path = tokenFilePath(env);
-  const stored = readTokenFile(path);
-  if (stored !== undefined) {
-    return { token: stored, source: "token file", path };
-  }
-
-  return undefined;
-}
-
-export function requireCredential(env: Env): Credential {
-  const credential = resolveCredential(env);
-  if (credential === undefined) {
-    throw new AxiError("no credential is configured", "AUTH_REQUIRED", [
-      "Run `awx-axi auth login` with CONTROLLER_USERNAME and CONTROLLER_PASSWORD set",
-      "Or set CONTROLLER_OAUTH_TOKEN to an existing token",
-    ]);
-  }
+export function requireCredential(env: Env, selection: Selection = {}): Credential {
+  const credential = resolveCredential(env, selection);
+  if (credential === undefined) throw new AxiError("no credential is configured", "AUTH_REQUIRED", [
+    "Run `awx-axi auth login` with AWX_AXI_USERNAME and AWX_AXI_PASSWORD set",
+    "Or configure a token SecretRef",
+  ]);
   return credential;
 }
 
-export interface BasicAuth {
-  readonly username: string;
-  readonly password: string;
+export interface BasicAuth { readonly username: string; readonly password: string }
+
+export function resolveBasicAuth(envInput: Env): BasicAuth | undefined {
+  const env = normalizeEnv(envInput);
+  const username = env.AWX_AXI_USERNAME;
+  const password = env.AWX_AXI_PASSWORD;
+  if (!username || !password) return undefined;
+  registerSecret(password);
+  registerSecret(Buffer.from(`${username}:${password}`).toString("base64"));
+  return { username, password };
 }
 
-/** The `auth login` credential, and nothing else's (§5.1). */
-export function resolveBasicAuth(env: Env): BasicAuth | undefined {
-  const username = env.CONTROLLER_USERNAME;
-  const password = env.CONTROLLER_PASSWORD;
-  return username !== undefined &&
-    username.length > 0 &&
-    password !== undefined &&
-    password.length > 0
-    ? { username, password }
-    : undefined;
-}
-
-export function readTokenFile(path: string): string | undefined {
-  try {
-    const value = readFileSync(path, "utf8").trim();
-    return value.length > 0 ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Write the token file at `0600`. Its value is never echoed (§5.2). */
-export function writeTokenFile(path: string, token: string): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${token}\n`, { mode: 0o600 });
-  chmodSync(path, 0o600);
-}
-
-export function removeTokenFile(path: string): boolean {
-  try {
-    readFileSync(path);
-  } catch {
-    return false;
-  }
-  rmSync(path);
-  return true;
-}
-
-/**
- * The bearer-token transport every ordinary command uses.
- *
- * `CONTROLLER_VERIFY_SSL=false` is applied here rather than in the transport
- * because Node's native `fetch` takes no per-request TLS options and awx-axi
- * declines a second HTTP dependency to get them (§12).
- */
-export function createTransport(env: Env): AwxTransport {
-  const config = resolveController(env);
-  const credential = requireCredential(env);
-  applyTlsPosture(config, env);
-
+export function createTransport(env: Env, selection: Selection = {}, override?: Credential): AwxTransport {
+  const config = resolveController(env, selection);
+  const credential = override ?? requireCredential(env, selection);
+  registerSecret(credential.token);
   return new HttpTransport({
-    baseUrl: config.baseUrl,
-    apiBasePath: config.apiBasePath,
-    authorization: `Bearer ${credential.token}`,
-    readOnly: isReadOnly(env),
-    env,
+    baseUrl: config.baseUrl, apiBasePath: config.apiBasePath,
+    verifySsl: config.verifySsl, authorization: `Bearer ${credential.token}`,
+    readOnly: isReadOnly(env), env,
   });
 }
 
-/** The basic-auth transport, used only by `auth login` to mint a token (§5.1). */
-export function createBasicAuthTransport(env: Env): AwxTransport {
-  const config = resolveController(env);
+export function createBasicAuthTransport(env: Env, selection: Selection = {}): AwxTransport {
+  const config = resolveController(env, selection, true);
   const basic = resolveBasicAuth(env);
-  if (basic === undefined) {
-    throw new AxiError(
-      "CONTROLLER_USERNAME and CONTROLLER_PASSWORD are required to mint a token",
-      "AUTH_REQUIRED",
-      [
-        "Set CONTROLLER_USERNAME and CONTROLLER_PASSWORD in the environment, then re-run `awx-axi auth login`",
-      ],
-    );
-  }
-  applyTlsPosture(config, env);
-
-  const encoded = Buffer.from(`${basic.username}:${basic.password}`).toString(
-    "base64",
-  );
+  if (!basic) throw new AxiError("AWX_AXI_USERNAME and AWX_AXI_PASSWORD are required to mint a token", "AUTH_REQUIRED");
   return new HttpTransport({
-    baseUrl: config.baseUrl,
-    apiBasePath: config.apiBasePath,
-    authorization: `Basic ${encoded}`,
-    readOnly: isReadOnly(env),
-    env,
+    baseUrl: config.baseUrl, apiBasePath: config.apiBasePath,
+    verifySsl: config.verifySsl,
+    authorization: `Basic ${Buffer.from(`${basic.username}:${basic.password}`).toString("base64")}`,
+    readOnly: isReadOnly(env), env,
   });
-}
-
-function applyTlsPosture(config: ControllerConfig, env: Env): void {
-  if (!config.verifySsl && env === process.env) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  }
 }

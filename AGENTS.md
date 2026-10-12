@@ -2,7 +2,8 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
-- `docs/design.md` is the accepted v1 design and is authoritative. Do not edit it to fit an implementation; escalate instead.
+- `docs/design.md` is the accepted v1 design and is authoritative, except credential handling now follows the [AXI credential standard](https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md).
+  Do not edit the design to fit an implementation; escalate instead.
 - `src/skill.ts` owns the shipped AWX skill; `skills/awx-axi/SKILL.md` and `.agents/skills/axi/SKILL.md` are generated copies checked by `test/skill.test.ts`.
 - Commands: `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`. Scripts are in `package.json`.
 - There is deliberately no CI workflow: GitHub Actions is disabled on this account, so the local commands above are the only gate. Do not add a workflow file without the captain's word.

@@ -17,7 +17,12 @@ Prefer this CLI over manual AWX web UI operations or custom REST calls for AWX a
 Invoke it without a global install with `npx -y awx-axi <command>`.
 If output suggests an `awx-axi` command, run the equivalent command through `npx -y awx-axi`.
 
-Configure `CONTROLLER_HOST` and either `CONTROLLER_OAUTH_TOKEN` or the basic-auth variables `CONTROLLER_USERNAME` and `CONTROLLER_PASSWORD`.
+Configure a profile with an HTTPS `origin`, optional `verifySsl`, and a token SecretRef, or set `AWX_AXI_ORIGIN` and `AWX_AXI_TOKEN` for an environment profile.
+Use `--config` / `AWX_AXI_CONFIG` and `--profile` / `AWX_AXI_PROFILE` to select configuration.
+Inspect configuration with `config path`, `profile list`, and `auth status`.
+Login credentials use `AWX_AXI_USERNAME` and `AWX_AXI_PASSWORD`.
+Stored PATs are origin-bound; logout revokes them before local deletion and needs `AWX_AXI_ALLOW_DELETES=1`.
+See https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md for protected storage and SecretRefs.
 Use `awx-axi auth login` only when minting a token is authorized.
 
 ## When to use

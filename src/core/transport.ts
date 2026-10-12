@@ -8,6 +8,10 @@ import { AxiError } from "axi-sdk-js";
 
 import { networkError } from "./errors.js";
 import { walkPages } from "./paginate.js";
+import { booleanEnv, writeLogPath } from "./profiles.js";
+import { PrivateFiles } from "./private-file.js";
+import { redact } from "./redact.js";
+import { createTlsFetch } from "./tls-fetch.js";
 
 /** Query parameters for a read. Values are serialized by the implementation. */
 export type Query = Record<string, string | number | boolean>;
@@ -58,7 +62,7 @@ export interface AwxTransport {
 
 /** True when the §6.5 boundary is in force. */
 export function isReadOnly(env: Record<string, string | undefined>): boolean {
-  return env.AWX_AXI_READ_ONLY === "1";
+  return booleanEnv(env, "AWX_AXI_READ_ONLY");
 }
 
 /**
@@ -102,7 +106,7 @@ export function assertWritable(
         ? "config"
         : "operational");
 
-  if (effectiveTag === "config" && env.AWX_AXI_ALLOW_CONFIG_WRITES !== "1") {
+  if (effectiveTag === "config" && !booleanEnv(env, "AWX_AXI_ALLOW_CONFIG_WRITES")) {
     throw new AxiError(
       `refused ${method} ${route}: configuration writes are disabled in this session`,
       "CONFIG_WRITES_DISABLED",
@@ -110,7 +114,7 @@ export function assertWritable(
     );
   }
 
-  if (effectiveTag === "delete" && env.AWX_AXI_ALLOW_DELETES !== "1") {
+  if (effectiveTag === "delete" && !booleanEnv(env, "AWX_AXI_ALLOW_DELETES")) {
     throw new AxiError(
       `refused ${method} ${route}: delete operations are disabled in this session`,
       "DELETE_WRITES_DISABLED",
@@ -118,7 +122,7 @@ export function assertWritable(
     );
   }
 
-  if (effectiveTag === "security" && env.AWX_AXI_ALLOW_SECURITY_WRITES !== "1") {
+  if (effectiveTag === "security" && !booleanEnv(env, "AWX_AXI_ALLOW_SECURITY_WRITES")) {
     throw new AxiError(
       `refused ${method} ${route}: security writes are disabled in this session`,
       "SECURITY_WRITES_DISABLED",
@@ -217,12 +221,13 @@ export interface HttpTransportOptions {
   readonly readOnly: boolean;
   readonly env?: Record<string, string | undefined>;
   readonly fetch?: FetchLike;
+  readonly verifySsl?: boolean;
   readonly sleep?: (ms: number) => Promise<void>;
   /** Attempts for a retryable GET, including the first. */
   readonly attempts?: number;
 }
 
-/** The production transport: Node's native `fetch`, no client library (§12). */
+/** The production transport uses a scoped Node HTTPS agent. */
 export class HttpTransport implements AwxTransport {
   readonly #options: HttpTransportOptions;
   readonly #fetch: FetchLike;
@@ -237,7 +242,7 @@ export class HttpTransport implements AwxTransport {
 
   constructor(options: HttpTransportOptions) {
     this.#options = options;
-    this.#fetch = options.fetch ?? ((url, init) => fetch(url, init));
+    this.#fetch = options.fetch ?? createTlsFetch(options.verifySsl ?? true);
     this.#apiRoot = new URL(options.apiBasePath, options.baseUrl);
   }
 
@@ -301,6 +306,9 @@ export class HttpTransport implements AwxTransport {
     body: unknown,
   ): Promise<AwxResponse> {
     const url = new URL(route, this.#apiRoot);
+    if (url.origin !== new URL(this.#options.baseUrl).origin || url.username || url.password) {
+      throw new AxiError("refused to send credentials outside the configured origin", "CONFIG_INVALID");
+    }
     for (const [key, value] of Object.entries(query)) {
       url.searchParams.set(key, String(value));
     }
@@ -313,6 +321,12 @@ export class HttpTransport implements AwxTransport {
       headers["Content-Type"] = "application/json";
     }
 
+    const journal = method !== "GET" && this.#options.env !== undefined
+      ? { files: new PrivateFiles(), path: writeLogPath(this.#options.env) } : undefined;
+    if (journal) journal.files.withLock(journal.path, () => {
+      journal.files.write(journal.path, journal.files.read(journal.path, true) ?? "");
+    });
+
     let response: Response;
     try {
       response = await this.#fetch(url.toString(), {
@@ -324,6 +338,16 @@ export class HttpTransport implements AwxTransport {
       throw networkError(cause, url.host);
     }
 
+    if (journal) {
+      try {
+        journal.files.withLock(journal.path, () => {
+          const previous = journal.files.read(journal.path, true) ?? "";
+          journal.files.write(journal.path, `${previous}${JSON.stringify({ at: new Date().toISOString(), method, status: response.status })}\n`);
+        });
+      } catch (error) {
+        process.stderr.write(redact(`Write journal failed after ${method} returned ${response.status}: ${String(error)}\n`));
+      }
+    }
     return {
       status: response.status,
       headers: response.headers,
