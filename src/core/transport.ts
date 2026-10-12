@@ -323,7 +323,9 @@ export class HttpTransport implements AwxTransport {
 
     const journal = method !== "GET" && this.#options.env !== undefined
       ? { files: new PrivateFiles(), path: writeLogPath(this.#options.env) } : undefined;
-    if (journal) journal.files.write(journal.path, journal.files.read(journal.path, true) ?? "");
+    if (journal) journal.files.withLock(journal.path, () => {
+      journal.files.write(journal.path, journal.files.read(journal.path, true) ?? "");
+    });
 
     let response: Response;
     try {
@@ -338,8 +340,10 @@ export class HttpTransport implements AwxTransport {
 
     if (journal) {
       try {
-        const previous = journal.files.read(journal.path, true) ?? "";
-        journal.files.write(journal.path, `${previous}${JSON.stringify({ at: new Date().toISOString(), method, status: response.status })}\n`);
+        journal.files.withLock(journal.path, () => {
+          const previous = journal.files.read(journal.path, true) ?? "";
+          journal.files.write(journal.path, `${previous}${JSON.stringify({ at: new Date().toISOString(), method, status: response.status })}\n`);
+        });
       } catch (error) {
         process.stderr.write(redact(`Write journal failed after ${method} returned ${response.status}: ${String(error)}\n`));
       }

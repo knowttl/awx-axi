@@ -7,7 +7,7 @@
  * `mcpEquivalents` - and the core owns everything else.
  */
 import { validationError } from "./errors.js";
-import { redactValue, registerSecret } from "./redact.js";
+import { registerSecret } from "./redact.js";
 import {
   assertNoSecretFlags,
   assertUsableArity,
@@ -245,17 +245,12 @@ export async function runPlan<T>(
   while (!step.done) {
     const request = step.value;
     const result = await execute(request, runner);
-    if (request.kind === "read" || request.kind === "write") {
+    if (request.kind === "write") {
       const response = result as AwxResponse;
-      if (request.kind === "write" && response.body && typeof response.body === "object" &&
+      if (response.body && typeof response.body === "object" &&
         "token" in response.body && typeof response.body.token === "string") registerSecret(response.body.token);
-      step = plan.next({ ...response, body: redactValue(response.body) });
-    } else if (request.kind === "readPaged") {
-      const response = result as PagedResult;
-      step = plan.next({ ...response, rows: response.rows.map(redactValue) });
-    } else {
-      step = plan.next(result);
     }
+    step = plan.next(result);
   }
 
   return step.value;

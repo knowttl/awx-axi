@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +14,50 @@ function directory(): string {
   return path;
 }
 afterEach(() => { directories.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
+
+describe("private-file transaction locks", () => {
+  it("releases the lock when a transaction fails", () => {
+    const path = join(directory(), "state");
+    const files = new PrivateFiles();
+    expect(() => files.withLock(path, () => { throw new Error("transaction failed"); })).toThrow("transaction failed");
+    expect(existsSync(`${path}.lock`)).toBe(false);
+    files.withLock(path, () => files.write(path, "replacement"));
+    expect(files.read(path, true)).toBe("replacement");
+  });
+
+  it("times out rather than removing a live owner's lock", () => {
+    const path = join(directory(), "state");
+    const files = new PrivateFiles({ wait: () => {} });
+    files.withLock(path, () => {
+      expect(() => files.withLock(path, () => files.write(path, "unexpected")))
+        .toThrow(/timed out waiting for file lock/);
+      expect(files.read(`${path}.lock`, true)).toBe(String(process.pid));
+    });
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("recovers a lock whose owning process has exited", () => {
+    const path = join(directory(), "state");
+    const owner = execFileSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" });
+    const files = new PrivateFiles();
+    files.write(`${path}.lock`, owner);
+    files.withLock(path, () => files.write(path, "recovered"));
+    expect(files.read(path, true)).toBe("recovered");
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  it("protects a Windows lock before writing its owner", () => {
+    const parent = directory();
+    const path = join(parent, "state");
+    const files = new PrivateFiles({ platform: "win32", acl: (target, action, isDirectory) => {
+      if (!isDirectory && action === "restrict") expect(readFileSync(target, "utf8")).toBe("");
+    } });
+    files.withLock(path, () => {
+      expect(files.read(`${path}.lock`, true)).toBe(String(process.pid));
+    });
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+});
 
 describe("private files on POSIX", () => {
   it("writes atomically and tightens an existing directory", () => {

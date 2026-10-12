@@ -7,6 +7,7 @@
  */
 import { encode } from "@toon-format/toon";
 import { AxiError } from "axi-sdk-js";
+import { isSensitiveKey, redact, REDACTION } from "./redact.js";
 
 /**
  * The four codes that exit 2 (§9). `exitCodeForError` from the SDK maps only
@@ -164,7 +165,7 @@ export function describeAwxBody(
   const record = body as Record<string, unknown>;
   const detail = record.detail;
   if (typeof detail === "string") {
-    return detail;
+    return redact(detail);
   }
 
   if (status !== 400) {
@@ -181,10 +182,11 @@ export function describeAwxBody(
     if (messages.length === 0) {
       continue;
     }
+    const safe = isSensitiveKey(field) ? REDACTION : messages.map(redact).join("; ");
     parts.push(
       field === "__all__"
-        ? messages.join("; ")
-        : `${field}: ${messages.join("; ")}`,
+        ? safe
+        : `${field}: ${safe}`,
     );
   }
 

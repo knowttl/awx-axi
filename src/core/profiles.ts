@@ -214,13 +214,17 @@ export function storedToken(env: Env, selected: SelectedProfile, files = new Pri
 }
 
 export function saveToken(env: Env, selected: SelectedProfile, token: StoredToken, files = new PrivateFiles()): void {
-  const credentials = loadCredentials(env, files);
-  credentials.profiles[selected.name] = token;
-  files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
+  files.withLock(credentialsPath(env), () => {
+    const credentials = loadCredentials(env, files);
+    credentials.profiles[selected.name] = token;
+    files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
+  });
 }
 
 export function deleteToken(env: Env, selected: SelectedProfile, files = new PrivateFiles()): void {
-  const credentials = loadCredentials(env, files);
-  delete credentials.profiles[selected.name];
-  files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
+  files.withLock(credentialsPath(env), () => {
+    const credentials = loadCredentials(env, files);
+    delete credentials.profiles[selected.name];
+    files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
+  });
 }

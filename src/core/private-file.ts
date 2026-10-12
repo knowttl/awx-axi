@@ -4,7 +4,7 @@ import {
   chmodSync, closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync,
   mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import { AxiError } from "axi-sdk-js";
 
@@ -75,7 +75,7 @@ export class PrivateFiles {
     }
   }
 
-  #write(path: string, content: string): void {
+  #directory(path: string): string {
     const directory = dirname(resolve(path));
     const missing: string[] = [];
     for (let current = directory; !existsSync(current); current = dirname(current)) missing.push(current);
@@ -84,6 +84,55 @@ export class PrivateFiles {
       if (this.#windows) this.#acl(realpathSync(current), "restrict", true);
       else chmodSync(current, 0o700);
     }
+    return directory;
+  }
+
+  withLock(path: string, transaction: () => void): void {
+    let lock: string;
+    try { lock = join(realpathSync(this.#directory(path)), `${basename(path)}.lock`); } catch { throw this.#insecure(path); }
+    let fd: number | undefined;
+    for (let attempt = 0; fd === undefined; attempt += 1) {
+      if (attempt >= 100) throw new AxiError(`timed out waiting for file lock: ${lock}`, "CONFIG_INVALID");
+      try {
+        fd = openSync(lock, "wx", this.#windows ? undefined : 0o600);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw this.#insecure(lock);
+        try {
+          const identity = lstatSync(lock);
+          const owner = Number(this.read(lock, true));
+          if (Number.isSafeInteger(owner) && owner > 0) {
+            try { process.kill(owner, 0); } catch (cause) {
+              if ((cause as NodeJS.ErrnoException).code === "ESRCH") {
+                const current = lstatSync(lock);
+                if (current.ino === identity.ino && current.dev === identity.dev) rmSync(lock, { force: true });
+                continue;
+              }
+            }
+          }
+        } catch (cause) {
+          if ((cause as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw cause;
+        }
+        (this.#options.wait ?? wait)(20);
+      }
+    }
+    try {
+      try {
+        if (this.#windows) this.#acl(lock, "restrict");
+        writeFileSync(fd, String(process.pid), "utf8");
+        fsyncSync(fd);
+        closeSync(fd);
+        fd = undefined;
+      } catch { throw this.#insecure(lock); }
+      transaction();
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+      rmSync(lock, { force: true });
+    }
+  }
+
+  #write(path: string, content: string): void {
+    const directory = this.#directory(path);
     // Reject a hostile existing target before replacing it, without reading its value.
     let target;
     try { target = lstatSync(path); } catch (error) {

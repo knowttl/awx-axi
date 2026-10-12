@@ -62,7 +62,7 @@ export function redact(text: string): string {
 const SENSITIVE_KEY = /(password|api[-_]?key|access[-_]?key|private[-_]?key|secret|token|passphrase)/i;
 
 export function isSensitiveKey(key: string): boolean {
-  return key !== "passwords_needed_to_start" && SENSITIVE_KEY.test(key);
+  return SENSITIVE_KEY.test(key);
 }
 
 export function redactValue(value: unknown): unknown {

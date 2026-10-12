@@ -8,7 +8,7 @@
  */
 import { encode } from "@toon-format/toon";
 
-import { redact } from "./redact.js";
+import { redact, redactValue } from "./redact.js";
 
 /** Row values after projection: whatever the encoder can put in a cell. */
 export type Row = Record<string, string | number | boolean | null>;
@@ -42,7 +42,7 @@ export function listOutput(options: ListOutputOptions): Record<string, unknown> 
   if (options.count !== undefined) {
     output.count = countLine(options.rows.length, options.count);
   }
-  output[options.label] = options.rows;
+  output[options.label] = options.rows.map(redactValue);
 
   return withHelp(output, options.help);
 }
@@ -80,7 +80,8 @@ export interface DetailOutputOptions {
 export function detailOutput(
   options: DetailOutputOptions,
 ): Record<string, unknown> {
-  return withHelp({ [options.label]: options.fields }, options.help);
+  const fields = Object.fromEntries(Object.entries(options.fields).map(([key, value]) => [key, redactValue(value)]));
+  return withHelp({ [options.label]: fields }, options.help);
 }
 
 export interface Truncated {
@@ -126,7 +127,7 @@ export interface RawRegionOptions {
 export function rawRegion(options: RawRegionOptions): string {
   const body = redact(options.body);
   const parts = [
-    encode(options.header),
+    encode(redactValue(options.header)),
     `${options.label}:`,
     body.endsWith("\n") ? body.slice(0, -1) : body,
   ];
