@@ -92,6 +92,33 @@ describe("credential profiles", () => {
     expect(resolveCredential(env, { profile: name })).toMatchObject({ token: "synthetic-minted-token" });
   });
 
+  it.each(["named", "env"])("preserves concurrent HTTP consent for a named and %s profile", async (name) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "http://awx.example.com", AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
+    configure(env, { first: { origin: env.AWX_AXI_ORIGIN }, named: { origin: env.AWX_AXI_ORIGIN }, production }, "first");
+    const first = new RecordedTransport([{ status: 201, body: { id: 1, token: "first-token" } }], { env });
+    const second = new RecordedTransport([{ status: 201, body: { id: 2, token: "second-token" } }], { env });
+    await Promise.all([
+      authCommand(["login", "--allow-http"], { env, selection: { profile: "first" }, createTransport: () => first, createBasicAuthTransport: () => first }),
+      authCommand(["login", "--allow-http"], { env, selection: name === "env" ? {} : { profile: name }, createTransport: () => second, createBasicAuthTransport: () => second }),
+    ]);
+    const config = loadConfig(env);
+    expect(config.profiles.first).toMatchObject({ allowHttp: true });
+    expect(config.profiles[name]).toMatchObject({ allowHttp: true });
+    expect(config.profiles.production).toEqual(production);
+    expect(config.defaultProfile).toBe("first");
+  });
+
+  it.each(["named", "env"])("saves only HTTP consent with transient overrides on an existing %s profile", async (name) => {
+    const env = { ...environment(), AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
+    const profile = { ...production, verifySsl: true };
+    configure(env, { [name]: profile });
+    const run = await runCli(["auth", "login", "--allow-http", "--profile", name, "--origin", "https://temporary.example.com", "--verify-ssl", "false"], {
+      env, script: [{ status: 201, body: { id: 9, token: "synthetic-minted-token" } }],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(loadConfig(env).profiles[name]).toEqual({ ...profile, allowHttp: true });
+  });
+
   it("does not persist HTTP consent after a failed login", async () => {
     const env = { ...environment(), AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "synthetic-password" };
     configure(env, { production: { origin: "http://awx.example.com" } });

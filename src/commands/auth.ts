@@ -4,7 +4,7 @@ import { resolveBasicAuth, resolveController, resolveCredential, type Credential
 import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
 import { PrivateFiles } from "../core/private-file.js";
-import { credentialsPath, deleteToken, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
+import { credentialsPath, deleteToken, loadConfig, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
 import { registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
 import type { AwxTransport } from "../core/transport.js";
@@ -64,8 +64,12 @@ async function login(context: AuthContext): Promise<Renderable> {
   if (!Number.isSafeInteger(body.id) || (body.id as number) <= 0) throw new AxiError("controller returned no PAT id; credential was not stored", "AUTH_REQUIRED");
   saveToken(context.env, selected, { origin: selected.profile.origin, token: body.token, id: body.id as number }, undefined, implicit);
   if (context.selection.allowHttp) {
-    selected.config.profiles[selected.name] = { ...selected.profile, token: selected.config.profiles[selected.name]?.token ?? { stored: true }, allowHttp: true };
-    new PrivateFiles().write(selected.path, `${JSON.stringify(selected.config, null, 2)}\n`);
+    const files = new PrivateFiles();
+    files.withLock(selected.path, () => {
+      selected.config = loadConfig(context.env, { configPath: selected.path }, files);
+      selected.config.profiles[selected.name] = { ...(selected.config.profiles[selected.name] ?? { ...selected.profile, token: { stored: true } }), allowHttp: true };
+      files.write(selected.path, `${JSON.stringify(selected.config, null, 2)}\n`);
+    });
   }
   return { auth: { profile: selected.name, origin: selected.profile.origin, user: basic.username, credential: `stored in ${credentialsPath(context.env)}`, scope: body.scope ?? "write" },
     help: [
