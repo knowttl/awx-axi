@@ -257,20 +257,75 @@ awx-axi system-job-template launch cleanup-jobs
 
 ## Configuration
 
-awx-axi reads controller and session settings through environment variables.
+awx-axi follows the [AXI credential standard](https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md).
+Profiles live in `$XDG_CONFIG_HOME/awx-axi/config.json`, or `~/.config/awx-axi/config.json` when XDG is unset or relative.
+On Windows, XDG is ignored and config lives under `%APPDATA%\awx-axi`.
+Stored PATs and `writes.log` live under `$XDG_STATE_HOME/awx-axi`, defaulting to `~/.local/state/awx-axi`, or `%LOCALAPPDATA%\awx-axi` on Windows.
+Home paths use the operating system's home directory.
+
+```json
+{
+  "version": 1,
+  "defaultProfile": "production",
+  "profiles": {
+    "production": {
+      "origin": "https://awx.example.com",
+      "verifySsl": true,
+      "token": { "env": "PRODUCTION_PAT" }
+    }
+  }
+}
+```
+
+`token` accepts exactly one SecretRef: `{"env":"NAME"}`, `{"file":"/absolute/private/path"}`, or `{"stored":true}`.
+An omitted token ref defaults to `{"env":"AWX_AXI_TOKEN"}`.
+Inline tokens are rejected without printing their values.
+Origins must use HTTPS without userinfo, a path, query or fragment.
+Plain-HTTP controllers are refused pending a decision about an explicit exception.
+
+Select config with `--config`, then `AWX_AXI_CONFIG`, then the default path.
+Select a profile with `--profile`, then `AWX_AXI_PROFILE`, then a complete environment profile, then `defaultProfile`, then the only profile.
+An environment profile requires `AWX_AXI_ORIGIN` plus `AWX_AXI_TOKEN`, or both login credentials for `auth login`.
+An incomplete environment profile fails instead of falling back to another profile.
+File-selected profiles use their own settings and SecretRefs.
+Non-secret flags `--origin` and `--verify-ssl true|false` override the selected profile.
+
+`awx-axi config path` prints the config location.
+`awx-axi profile list` lists names and origins without resolving secrets.
+`awx-axi auth status` reports profile, origin, credential source and identity using one live read.
+`awx-axi doctor` performs the same bounded identity and credential permission check.
+`awx-axi auth login` mints a PAT, saves its id and origin in protected `credentials.json`, and writes a stored SecretRef into the selected profile.
+When logging in with an environment profile, select the saved profile explicitly afterwards with `--profile env` while the environment variables remain set.
+`awx-axi auth logout` revokes that PAT upstream before removing it locally, requiring `AWX_AXI_ALLOW_DELETES=1` and respecting read-only mode.
+Revocation failures preserve the local PAT for retry.
+Stored tokens cannot be used after an origin change.
+
+Files are written atomically and read only after ownership, type and permissions checks.
+POSIX directories use 0700 and secrets use 0600, with read-only 0400 secrets also accepted.
+Windows writes apply protected DACLs for the current account, SYSTEM and Administrators.
+Ordinary Windows reads reject reparse points; `auth status` and `doctor` also verify DACLs.
+TLS verification changes apply only to the selected transport.
+The old `~/.awx-axi/token` and `$AWX_AXI_HOME/token` are never read.
+When only a legacy token exists, `CONFIG_MOVED` names the new path and profile format.
 
 | Variable | Meaning |
 | --- | --- |
-| `CONTROLLER_HOST` | Controller base URL, e.g. `https://awx.example.com` |
+| `AWX_AXI_CONFIG` / `AWX_AXI_PROFILE` | Config file path / selected profile |
+| `AWX_AXI_ORIGIN` | HTTPS origin for the environment profile |
 | `AWX_AXI_API_BASE_PATH` | API path override, default `/api/v2/` |
-| `CONTROLLER_OAUTH_TOKEN` | Direct token used for API calls |
-| `CONTROLLER_USERNAME` / `CONTROLLER_PASSWORD` | Used by `awx-axi auth login` to mint and save a token |
-| `CONTROLLER_VERIFY_SSL` | Set to `false` for self-signed certificates |
-| `AWX_AXI_HOME` | Token file directory, default `~/.awx-axi` |
-| `AWX_AXI_READ_ONLY` | Set `1` to block mutating commands in non-live contexts |
+| `AWX_AXI_TOKEN` | Direct token used by the environment profile or a default SecretRef |
+| `AWX_AXI_USERNAME` / `AWX_AXI_PASSWORD` | Used only by `auth login` |
+| `AWX_AXI_VERIFY_SSL` | Environment profile TLS verification, default `true` |
+| `AWX_AXI_WRITE_LOG` | Write journal path override |
+| `AWX_AXI_READ_ONLY` | Set `1` or `true` to block mutating commands |
 | `AWX_AXI_ALLOW_CONFIG_WRITES` | Set `1` to allow configuration-tagged mutations |
 | `AWX_AXI_ALLOW_DELETES` | Set `1` to allow delete-tagged mutations |
 | `AWX_AXI_ALLOW_SECURITY_WRITES` | Set `1` to allow security-sensitive writes |
+
+Boolean environment settings accept `1`, `true`, `0` or `false`, case-insensitively; other values fail closed.
+For one minor release, `CONTROLLER_HOST`, `CONTROLLER_OAUTH_TOKEN`, `CONTROLLER_USERNAME`, `CONTROLLER_PASSWORD` and `CONTROLLER_VERIFY_SSL` remain deprecated aliases with stderr notices.
+The new names win when both are set.
+Legacy file paths have no transition period.
 
 ## Development & Testing
 

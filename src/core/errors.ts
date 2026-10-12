@@ -204,7 +204,7 @@ export function networkError(cause: unknown, host: string): AxiError {
       `the certificate presented by ${host} could not be verified`,
       "TLS_UNTRUSTED",
       [
-        "Set CONTROLLER_VERIFY_SSL=false to trust this controller's certificate",
+        "Set AWX_AXI_VERIFY_SSL=false for the env profile or configure verifySsl: false for this controller",
       ],
     );
   }

@@ -1,215 +1,78 @@
-/**
- * `auth login|status|logout` (design.md §5.2, §5.3).
- *
- * Non-interactive by construction: every value comes from the environment, and
- * nothing prompts (AXI §6). The token value is never echoed to stdout, not even
- * truncated.
- */
 import { AxiError } from "axi-sdk-js";
 
-import {
-  removeTokenFile,
-  resolveBasicAuth,
-  resolveController,
-  resolveCredential,
-  tokenFilePath,
-  writeTokenFile,
-  type Env,
-} from "../core/auth.js";
+import { resolveBasicAuth, resolveController, resolveCredential, type Credential, type Env } from "../core/auth.js";
 import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
+import { credentialsPath, deleteToken, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
+import { registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
 import type { AwxTransport } from "../core/transport.js";
 
 export interface AuthContext {
   readonly env: Env;
-  createTransport(): AwxTransport;
-  /** Basic auth, used by `auth login` alone (§5.1). */
+  readonly selection: Selection;
+  createTransport(credential?: Credential): AwxTransport;
   createBasicAuthTransport(): AwxTransport;
 }
 
 export const AUTH_HELP = `auth: authenticate against the controller
-usage: awx-axi auth login|status|logout
+usage: awx-axi auth login|status|logout [--config <path>] [--profile <name>]
 
-  login    mint a token from CONTROLLER_USERNAME and CONTROLLER_PASSWORD and store it 0600
-  status   report whether a credential resolved, and who it belongs to
-  logout   remove the stored token file
+  login    mint a PAT using AWX_AXI_USERNAME and AWX_AXI_PASSWORD and store it privately
+  status   report selected profile, origin, credential source, and identity
+  logout   revoke the stored PAT upstream before deleting it locally
 
-No secret is ever a command-line argument: credentials come from the
-environment or from the 0600 token file (design.md §5.3).
+Global non-secret overrides: --origin <https-origin>, --verify-ssl <true|false>.
+Secrets come from environment variables or SecretRefs, never arguments.
+Logout respects read-only and delete gates; set AWX_AXI_ALLOW_DELETES=1 to revoke.
 
 examples:
-  awx-axi auth login
+  awx-axi auth login --profile production
   awx-axi auth status
-  awx-axi auth logout
+  awx-axi auth logout --profile production
 `;
 
-const SUBCOMMANDS = ["login", "status", "logout"];
-
-export async function authCommand(
-  args: string[],
-  context: AuthContext,
-): Promise<Renderable> {
+export async function authCommand(args: string[], context: AuthContext): Promise<Renderable> {
   const name = args[0];
-  if (name === undefined || !SUBCOMMANDS.includes(name)) {
-    throw validationError(
-      name === undefined
-        ? "`awx-axi auth` needs a subcommand"
-        : `unknown subcommand \`auth ${name}\``,
-      [`valid subcommands for \`awx-axi auth\`: ${SUBCOMMANDS.join(", ")}`],
-    );
-  }
-
-  parseFlags(`auth ${name}`, args.slice(1), [], {
-    names: [],
-    required: 0,
-  });
-
-  switch (name) {
-    case "login":
-      return login(context);
-    case "logout":
-      return logout(context.env);
-    default:
-      return status(context);
-  }
+  if (!name || !["login", "status", "logout"].includes(name)) throw validationError("auth needs login, status, logout");
+  parseFlags(`auth ${name}`, args.slice(1), [], { names: [], required: 0 });
+  if (name === "login") return login(context);
+  if (name === "logout") return logout(context);
+  return status(context);
 }
 
 async function login(context: AuthContext): Promise<Renderable> {
-  const config = resolveController(context.env);
   const basic = resolveBasicAuth(context.env);
-
-  // Validate the required input before calling any dependency (AXI §6). §5.2
-  // requires exit 2 here and names the missing variables: this is missing
-  // required input, which §9.1 codes as VALIDATION_ERROR, not the
-  // AUTH_REQUIRED that means "no credential resolved" on an ordinary command.
-  if (basic === undefined) {
-    const missing = [
-      ...(context.env.CONTROLLER_USERNAME ? [] : ["CONTROLLER_USERNAME"]),
-      ...(context.env.CONTROLLER_PASSWORD ? [] : ["CONTROLLER_PASSWORD"]),
-    ];
-    throw validationError(
-      `\`auth login\` needs ${missing.join(" and ")} in the environment`,
-      [
-        "Set them in the environment and re-run `awx-axi auth login`",
-        "Or set CONTROLLER_OAUTH_TOKEN to an existing token and skip login",
-      ],
-    );
-  }
-
-  const transport = context.createBasicAuthTransport();
-
-  const response = await transport.post("tokens/", {
-    description: "awx-axi",
-    scope: "write",
-  });
-
-  if (response.status === 403) {
-    throw new AxiError(
-      `${config.host} refused to mint a token for this account`,
-      "FORBIDDEN",
-      [
-        "An SSO-provisioned account cannot mint a token unless the controller enables it",
-        "Set CONTROLLER_OAUTH_TOKEN to a token issued through the controller UI instead",
-      ],
-    );
-  }
-  if (response.status !== 201) {
-    throw errorForResponse(response, { subject: `${config.host}` });
-  }
-
+  if (!basic) throw validationError("auth login needs AWX_AXI_USERNAME and AWX_AXI_PASSWORD in the environment");
+  const selected = selectProfile(context.env, context.selection);
+  const response = await context.createBasicAuthTransport().post("tokens/", { description: "awx-axi", scope: "write" });
+  if (response.status !== 201) throw errorForResponse(response, { subject: selected.profile.origin });
   const body = (response.body ?? {}) as Record<string, unknown>;
-  const token = body.token;
-  if (typeof token !== "string" || token.length === 0) {
-    throw new AxiError(
-      `${config.host} returned no token`,
-      "UNKNOWN",
-      ["Run `awx-axi auth status` to check the stored credential"],
-    );
-  }
-
-  const path = tokenFilePath(context.env);
-  writeTokenFile(path, token);
-
-  return {
-    auth: {
-      controller: config.host,
-      user: usernameOf(body) ?? basic?.username ?? "unknown",
-      token: `stored in ${collapseHome(path, context.env)}`,
-      scope: typeof body.scope === "string" ? body.scope : "write",
-    },
-  };
+  if (typeof body.token !== "string" || !body.token) throw new AxiError("controller returned no token", "AUTH_REQUIRED");
+  registerSecret(body.token);
+  if (!Number.isSafeInteger(body.id) || (body.id as number) <= 0) throw new AxiError("controller returned no PAT id; credential was not stored", "AUTH_REQUIRED");
+  saveToken(context.env, selected, { origin: selected.profile.origin, token: body.token, id: body.id as number });
+  return { auth: { profile: selected.name, origin: selected.profile.origin, user: basic.username, credential: `stored in ${credentialsPath(context.env)}`, scope: body.scope ?? "write" },
+    help: [`Run \`awx-axi auth status --profile ${selected.name}\` to check the saved profile`] };
 }
 
 async function status(context: AuthContext): Promise<Renderable> {
-  const config = resolveController(context.env);
-  const credential = resolveCredential(context.env);
-
-  if (credential === undefined) {
-    return {
-      auth: {
-        controller: config.host,
-        source: "none",
-        valid: false,
-      },
-      help: [
-        "Run `awx-axi auth login` with CONTROLLER_USERNAME and CONTROLLER_PASSWORD set",
-        "Or set CONTROLLER_OAUTH_TOKEN to an existing token",
-      ],
-    };
-  }
-
-  const source =
-    credential.path === undefined
-      ? credential.source
-      : collapseHome(credential.path, context.env);
+  const selected = selectProfile(context.env, context.selection, undefined, true);
+  const config = resolveController(context.env, context.selection);
+  const credential = resolveCredential(context.env, context.selection, undefined, true);
+  if (!credential) return { auth: { profile: selected.name, origin: selected.profile.origin, controller: config.host, source: "none", valid: false }, help: ["Run `awx-axi auth login` to store a PAT"] };
   const response = await context.createTransport().get("me/");
-  const valid = response.status === 200;
-
-  return {
-    auth: {
-      controller: config.host,
-      source,
-      user: valid ? (firstResultUsername(response.body) ?? "unknown") : "unknown",
-      valid,
-    },
-    ...(valid
-      ? {}
-      : {
-          help: [
-            "Run `awx-axi auth login` to mint a fresh token",
-          ],
-        }),
-  };
+  const body = response.body as { results?: { username?: string }[]; username?: string } | null;
+  return { auth: { profile: selected.name, origin: selected.profile.origin, controller: config.host, source: credential.path ?? credential.source,
+    user: response.status === 200 ? (body?.results?.[0]?.username ?? body?.username ?? "unknown") : "unknown", valid: response.status === 200 } };
 }
 
-function logout(env: Env): Renderable {
-  const path = tokenFilePath(env);
-  const removed = removeTokenFile(path);
-
-  return {
-    auth: removed
-      ? `token removed from ${collapseHome(path, env)}`
-      : `no stored token at ${collapseHome(path, env)} (no-op)`,
-  };
-}
-
-function usernameOf(body: Record<string, unknown>): string | undefined {
-  const summary = (body.summary_fields ?? {}) as Record<string, unknown>;
-  const user = (summary.user ?? {}) as Record<string, unknown>;
-  return typeof user.username === "string" ? user.username : undefined;
-}
-
-function firstResultUsername(body: unknown): string | undefined {
-  const results = (body as { results?: unknown } | null)?.results;
-  const row = Array.isArray(results) ? results[0] : body;
-  const username = (row as { username?: unknown } | null)?.username;
-  return typeof username === "string" ? username : undefined;
-}
-
-function collapseHome(path: string, env: Env): string {
-  const home = env.HOME;
-  return home !== undefined && home.length > 0 && path.startsWith(home)
-    ? `~${path.slice(home.length)}`
-    : path;
+async function logout(context: AuthContext): Promise<Renderable> {
+  const selected = selectProfile(context.env, context.selection);
+  const stored = storedToken(context.env, selected);
+  if (!stored) return { auth: "no stored PAT for the selected profile (no-op)" };
+  const response = await context.createTransport({ token: stored.token, source: "stored" }).delete(`tokens/${stored.id}/`);
+  if (response.status !== 204 && response.status !== 404) throw errorForResponse(response, { subject: "PAT revocation" });
+  deleteToken(context.env, selected);
+  return { auth: `PAT revoked and removed for profile ${selected.name}` };
 }

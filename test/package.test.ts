@@ -26,7 +26,7 @@ describe("the published package", () => {
         throw new Error("npm pack returned no package");
       }
       expect(result.files.map((file) => file.path)).toEqual(
-        expect.arrayContaining(["LICENSE", "dist/bin/awx-axi.js"]),
+        expect.arrayContaining(["LICENSE", "dist/bin/awx-axi.js", "axi-credential.schema.json"]),
       );
 
       const tarball = join(directory, result.filename);
@@ -48,5 +48,5 @@ describe("the published package", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });

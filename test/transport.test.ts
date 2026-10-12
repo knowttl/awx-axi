@@ -28,6 +28,11 @@ function transport(
 }
 
 describe("getPaged (design.md §4.3 cases 1-3)", () => {
+  it("rejects cross-origin pagination links before sending an authorization header", async () => {
+    const { transport: http, calls } = transport([]);
+    await expect(http.get("https://other.example.com/api/v2/jobs/")).rejects.toMatchObject({ code: "CONFIG_INVALID" });
+    expect(calls).toHaveLength(0);
+  });
   it("follows the envelope's next link rather than inferring page boundaries", async () => {
     const { transport: http, calls } = transport([
       "unified-jobs-page-1",
