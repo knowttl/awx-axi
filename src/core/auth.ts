@@ -34,7 +34,7 @@ export function resolveController(env: Env, selection: Selection = {}, login = f
 export function resolveCredential(envInput: Env, selection: Selection = {}, files = new PrivateFiles(), verifyAcl = false): Credential | undefined {
   const env = normalizeEnv(envInput);
   const selected = selectProfile(env, selection, files, verifyAcl);
-  const ref = selected.profile.token ?? { env: "AWX_AXI_TOKEN" };
+  const ref = selected.profile.token ?? { stored: true };
   let token: string | undefined;
   let source: string;
   let path: string | undefined;

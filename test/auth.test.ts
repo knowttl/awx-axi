@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -88,11 +88,20 @@ describe("credential profiles", () => {
 
   it("binds stored tokens to the effective origin, including flag overrides", () => {
     const env = environment();
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     expect(resolveCredential(env)?.token).toBe("bound-token");
     expect(() => resolveCredential(env, { origin: "https://other.example.com" })).toThrow(expect.objectContaining({ code: "CONFIG_INVALID" }));
     expect(statSync(credentialsPath(env)).mode & 0o777).toBe(0o600);
+  });
+
+  it("preserves an explicit environment SecretRef after storing a login credential", () => {
+    const env = { ...environment(), PRODUCTION_PAT: "environment-token" };
+    configure(env, { production });
+    const before = readFileSync(configPath(env), "utf8");
+    saveToken(env, selectProfile(env), { origin: production.origin, token: "stored-token", id: 9 });
+    expect(readFileSync(configPath(env), "utf8")).toBe(before);
+    expect(resolveCredential(env)).toMatchObject({ token: "environment-token", source: "PRODUCTION_PAT" });
   });
 
   it("treats prototype-like profile names as ordinary names", () => {
@@ -145,6 +154,47 @@ describe("credential profiles", () => {
 });
 
 describe("authentication through the CLI", () => {
+  it.each([
+    [{ env: { origin: production.origin } }, {}, "https://other.example.com", []],
+    [{ production }, { env: { origin: production.origin, token: "original-token", id: 9 } }, "https://other.example.com", []],
+    [{ env: { origin: production.origin } }, { env: { origin: production.origin, token: "original-token", id: 9 } }, "https://other.example.com", []],
+    [{ env: { origin: production.origin } }, {}, production.origin, ["--origin", "https://other.example.com"]],
+  ] as const)("refuses implicit env login collisions before minting: %j", async (profiles, credentials, origin, argv) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    configure(env, profiles);
+    files.write(credentialsPath(env), JSON.stringify({ version: 1, profiles: credentials }));
+    const beforeConfig = readFileSync(configPath(env), "utf8");
+    const beforeCredentials = readFileSync(credentialsPath(env), "utf8");
+    const run = await runCli(["auth", "login", ...argv], { env });
+    expect(run.stdout).toContain("CONFIG_INVALID");
+    expect(run.stdout).toContain("--profile");
+    expect(run.transport.requests).toHaveLength(0);
+    expect(readFileSync(configPath(env), "utf8")).toBe(beforeConfig);
+    expect(readFileSync(credentialsPath(env), "utf8")).toBe(beforeCredentials);
+  });
+
+  it("allows implicit env login to replace a PAT bound to the same controller", async () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    configure(env, { env: { origin: production.origin } });
+    saveToken(env, selectProfile(env, { profile: "env" }), { origin: production.origin, token: "original-token", id: 9 });
+    const before = readFileSync(configPath(env), "utf8");
+    const run = await runCli(["auth", "login"], { env, script: [{ status: 201, body: { token: "replacement-token", id: 10 } }] });
+    expect(run.exitCode).toBe(0);
+    expect(readFileSync(configPath(env), "utf8")).toBe(before);
+    expect(resolveCredential(env, { profile: "env" })?.token).toBe("replacement-token");
+  });
+
+  it.each([
+    [["--profile", "env"], undefined],
+    [[], "env"],
+  ] as const)("uses the explicitly selected env profile for login: %j", async (argv, profile) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: "https://other.example.com", AWX_AXI_PROFILE: profile, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    configure(env, { env: { origin: production.origin } });
+    const run = await runCli(["auth", "login", ...argv], { env, script: [{ status: 201, body: { token: "explicit-token", id: 9 } }] });
+    expect(run.exitCode).toBe(0);
+    expect(resolveCredential(env, { profile: "env" })?.token).toBe("explicit-token");
+  });
+
   it.each([
     [["template", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight],
     [["job", "launch", "12"], "credential-passwords-file", secretInputs, passwordPreflight],
@@ -199,7 +249,7 @@ describe("authentication through the CLI", () => {
 
   it("reads and writes profiles and credentials beneath symlinked XDG directories", () => {
     const env = environment();
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const configLink = `${env.XDG_CONFIG_HOME!}-link`;
     const stateLink = `${env.XDG_STATE_HOME!}-link`;
@@ -211,14 +261,16 @@ describe("authentication through the CLI", () => {
     expect(resolveCredential(env)?.token).toBe("replacement-token");
   });
 
-  it("mints a PAT, persists the stored ref, and never prints the secret", async () => {
+  it("mints a PAT into state without creating config or printing the secret", async () => {
     const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
     const run = await runCli(["auth", "login"], { env, script: [{ status: 201, body: { id: 9, token: "minted-token", scope: "write" } }] });
     expect(run.exitCode).toBe(0);
     expect(run.transport.requests[0]).toMatchObject({ method: "POST", route: "tokens/" });
     expect(run.stdout).not.toContain("minted-token");
+    expect(existsSync(configPath(env))).toBe(false);
+    expect(run.stdout).toContain("Add profile env");
+    configure(env, { env: { origin: production.origin } });
     expect(resolveCredential(env, { profile: "env" })?.token).toBe("minted-token");
-    expect(loadConfig(env).profiles.env?.token).toEqual({ stored: true });
   });
 
   it("refuses login in read-only mode before minting or storing", async () => {
@@ -229,9 +281,9 @@ describe("authentication through the CLI", () => {
     expect(run.transport.requests).toHaveLength(0);
   });
 
-  it("keeps hosted login config unchanged while storing the PAT", async () => {
-    const env = { ...environment(), AWX_AXI_HOSTED: "true", AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
-    configure(env, { hosted: { origin: production.origin, token: { stored: true } } });
+  it("keeps config unchanged and uses stored credentials when the token ref is omitted", async () => {
+    const env = { ...environment(), AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "test-password" };
+    configure(env, { hosted: { origin: production.origin } });
     const before = readFileSync(configPath(env), "utf8");
     const run = await runCli(["auth", "login"], { env, script: [{ status: 201, body: { id: 9, token: "hosted-token" } }] });
     expect(run.exitCode).toBe(0);
@@ -271,7 +323,7 @@ describe("authentication through the CLI", () => {
     ["1", "0", "SECURITY_WRITES_DISABLED"],
   ])("retains the stored PAT when logout gates are %s and %s", async (deletes, security, code) => {
     const env = { ...environment(), AWX_AXI_ALLOW_DELETES: deletes, AWX_AXI_ALLOW_SECURITY_WRITES: security };
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const run = await runCli(["auth", "logout"], { env });
     expect(run.stdout).toContain(code);
@@ -293,7 +345,7 @@ describe("authentication through the CLI", () => {
   it("redacts resolved secrets and their encoded forms in upstream errors", async () => {
     const token = "synthetic-token/with-encoding";
     const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token, id: 9 });
     const run = await runCli(["auth", "logout"], { env, script: [{ status: 403, body: { detail: `denied ${token} ${encodeURIComponent(token)}` } }] });
     expect(run.exitCode).toBe(1);
@@ -312,7 +364,7 @@ describe("authentication through the CLI", () => {
 
   it("revokes the stored PAT before deleting it locally", async () => {
     const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const run = await runCli(["auth", "logout"], { env, script: [{ status: 204 }] });
     expect(run.exitCode).toBe(0);
@@ -322,7 +374,7 @@ describe("authentication through the CLI", () => {
 
   it("keeps the local PAT when revocation fails", async () => {
     const env = { ...environment(), AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_SECURITY_WRITES: "1" };
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const run = await runCli(["auth", "logout"], { env, script: [{ status: 403 }] });
     expect(run.exitCode).toBe(1);
@@ -331,7 +383,7 @@ describe("authentication through the CLI", () => {
 
   it("keeps the local PAT when read-only mode refuses logout", async () => {
     const env = { ...environment(), AWX_AXI_READ_ONLY: "true", AWX_AXI_ALLOW_DELETES: "1" };
-    configure(env, { production });
+    configure(env, { production: { origin: production.origin } });
     saveToken(env, selectProfile(env), { origin: production.origin, token: "bound-token", id: 9 });
     const run = await runCli(["auth", "logout"], { env });
     expect(run.exitCode).toBe(1);

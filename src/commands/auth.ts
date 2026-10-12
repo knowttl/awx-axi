@@ -3,7 +3,7 @@ import { AxiError } from "axi-sdk-js";
 import { resolveBasicAuth, resolveController, resolveCredential, type Credential, type Env } from "../core/auth.js";
 import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
-import { booleanEnv, credentialsPath, deleteToken, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
+import { credentialsPath, deleteToken, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
 import { registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
 import type { AwxTransport } from "../core/transport.js";
@@ -43,11 +43,14 @@ export async function authCommand(args: string[], context: AuthContext): Promise
 }
 
 async function login(context: AuthContext): Promise<Renderable> {
-  booleanEnv(context.env, "AWX_AXI_HOSTED");
   const basic = resolveBasicAuth(context.env);
   if (!basic) throw validationError("auth login needs AWX_AXI_USERNAME and AWX_AXI_PASSWORD in the environment");
   const selected = selectProfile(context.env, context.selection, undefined, false, true);
-  loadCredentials(context.env);
+  const credentials = loadCredentials(context.env);
+  if (selected.name === "env" && context.selection.profile === undefined && context.env.AWX_AXI_PROFILE === undefined &&
+    [selected.config.profiles.env?.origin, credentials.profiles.env?.origin].some((origin) => origin !== undefined && origin !== selected.profile.origin)) {
+    throw new AxiError("environment login would replace an env profile bound to another controller; select a configured profile explicitly with --profile or AWX_AXI_PROFILE", "CONFIG_INVALID");
+  }
   const response = await context.createBasicAuthTransport().post("tokens/", { description: "awx-axi", scope: "write" });
   if (response.status !== 201) throw errorForResponse(response, { subject: selected.profile.origin });
   const body = (response.body ?? {}) as Record<string, unknown>;
@@ -56,7 +59,10 @@ async function login(context: AuthContext): Promise<Renderable> {
   if (!Number.isSafeInteger(body.id) || (body.id as number) <= 0) throw new AxiError("controller returned no PAT id; credential was not stored", "AUTH_REQUIRED");
   saveToken(context.env, selected, { origin: selected.profile.origin, token: body.token, id: body.id as number });
   return { auth: { profile: selected.name, origin: selected.profile.origin, user: basic.username, credential: `stored in ${credentialsPath(context.env)}`, scope: body.scope ?? "write" },
-    help: [`Run \`awx-axi auth status --profile ${selected.name}\` to check the saved profile`] };
+    help: [
+      ...(Object.hasOwn(selected.config.profiles, selected.name) ? [] : [`Add profile ${selected.name} with origin ${selected.profile.origin} to ${selected.path}; login never writes config`]),
+      `Run \`awx-axi auth status --profile ${selected.name}\` to check the configured profile`,
+    ] };
 }
 
 async function status(context: AuthContext): Promise<Renderable> {

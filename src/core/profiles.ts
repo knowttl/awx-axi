@@ -214,14 +214,9 @@ export function storedToken(env: Env, selected: SelectedProfile, files = new Pri
 }
 
 export function saveToken(env: Env, selected: SelectedProfile, token: StoredToken, files = new PrivateFiles()): void {
-  const hosted = booleanEnv(env, "AWX_AXI_HOSTED");
   const credentials = loadCredentials(env, files);
   credentials.profiles[selected.name] = token;
   files.write(credentialsPath(env), `${JSON.stringify(credentials, null, 2)}\n`);
-  if (hosted) return;
-  selected.config.profiles[selected.name] = { ...selected.profile, token: { stored: true } };
-  selected.config.defaultProfile ??= selected.name;
-  files.write(selected.path, `${JSON.stringify(selected.config, null, 2)}\n`);
 }
 
 export function deleteToken(env: Env, selected: SelectedProfile, files = new PrivateFiles()): void {

@@ -7,6 +7,9 @@ See the README configuration section for profile examples, environment variables
 
 The old token file is never read or automatically imported because it has no controller binding.
 Create a profile with an HTTPS origin and an environment or private-file SecretRef, or use `auth login` to mint an origin-bound PAT.
+Login writes only protected state credentials and never config.
+A profile with no token ref uses its stored credential by profile name; explicit SecretRefs retain their declared sources.
+Implicit environment login refuses collisions with configured or stored identities bound to another controller before minting.
 Legacy environment variables remain aliases for one minor release with stderr notices.
 Plain-HTTP controllers are refused pending an owner decision about an explicit exception.
 `verifySsl: false` changes certificate verification only for the selected transport and does not allow HTTP.
