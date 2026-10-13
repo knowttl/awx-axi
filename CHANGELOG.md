@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.4...awx-axi-v0.1.5) (2026-10-12)
+
+
+### Features
+
+* adopt AXI credential profiles and protected PAT storage ([#39](https://github.com/knowttl/awx-axi/issues/39)) ([7c2569e](https://github.com/knowttl/awx-axi/commit/7c2569e85fde6ad02d740a29dc3ecf5d5076e511))
+* support explicit per-profile HTTP controller opt-in ([#41](https://github.com/knowttl/awx-axi/issues/41)) ([0b27015](https://github.com/knowttl/awx-axi/commit/0b270152113a0c7e7a8b3fbe6899e33361723106))
+
 ## [0.1.4](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.3...awx-axi-v0.1.4) (2026-08-27)
 
 
