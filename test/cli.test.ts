@@ -7,6 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import { DESCRIPTION, DOMAINS, main } from "../src/cli.js";
 import type { Domain } from "../src/core/registry.js";
 
+vi.mock("node:fs", { spy: true });
+
 function capture(): { write: (chunk: string) => void; text: () => string } {
   const chunks: string[] = [];
   return {
