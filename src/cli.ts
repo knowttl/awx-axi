@@ -93,6 +93,7 @@ export interface MainOptions {
 export async function main(options: MainOptions = {}): Promise<void> {
   clearSecrets();
   let argv = options.argv ?? process.argv.slice(2);
+  const bareHome = argv.length === 0;
   const env = normalizeEnv(options.env ?? process.env);
   const selection: Selection = {};
   let globalError: unknown;
@@ -165,7 +166,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
           ?.help ?? domain?.help;
       return help === undefined || help.endsWith("\n") ? help : `${help}\n`;
     },
-    home: () => homeCommand(),
+    home: () => homeCommand(bareHome ? env : {}),
   });
 }
 
