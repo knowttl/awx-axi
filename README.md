@@ -34,7 +34,11 @@ npx skills add knowttl/awx-axi --skill awx-axi
 Add `-g` for a global install instead of a project-scoped install.
 
 Running `awx-axi` with no arguments in Codex, Claude Code, OpenCode, or Pi shows a one-line hint with this install command when the skill is missing for that host.
-The hint disappears when a global or project installation is found and is omitted outside recognized agent hosts.
+The hint disappears when an installation is found in a supported location and is omitted outside recognized agent hosts.
+
+Detection checks each host's default roots, skills CLI destinations, documented root environment overrides, and Claude's conditional main-checkout worktree fallback, looking only for a direct `awx-axi/SKILL.md` child of each root.
+It uses file-existence checks, plus `.git` and `commondir` reads for that fallback, with no network requests, subprocesses, settings-file parsing, or recursive skill-tree walks.
+Settings-listed skill paths and nested layouts are not detected, so those installations may still produce the extra hint line.
 
 This is the fastest setup path for agent workflows.
 The skill points agents to run commands as `npx -y awx-axi`.
