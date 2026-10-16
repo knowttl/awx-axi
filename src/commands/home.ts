@@ -33,24 +33,34 @@ function needsSkillHint(env: Env): boolean {
   try {
     const home = env.HOME || homedir();
     const skill = "awx-axi/SKILL.md";
-    const globalDirectories = [join(home, ".agents/skills")];
-    const projectDirectories = [".agents/skills"];
-    if (host === "codex") {
-      globalDirectories.push(join(env.CODEX_HOME?.trim() || join(home, ".codex"), "skills"));
-    } else if (host === "pi") {
-      const agentDirectory = env.PI_CODING_AGENT_DIR || join(home, ".pi/agent");
-      globalDirectories.push(join(agentDirectory.replace(/^~(?=\/|$)/, () => home), "skills"));
-      projectDirectories.push(".pi/skills");
-    } else if (host === "opencode") {
-      globalDirectories.push(
-        join(env.XDG_CONFIG_HOME || join(home, ".config"), "opencode/skills"),
-        join(home, ".claude/skills"),
-      );
-      projectDirectories.push(".opencode/skills", ".claude/skills");
-    } else {
-      globalDirectories.push(join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"), "skills"));
-      projectDirectories.push(".claude/skills");
-    }
+    const { globalDirectories, projectDirectories } = {
+      codex: {
+        globalDirectories: [
+          join(home, ".agents/skills"),
+          join(env.CODEX_HOME?.trim() || join(home, ".codex"), "skills"),
+        ],
+        projectDirectories: [".agents/skills"],
+      },
+      claude: {
+        globalDirectories: [join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"), "skills")],
+        projectDirectories: [".claude/skills"],
+      },
+      opencode: {
+        globalDirectories: [
+          join(home, ".agents/skills"),
+          join(env.XDG_CONFIG_HOME || join(home, ".config"), "opencode/skills"),
+          join(home, ".claude/skills"),
+        ],
+        projectDirectories: [".agents/skills", ".opencode/skills", ".claude/skills"],
+      },
+      pi: {
+        globalDirectories: [
+          join(home, ".agents/skills"),
+          join((env.PI_CODING_AGENT_DIR || join(home, ".pi/agent")).replace(/^~(?=\/|$)/, () => home), "skills"),
+        ],
+        projectDirectories: [".agents/skills", ".pi/skills"],
+      },
+    }[host];
     if (globalDirectories.some((directory) => existsSync(join(directory, skill)))) return false;
 
     // Stop at .git files as well as directories, including disposable worktrees.
