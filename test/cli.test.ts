@@ -1,5 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import * as fs from "node:fs";
+import { join, resolve, sep } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,12 +24,26 @@ describe("the CLI shell", () => {
     { name: "Codex project", env: { CODEX_THREAD_ID: "thread" }, installed: "repo/.agents/skills", hint: false },
     { name: "Codex native global", env: { CODEX_THREAD_ID: "thread" }, installed: "home/.codex/skills", hint: false },
     { name: "Codex custom native global", env: { CODEX_THREAD_ID: "thread", CODEX_HOME: "custom" }, installed: "custom/skills", hint: false },
+    { name: "Codex bundled system", env: { CODEX_THREAD_ID: "thread" }, installed: "home/.codex/skills/.system", hint: false },
+    { name: "Codex custom bundled system", env: { CODEX_THREAD_ID: "thread", CODEX_HOME: "custom" }, installed: "custom/skills/.system", hint: false },
+    { name: "Codex admin", env: { CODEX_THREAD_ID: "thread" }, installed: undefined, systemSkill: "/etc/codex/skills/awx-axi/SKILL.md", hint: false },
+    { name: "Codex custom home replaces native default", env: { CODEX_THREAD_ID: "thread", CODEX_HOME: "custom" }, installed: "home/.codex/skills", hint: true },
     { name: "Claude missing", env: { CLAUDECODE: "1" }, installed: undefined, hint: true },
     { name: "Claude global", env: { CLAUDECODE: "1" }, installed: "home/.claude/skills", hint: false },
     { name: "Codex-only global install in Claude", env: { CLAUDECODE: "1" }, installed: "home/.agents/skills", hint: true },
     { name: "Claude project", env: { CLAUDECODE: "1" }, installed: "repo/.claude/skills", hint: false },
+    { name: "Claude current directory", env: { CLAUDECODE: "1" }, installed: "repo/nested/.claude/skills", hint: false },
+    { name: "Claude stops at repository root", env: { CLAUDECODE: "1" }, installed: ".claude/skills", hint: true },
     { name: "Codex-only project install in Claude", env: { CLAUDECODE: "1" }, installed: "repo/.agents/skills", hint: true },
     { name: "Claude custom global", env: { CLAUDECODE: "1", CLAUDE_CONFIG_DIR: "custom" }, installed: "custom/skills", hint: false },
+    { name: "Claude custom home replaces native default", env: { CLAUDECODE: "1", CLAUDE_CONFIG_DIR: "custom" }, installed: "home/.claude/skills", hint: true },
+    {
+      name: "Claude managed enterprise", env: { CLAUDECODE: "1" }, installed: undefined, hint: false,
+      systemSkill: join(process.platform === "darwin" ? "/Library/Application Support/ClaudeCode"
+        : process.platform === "win32" ? join(process.env.ProgramFiles || "C:\\Program Files", "ClaudeCode")
+        : "/etc/claude-code", ".claude/skills/awx-axi/SKILL.md"),
+    },
+    { name: "Claude ignores Codex admin", env: { CLAUDECODE: "1" }, installed: undefined, systemSkill: "/etc/codex/skills/awx-axi/SKILL.md", hint: true },
     { name: "Claude ignores OpenCode global", env: { CLAUDECODE: "1" }, installed: "home/.config/opencode/skills", hint: true },
     { name: "Claude ignores OpenCode project", env: { CLAUDECODE: "1" }, installed: "repo/.opencode/skills", hint: true },
     { name: "Claude ignores Pi global", env: { CLAUDECODE: "1" }, installed: "home/.pi/agent/skills", hint: true },
@@ -36,21 +51,31 @@ describe("the CLI shell", () => {
     { name: "OpenCode missing", env: { OPENCODE: "1" }, installed: undefined, hint: true },
     { name: "OpenCode shared global", env: { OPENCODE: "1" }, installed: "home/.agents/skills", hint: false },
     { name: "OpenCode project", env: { OPENCODE: "1" }, installed: "repo/.agents/skills", hint: false },
+    { name: "OpenCode shared current directory", env: { OPENCODE: "1" }, installed: "repo/nested/.agents/skills", hint: false },
+    { name: "OpenCode stops at repository root", env: { OPENCODE: "1" }, installed: ".opencode/skills", hint: true },
     { name: "OpenCode native global", env: { OPENCODE: "1" }, installed: "home/.config/opencode/skills", hint: false },
     { name: "OpenCode XDG global", env: { OPENCODE: "1", XDG_CONFIG_HOME: "custom" }, installed: "custom/opencode/skills", hint: false },
+    { name: "OpenCode config directory", env: { OPENCODE: "1", OPENCODE_CONFIG_DIR: "custom" }, installed: "custom/skills", hint: false },
+    { name: "OpenCode config directory keeps global roots", env: { OPENCODE: "1", OPENCODE_CONFIG_DIR: "custom" }, installed: "home/.config/opencode/skills", hint: false },
     { name: "OpenCode native project", env: { OPENCODE: "1" }, installed: "repo/.opencode/skills", hint: false },
+    { name: "OpenCode native current directory", env: { OPENCODE: "1" }, installed: "repo/nested/.opencode/skills", hint: false },
     { name: "OpenCode Claude global", env: { OPENCODE: "1" }, installed: "home/.claude/skills", hint: false },
     { name: "OpenCode Claude project", env: { OPENCODE: "1" }, installed: "repo/.claude/skills", hint: false },
+    { name: "OpenCode Claude current directory", env: { OPENCODE: "1" }, installed: "repo/nested/.claude/skills", hint: false },
     { name: "OpenCode ignores Codex native global", env: { OPENCODE: "1" }, installed: "home/.codex/skills", hint: true },
     { name: "OpenCode ignores Pi global", env: { OPENCODE: "1" }, installed: "home/.pi/agent/skills", hint: true },
     { name: "OpenCode ignores Pi project", env: { OPENCODE: "1" }, installed: "repo/.pi/skills", hint: true },
     { name: "Pi missing", env: { PI_SESSION_ID: "session" }, installed: undefined, hint: true },
     { name: "Pi global", env: { PI_SESSION_ID: "session" }, installed: "home/.agents/skills", hint: false },
     { name: "Pi project", env: { PI_SESSION_ID: "session" }, installed: "repo/.agents/skills", hint: false },
+    { name: "Pi shared current directory", env: { PI_SESSION_ID: "session" }, installed: "repo/nested/.agents/skills", hint: false },
+    { name: "Pi stops at repository root", env: { PI_SESSION_ID: "session" }, installed: ".agents/skills", hint: true },
     { name: "Pi native global", env: { PI_SESSION_ID: "session" }, installed: "home/.pi/agent/skills", hint: false },
-    { name: "Pi native project", env: { PI_SESSION_ID: "session" }, installed: "repo/.pi/skills", hint: false },
+    { name: "Pi native current directory", env: { PI_SESSION_ID: "session" }, installed: "repo/nested/.pi/skills", hint: false },
+    { name: "Pi native ancestor is not loaded", env: { PI_SESSION_ID: "session" }, installed: "repo/.pi/skills", hint: true },
     { name: "Pi custom native global", env: { PI_SESSION_ID: "session", PI_CODING_AGENT_DIR: "custom" }, installed: "custom/skills", hint: false },
     { name: "Pi tilde native global", env: { PI_SESSION_ID: "session", PI_CODING_AGENT_DIR: "~/pi-custom" }, installed: "home/pi-custom/skills", hint: false },
+    { name: "Pi custom home replaces native default", env: { PI_SESSION_ID: "session", PI_CODING_AGENT_DIR: "custom" }, installed: "home/.pi/agent/skills", hint: true },
     { name: "Pi ignores Codex native global", env: { PI_SESSION_ID: "session" }, installed: "home/.codex/skills", hint: true },
     { name: "Pi ignores Claude global", env: { PI_SESSION_ID: "session" }, installed: "home/.claude/skills", hint: true },
     { name: "Pi ignores Claude project", env: { PI_SESSION_ID: "session" }, installed: "repo/.claude/skills", hint: true },
@@ -83,6 +108,13 @@ describe("the CLI shell", () => {
       writeFileSync(join(directory, "SKILL.md"), "installed skill");
     }
     const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(cwd);
+    const pathExists = fs.existsSync;
+    const existsSpy = vi.spyOn(fs, "existsSync").mockImplementation((path) => {
+      if (typeof path === "string" && !path.startsWith(`${root}${sep}`)) {
+        return "systemSkill" in testCase && path === testCase.systemSkill;
+      }
+      return pathExists(path);
+    });
     try {
       const stdout = capture();
       await main({
@@ -91,9 +123,11 @@ describe("the CLI shell", () => {
         env: {
           ...env,
           HOME: home,
+          ...(process.env.ProgramFiles ? { ProgramFiles: process.env.ProgramFiles } : {}),
           ...(env.CLAUDE_CONFIG_DIR ? { CLAUDE_CONFIG_DIR: join(root, env.CLAUDE_CONFIG_DIR) } : {}),
           ...(env.CODEX_HOME ? { CODEX_HOME: join(root, env.CODEX_HOME) } : {}),
           ...(env.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: join(root, env.XDG_CONFIG_HOME) } : {}),
+          ...(env.OPENCODE_CONFIG_DIR ? { OPENCODE_CONFIG_DIR: join(root, env.OPENCODE_CONFIG_DIR) } : {}),
           ...(env.PI_CODING_AGENT_DIR ? {
             PI_CODING_AGENT_DIR: env.PI_CODING_AGENT_DIR.startsWith("~")
               ? env.PI_CODING_AGENT_DIR : join(root, env.PI_CODING_AGENT_DIR),
@@ -112,6 +146,7 @@ describe("the CLI shell", () => {
         expect(stdout.text()).toBe(baseline.text());
       }
     } finally {
+      existsSpy.mockRestore();
       cwdSpy.mockRestore();
       rmSync(root, { recursive: true, force: true });
     }

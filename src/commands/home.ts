@@ -33,39 +33,57 @@ function needsSkillHint(env: Env): boolean {
   try {
     const home = env.HOME || homedir();
     const skill = "awx-axi/SKILL.md";
-    const { globalDirectories, projectDirectories } = {
-      codex: {
-        globalDirectories: [
-          join(home, ".agents/skills"),
-          join(env.CODEX_HOME?.trim() || join(home, ".codex"), "skills"),
-        ],
-        projectDirectories: [".agents/skills"],
-      },
-      claude: {
-        globalDirectories: [join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"), "skills")],
-        projectDirectories: [".claude/skills"],
-      },
-      opencode: {
-        globalDirectories: [
-          join(home, ".agents/skills"),
-          join(env.XDG_CONFIG_HOME || join(home, ".config"), "opencode/skills"),
-          join(home, ".claude/skills"),
-        ],
-        projectDirectories: [".agents/skills", ".opencode/skills", ".claude/skills"],
-      },
-      pi: {
-        globalDirectories: [
-          join(home, ".agents/skills"),
-          join((env.PI_CODING_AGENT_DIR || join(home, ".pi/agent")).replace(/^~(?=\/|$)/, () => home), "skills"),
-        ],
-        projectDirectories: [".agents/skills", ".pi/skills"],
-      },
-    }[host];
-    if (globalDirectories.some((directory) => existsSync(join(directory, skill)))) return false;
+    const codexHome = env.CODEX_HOME?.trim() || join(home, ".codex");
+    const managedDirectory = process.platform === "darwin" ? "/Library/Application Support/ClaudeCode"
+      : process.platform === "win32" ? join(env.ProgramFiles || "C:\\Program Files", "ClaudeCode")
+      : "/etc/claude-code";
+    // https://github.com/vercel-labs/skills/blob/main/src/agents.ts
+    const roots: Record<typeof host, { path: string; scope: "user-system" | "cwd" | "ancestors" }[]> = {
+      // https://developers.openai.com/codex/skills/#where-to-save-skills
+      codex: [
+        { path: join(home, ".agents/skills"), scope: "user-system" },
+        { path: join(codexHome, "skills"), scope: "user-system" },
+        { path: join(codexHome, "skills/.system"), scope: "user-system" },
+        { path: "/etc/codex/skills", scope: "user-system" },
+        { path: ".agents/skills", scope: "ancestors" },
+      ],
+      // https://code.claude.com/docs/en/skills#where-skills-live
+      // https://code.claude.com/docs/en/managed-settings#delivery-mechanisms
+      claude: [
+        { path: join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"), "skills"), scope: "user-system" },
+        { path: join(managedDirectory, ".claude/skills"), scope: "user-system" },
+        { path: ".claude/skills", scope: "ancestors" },
+      ],
+      // https://opencode.ai/docs/skills/#place-files
+      // https://opencode.ai/docs/config/#custom-directory
+      opencode: [
+        { path: join(home, ".agents/skills"), scope: "user-system" },
+        { path: join(env.XDG_CONFIG_HOME || join(home, ".config"), "opencode/skills"), scope: "user-system" },
+        { path: join(home, ".claude/skills"), scope: "user-system" },
+        ...(env.OPENCODE_CONFIG_DIR
+          ? [{ path: join(env.OPENCODE_CONFIG_DIR, "skills"), scope: "user-system" as const }] : []),
+        { path: ".agents/skills", scope: "ancestors" },
+        { path: ".opencode/skills", scope: "ancestors" },
+        { path: ".claude/skills", scope: "ancestors" },
+      ],
+      // https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/package-manager.ts
+      pi: [
+        { path: join(home, ".agents/skills"), scope: "user-system" },
+        {
+          path: join((env.PI_CODING_AGENT_DIR || join(home, ".pi/agent")).replace(/^~(?=\/|$)/, () => home), "skills"),
+          scope: "user-system",
+        },
+        { path: ".agents/skills", scope: "ancestors" },
+        { path: ".pi/skills", scope: "cwd" },
+      ],
+    };
+    if (roots[host].some((root) => root.scope === "user-system" && existsSync(join(root.path, skill)))) return false;
 
+    const cwd = process.cwd();
     // Stop at .git files as well as directories, including disposable worktrees.
-    for (let directory = process.cwd(); ; directory = dirname(directory)) {
-      if (projectDirectories.some((path) => existsSync(join(directory, path, skill)))) return false;
+    for (let directory = cwd; ; directory = dirname(directory)) {
+      if (roots[host].some((root) => (root.scope === "ancestors" || (root.scope === "cwd" && directory === cwd))
+        && existsSync(join(directory, root.path, skill)))) return false;
       if (existsSync(join(directory, ".git")) || dirname(directory) === directory) break;
     }
     return true;
