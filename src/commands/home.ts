@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import type { Env } from "../core/auth.js";
 import type { Renderable } from "../core/registry.js";
@@ -38,7 +38,7 @@ function needsSkillHint(env: Env): boolean {
       : process.platform === "win32" ? join(env.ProgramFiles || "C:\\Program Files", "ClaudeCode")
       : "/etc/claude-code";
     // https://github.com/vercel-labs/skills/blob/main/src/agents.ts
-    const roots: Record<typeof host, { path: string; scope: "user-system" | "cwd" | "ancestors" }[]> = {
+    const roots: Record<typeof host, { path: string; scope: "user-system" | "cwd" | "ancestors" | "main-checkout" }[]> = {
       // https://developers.openai.com/codex/skills/#where-to-save-skills
       codex: [
         { path: join(home, ".agents/skills"), scope: "user-system" },
@@ -53,6 +53,7 @@ function needsSkillHint(env: Env): boolean {
         { path: join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"), "skills"), scope: "user-system" },
         { path: join(managedDirectory, ".claude/skills"), scope: "user-system" },
         { path: ".claude/skills", scope: "ancestors" },
+        { path: ".claude/skills", scope: "main-checkout" },
       ],
       // https://opencode.ai/docs/skills/#place-files
       // https://opencode.ai/docs/config/#custom-directory
@@ -84,11 +85,32 @@ function needsSkillHint(env: Env): boolean {
     for (let directory = cwd; ; directory = dirname(directory)) {
       if (roots[host].some((root) => (root.scope === "ancestors" || (root.scope === "cwd" && directory === cwd))
         && existsSync(join(directory, root.path, skill)))) return false;
-      if (existsSync(join(directory, ".git")) || dirname(directory) === directory) break;
+      if (existsSync(join(directory, ".git"))) {
+        const fallbackRoots = roots[host].filter((root) => root.scope === "main-checkout"
+          && !existsSync(join(directory, root.path)));
+        if (fallbackRoots.length > 0) {
+          const checkout = mainCheckout(directory);
+          if (checkout && fallbackRoots.some((root) => existsSync(join(checkout, root.path, skill)))) return false;
+        }
+        break;
+      }
+      if (dirname(directory) === directory) break;
     }
     return true;
   } catch {
     // Discovery must never prevent the home view from rendering.
     return false;
+  }
+}
+
+function mainCheckout(worktree: string): string | undefined {
+  try {
+    const pointer = /^gitdir:\s*(.+)$/.exec(readFileSync(join(worktree, ".git"), "utf8").trim());
+    if (!pointer) return undefined;
+    const gitDirectory = resolve(worktree, pointer[1]!);
+    const commonDirectory = readFileSync(join(gitDirectory, "commondir"), "utf8").trim();
+    return commonDirectory ? dirname(resolve(gitDirectory, commonDirectory)) : undefined;
+  } catch {
+    return undefined;
   }
 }

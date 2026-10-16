@@ -33,6 +33,7 @@ describe("the CLI shell", () => {
     { name: "Codex-only global install in Claude", env: { CLAUDECODE: "1" }, installed: "home/.agents/skills", hint: true },
     { name: "Claude project", env: { CLAUDECODE: "1" }, installed: "repo/.claude/skills", hint: false },
     { name: "Claude current directory", env: { CLAUDECODE: "1" }, installed: "repo/nested/.claude/skills", hint: false },
+    { name: "Claude does not load descendants at startup", env: { CLAUDECODE: "1" }, installed: "repo/nested/child/.claude/skills", hint: true },
     { name: "Claude stops at repository root", env: { CLAUDECODE: "1" }, installed: ".claude/skills", hint: true },
     { name: "Codex-only project install in Claude", env: { CLAUDECODE: "1" }, installed: "repo/.agents/skills", hint: true },
     { name: "Claude custom global", env: { CLAUDECODE: "1", CLAUDE_CONFIG_DIR: "custom" }, installed: "custom/skills", hint: false },
@@ -48,6 +49,20 @@ describe("the CLI shell", () => {
     { name: "Claude ignores OpenCode project", env: { CLAUDECODE: "1" }, installed: "repo/.opencode/skills", hint: true },
     { name: "Claude ignores Pi global", env: { CLAUDECODE: "1" }, installed: "home/.pi/agent/skills", hint: true },
     { name: "Claude ignores Pi project", env: { CLAUDECODE: "1" }, installed: "repo/.pi/skills", hint: true },
+    { name: "Claude main checkout with relative metadata", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "relative", hint: false },
+    { name: "Claude main checkout with absolute metadata", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "absolute", hint: false },
+    { name: "Claude main checkout with absolute git pointer", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "absolute-pointer", hint: false },
+    { name: "Claude main checkout with absolute common directory", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "absolute-common", hint: false },
+    { name: "Claude empty local root blocks main checkout", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "local-root", hint: true },
+    { name: "Claude installed local root", env: { CLAUDECODE: "1" }, installed: "repo/.claude/skills", worktree: "relative", hint: false },
+    { name: "Claude nested install with empty local root", env: { CLAUDECODE: "1" }, installed: "repo/nested/.claude/skills", worktree: "local-root", hint: false },
+    { name: "Claude missing common directory metadata", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "missing-common", hint: true },
+    { name: "Claude empty common directory metadata", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "empty-common", hint: true },
+    { name: "Claude invalid git pointer", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "invalid-pointer", hint: true },
+    { name: "Claude main checkout without skill", env: { CLAUDECODE: "1" }, installed: undefined, worktree: "missing-skill", hint: true },
+    { name: "Codex ignores Claude main checkout", env: { CODEX_THREAD_ID: "thread" }, installed: undefined, worktree: "relative", hint: true },
+    { name: "OpenCode ignores Claude main checkout", env: { OPENCODE: "1" }, installed: undefined, worktree: "relative", hint: true },
+    { name: "Pi ignores Claude main checkout", env: { PI_SESSION_ID: "session" }, installed: undefined, worktree: "relative", hint: true },
     { name: "OpenCode missing", env: { OPENCODE: "1" }, installed: undefined, hint: true },
     { name: "OpenCode shared global", env: { OPENCODE: "1" }, installed: "home/.agents/skills", hint: false },
     { name: "OpenCode project", env: { OPENCODE: "1" }, installed: "repo/.agents/skills", hint: false },
@@ -102,6 +117,24 @@ describe("the CLI shell", () => {
     mkdirSync(home);
     // A worktree's .git entry is a file, not a directory.
     writeFileSync(join(root, "repo/.git"), "gitdir: unused");
+    if ("worktree" in testCase) {
+      const gitDirectory = join(root, "main/.git/worktrees/linked");
+      mkdirSync(gitDirectory, { recursive: true });
+      writeFileSync(join(root, "repo/.git"), testCase.worktree === "invalid-pointer" ? "invalid"
+        : `gitdir: ${testCase.worktree === "absolute" || testCase.worktree === "absolute-pointer"
+          ? gitDirectory : "../main/.git/worktrees/linked"}\n`);
+      if (testCase.worktree !== "missing-common") {
+        writeFileSync(join(gitDirectory, "commondir"), testCase.worktree === "empty-common" ? "\n"
+          : `${testCase.worktree === "absolute" || testCase.worktree === "absolute-common"
+            ? join(root, "main/.git") : "../.."}\n`);
+      }
+      if (testCase.worktree !== "missing-skill") {
+        const directory = join(root, "main/.claude/skills/awx-axi");
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(join(directory, "SKILL.md"), "installed skill");
+      }
+      if (testCase.worktree === "local-root") mkdirSync(join(root, "repo/.claude/skills"), { recursive: true });
+    }
     if (installed !== undefined) {
       const directory = join(root, installed, "awx-axi");
       mkdirSync(directory, { recursive: true });
