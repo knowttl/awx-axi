@@ -24,16 +24,30 @@ export function homeCommand(env: Env): Renderable {
 }
 
 function needsSkillHint(env: Env): boolean {
-  const sharedHost = env.CODEX_THREAD_ID || env.PI_SESSION_ID || env.OPENCODE === "1";
-  const claude = !sharedHost && env.CLAUDECODE === "1";
-  if (!sharedHost && !claude) return false;
+  const host = env.CODEX_THREAD_ID ? "codex"
+    : env.PI_SESSION_ID ? "pi"
+    : env.OPENCODE === "1" ? "opencode"
+    : env.CLAUDECODE === "1" ? "claude" : undefined;
+  if (host === undefined) return false;
 
   try {
     const home = env.HOME || homedir();
     const skill = "awx-axi/SKILL.md";
     const globalDirectories = [join(home, ".agents/skills")];
     const projectDirectories = [".agents/skills"];
-    if (claude) {
+    if (host === "codex") {
+      globalDirectories.push(join(env.CODEX_HOME?.trim() || join(home, ".codex"), "skills"));
+    } else if (host === "pi") {
+      const agentDirectory = env.PI_CODING_AGENT_DIR || join(home, ".pi/agent");
+      globalDirectories.push(join(agentDirectory.replace(/^~(?=\/|$)/, () => home), "skills"));
+      projectDirectories.push(".pi/skills");
+    } else if (host === "opencode") {
+      globalDirectories.push(
+        join(env.XDG_CONFIG_HOME || join(home, ".config"), "opencode/skills"),
+        join(home, ".claude/skills"),
+      );
+      projectDirectories.push(".opencode/skills", ".claude/skills");
+    } else {
       globalDirectories.push(join(env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude"), "skills"));
       projectDirectories.push(".claude/skills");
     }
