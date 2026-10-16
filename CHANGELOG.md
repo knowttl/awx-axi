@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.5...awx-axi-v0.1.6) (2026-10-16)
+
+
+### Features
+
+* hint at skill installation on bare invocation ([#42](https://github.com/knowttl/awx-axi/issues/42)) ([b965f95](https://github.com/knowttl/awx-axi/commit/b965f95282580e14dcdba081aaee3293c2b9e2ce))
+
+
+### Bug Fixes
+
+* the home view adds one hint line with the exact `npx skills add knowttl/awx-axi --skill awx-axi` command when the detected host has no installed skill, checked per host against that host's documented skill folders; no hint once installed or outside an agent host. ([b965f95](https://github.com/knowttl/awx-axi/commit/b965f95282580e14dcdba081aaee3293c2b9e2ce))
+
 ## [0.1.5](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.4...awx-axi-v0.1.5) (2026-10-12)
 
 
