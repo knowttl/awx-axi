@@ -28,10 +28,13 @@ It emits token-efficient TOON, adds contextual next-step suggestions, and keeps 
 Install the AWX skill using `npx skills`.
 
 ```sh
-npx skills add knowttl/awx-axi --skill awx-axi -g
+npx skills add knowttl/awx-axi --skill awx-axi
 ```
 
-Drop `-g` for a project-scoped install with your shell or CLI tooling.
+Add `-g` for a global install instead of a project-scoped install.
+
+Running `awx-axi` with no arguments in Codex, Claude Code, OpenCode, or Pi shows a one-line hint with this install command when the skill is missing for that host.
+The hint disappears when a global or project installation is found and is omitted outside recognized agent hosts.
 
 This is the fastest setup path for agent workflows.
 The skill points agents to run commands as `npx -y awx-axi`.

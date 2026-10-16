@@ -6,10 +6,7 @@ import type { Env } from "../core/auth.js";
 import type { Renderable } from "../core/registry.js";
 
 /**
- * Provisional home view. The real §8.1 home view - what is running, what needs
- * a decision, what broke - is a later task, and inventing its output here would
- * be wrong. `runAxiCli` requires a home handler, so this one says plainly that
- * no domain is registered yet.
+ * Provisional home view until the live dashboard in design.md §8.1 is implemented.
  *
  * The SDK merges the `bin:` and `description:` header into this output.
  */
