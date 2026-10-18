@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/root.py:47-61",
+  "$note": "Synthetic API-root advertisement with an alternate controller base path to exercise discovery and cache reuse; gateway behavior remains best-effort.",
+  "status": 200,
+  "body": { "available_versions": { "v2": "/api/controller/v2/" }, "current_version": "/api/controller/v2/" }
+}

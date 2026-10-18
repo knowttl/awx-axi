@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { AxiError } from "axi-sdk-js";
 import { describe, expect, it, vi } from "vitest";
 
@@ -47,9 +47,11 @@ describe("setup command (design.md §13)", () => {
     });
   });
 
-  it("executes real installSessionStartHooks default without crashing in temporary home", async () => {
+  it("installs the bare dashboard command for session start in a temporary home", async () => {
     const tempHome = mkdtempSync(join(tmpdir(), "awx-axi-setup-test-"));
     const originalHome = process.env.HOME;
+    const originalExecutable = process.argv[1];
+    process.argv[1] = resolve("dist/bin/awx-axi.js");
     process.env.HOME = tempHome;
 
     try {
@@ -60,7 +62,12 @@ describe("setup command (design.md §13)", () => {
             "installed session-start hooks for Claude Code, Codex, and OpenCode",
         },
       });
+      const settings = JSON.parse(readFileSync(join(tempHome, ".claude/settings.json"), "utf8")) as {
+        hooks: { SessionStart: { hooks: { command: string }[] }[] };
+      };
+      expect(settings.hooks.SessionStart[0]?.hooks[0]?.command).toBe(process.argv[1]);
     } finally {
+      process.argv[1] = originalExecutable!;
       process.env.HOME = originalHome;
       rmSync(tempHome, { recursive: true, force: true });
     }

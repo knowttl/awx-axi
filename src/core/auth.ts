@@ -1,5 +1,6 @@
 import { AxiError } from "axi-sdk-js";
 
+import { readControllerMetadata } from "./controller-discovery.js";
 import { PrivateFiles } from "./private-file.js";
 import { credentialsPath, normalizeEnv, selectProfile, storedToken, type Env, type Selection } from "./profiles.js";
 import { registerSecret } from "./redact.js";
@@ -22,7 +23,7 @@ export interface Credential {
 export function resolveController(env: Env, selection: Selection = {}, login = false): ControllerConfig {
   const { profile } = selectProfile(env, selection, undefined, false, login);
   if (profile.origin.startsWith("http://")) process.stderr.write("warning: plain HTTP controller traffic, including credentials, is unencrypted\n");
-  const path = env.AWX_AXI_API_BASE_PATH ?? "/api/v2/";
+  const path = env.AWX_AXI_API_BASE_PATH ?? readControllerMetadata(profile.origin, env)?.apiBasePath ?? "/api/v2/";
   if (!/^\/[^?#]*$/.test(path) || path.startsWith("//")) throw new AxiError("AWX_AXI_API_BASE_PATH must be an absolute API path", "CONFIG_INVALID");
   return {
     host: new URL(profile.origin).host,
@@ -77,7 +78,7 @@ export function resolveBasicAuth(envInput: Env): BasicAuth | undefined {
   return { username, password };
 }
 
-export function createTransport(env: Env, selection: Selection = {}, override?: Credential): AwxTransport {
+export function createTransport(env: Env, selection: Selection = {}, override?: Credential, signal?: AbortSignal): AwxTransport {
   const config = resolveController(env, selection);
   const credential = override ?? requireCredential(env, selection);
   registerSecret(credential.token);
@@ -85,6 +86,7 @@ export function createTransport(env: Env, selection: Selection = {}, override?: 
     baseUrl: config.baseUrl, apiBasePath: config.apiBasePath,
     verifySsl: config.verifySsl, authorization: `Bearer ${credential.token}`,
     readOnly: isReadOnly(env), env,
+    ...(signal === undefined ? {} : { signal }),
   });
 }
 

@@ -2,25 +2,120 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import type { Env } from "../core/auth.js";
-import type { Renderable } from "../core/registry.js";
+import { AxiError } from "axi-sdk-js";
+
+import { resolveController, type Env } from "../core/auth.js";
+import { errorForResponse } from "../core/errors.js";
+import type { Selection } from "../core/profiles.js";
+import { read, runPlan, type DomainContext, type Plan } from "../core/registry.js";
+import type { Query } from "../core/transport.js";
 
 /**
- * Provisional home view until the live dashboard in design.md §8.1 is implemented.
- *
+ * Bounded session dashboard (design.md §8.1).
  * The SDK merges the `bin:` and `description:` header into this output.
  */
-export function homeCommand(env: Env): Renderable {
+export async function homeCommand(
+  context: DomainContext & { readonly selection?: Selection },
+  hintEnv: Env,
+  release: string,
+): Promise<Record<string, unknown>> {
+  const controller = resolveController(context.env, context.selection);
+  const transport = context.createTransport();
+  const now = Date.now();
+  const requests = [
+    runPlan(homeList("jobs/", { status__in: "new,pending,waiting,running", order_by: "-id" }, 5), { transport }),
+    runPlan(homeList("workflow_approvals/", { status: "pending", order_by: "created" }, 5), { transport }),
+    runPlan(homeList("jobs/", {
+      status__in: "failed,error", finished__gte: new Date(now - 86_400_000).toISOString(), order_by: "-finished",
+    }, 3), { transport }),
+  ] as const;
+  const [running, approvals, failures] = await Promise.all(requests).catch(async (error: unknown) => {
+    await Promise.allSettled(requests);
+    throw error;
+  });
+  const command = homeInvocation(context.selection);
+  const help = [
+    running.rows.length || failures.rows.length
+      ? `Run \`${command} job show <id>\` for a job's result`
+      : `Run \`${command} job list\` for recent job history`,
+    ...(approvals.rows.length ? [`Run \`${command} approval show <id>\` to see what it gates`] : []),
+    `Run \`${command} template list\` to see what can be launched`,
+  ];
+  for (const [label, list, action] of [
+    ["running", running, "job list"],
+    ["approvals", approvals, "approval list"],
+    ["failures", failures, "job list --failed --since 24h"],
+  ] as const) {
+    if (list.count > list.rows.length) help.push(`Run \`${command} ${action}\` for more ${label} (${list.rows.length} of ${list.count} shown)`);
+  }
   return {
-    awx: "core build: no AWX domain is registered yet",
+    controller: `${controller.host} (AWX ${release})`,
+    running: running.rows.length ? running.rows.map((row) => ({
+      id: row.id, name: row.name, status: row.status, elapsed: row.elapsed,
+    })) : "0 jobs running",
+    approvals: approvals.rows.length ? approvals.rows.map((row) => ({
+      id: row.id,
+      workflow: ((row.summary_fields as Record<string, unknown> | undefined)?.source_workflow_job as Record<string, unknown> | undefined)?.name ?? null,
+      waiting: typeof row.created === "string" && Number.isFinite(Date.parse(row.created))
+        ? `${Math.max(0, Math.floor((now - Date.parse(row.created)) / 60_000))}m` : null,
+    })) : "0 approvals pending",
+    failures: failures.rows.length ? failures.rows.map((row) => ({
+      id: row.id, name: row.name, status: row.status, finished: row.finished,
+    })) : "0 failures in the last 24h",
     help: [
-      "Run `awx-axi auth status` to check the configured controller",
-      "Run `awx-axi --help` to see what this build provides",
-      ...(needsSkillHint(env)
+      ...help,
+      ...(needsSkillHint(hintEnv)
         ? ["Install the AWX skill: `npx skills add knowttl/awx-axi --skill awx-axi`"]
         : []),
     ],
   };
+}
+
+function* homeList(path: string, query: Query, limit: number): Plan<{ rows: Record<string, unknown>[]; count: number }> {
+  const response = yield* read(path, { ...query, page_size: limit });
+  if (response.status !== 200) throw errorForResponse(response, { subject: "home dashboard" });
+  const body = response.body as { results?: unknown; count?: unknown } | null;
+  if (!body || !Array.isArray(body.results) || typeof body.count !== "number"
+    || body.results.some((row) => !row || typeof row !== "object" || Array.isArray(row))
+    || (body.count > 0 && body.results.length === 0)) {
+    throw new AxiError("invalid dashboard list response", "INVALID_RESPONSE");
+  }
+  // Do not follow `next`: each dashboard block has exactly one bounded read.
+  return { rows: body.results.slice(0, limit) as Record<string, unknown>[], count: body.count };
+}
+
+/** Never expose controller response bodies or arbitrary exception text in session context. */
+export function homeDiagnostic(error: unknown, selection?: Selection): string {
+  const code = error instanceof AxiError ? error.code : "UNKNOWN";
+  const problem = code === "AUTH_REQUIRED" ? "authentication required"
+    : code === "FORBIDDEN" ? "dashboard access denied"
+    : code === "CONTROLLER_UNREACHABLE" ? "controller unreachable"
+    : code === "TLS_UNTRUSTED" ? "controller certificate could not be verified"
+    : code.startsWith("PROFILE_") || code.startsWith("CONFIG_") ? "controller configuration required"
+    : "dashboard unavailable";
+  const command = homeInvocation(selection);
+  const fix = code === "AUTH_REQUIRED" ? `Run \`${command} auth login\` to configure credentials`
+    : `Run \`${command} auth status\` to check configuration and access`;
+  return `awx: ${problem}; ${fix}\n`;
+}
+
+function homeInvocation(selection: Selection = {}): string {
+  const args = ["awx-axi"];
+  for (const [flag, value] of [
+    ["--config", selection.configPath],
+    ["--profile", selection.profile],
+    ["--origin", selection.origin],
+    ["--verify-ssl", selection.verifySsl],
+  ] as const) {
+    if (value === undefined) continue;
+    const text = String(value);
+    const quoted = /^[A-Za-z0-9_./:-]+$/.test(text) ? text
+      : /\p{Cc}/u.test(text)
+        ? `$'${text.replace(/[\\'\p{Cc}]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`)}'`
+        : `'${text.replaceAll("'", "'\\''")}'`;
+    args.push(flag, quoted);
+  }
+  return args.join(" ");
 }
 
 function needsSkillHint(env: Env): boolean {

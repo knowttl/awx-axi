@@ -2,7 +2,7 @@
 
 Status: accepted v1 technical design, with commands implemented under `src/domains/`.
 The registry in `src/cli.ts` and README describe the current shipped surface.
-Unimplemented targets, including the home dashboard (§8.1), remain proposals.
+Unimplemented targets remain proposals.
 Historical process notes and audits are preserved on `archive/internal-docs`.
 
 Target controller: **Ansible AWX 24.6.1**.
@@ -192,13 +192,16 @@ awx-axi never emits `cancelled`.
   AAP 2.5 and later front the controller with a platform gateway, move the controller API under
   `/api/controller/v2/`, and move token issuance to the gateway; this is why awxkit grew
   `AWXKIT_API_BASE_PATH`.
-  awx-axi handles this by **probing `GET /api/`** for the advertised version list on first use and caching the
-  resolved base path, with `AWX_AXI_API_BASE_PATH` as an explicit override.
-  That same first-use probe also reads **`GET /api/v2/ping/`** for the controller *release*, because
+  awx-axi handles this by **probing `GET /api/`** for the advertised version list on the first home invocation and caching the resolved base path, with `AWX_AXI_API_BASE_PATH` as an explicit override that skips this request.
+  Discovery also reads **`GET <resolved-api-base-path>ping/`** for the controller *release*, because
   `GET /api/` advertises the API version list and never the release, and the home header in §8.1 names the
   release.
   Both values are cached together, so the release costs one request on first use and nothing afterwards; at
   24.6.1 `ping` requires no authentication, so the probe also works before credentials are resolved.
+  Both discovery reads are unauthenticated.
+  The cache lives in `controllers/` under the tool's [state directory](../README.md#configuration), keyed separately by origin and API-path override.
+  Explicit commands reuse the cached API path without performing discovery; before discovery they fall back to `/api/v2/` unless overridden.
+  There is no automatic expiry or refresh; remove the corresponding cache file to rediscover metadata on the next home invocation after a controller upgrade or API-path change.
   Only 24.6.1 is verified and tested; a gateway-fronted controller is best-effort until someone runs the live
   suite against one.
 - **`MAX_PAGE_SIZE` is operator-tunable.**
@@ -720,7 +723,7 @@ is numeric.
 
 | Command | Requests | Note |
 | --- | --- | --- |
-| home view | 3 | running jobs, pending approvals, recent failures; 4 on first use, when the §4.2 version probe runs and is cached |
+| home view | 3 | running jobs, pending approvals, recent failures; without cached metadata: 5, or 4 with an explicit API-path override (§4.2) |
 | `job list` | 1 | |
 | `job show` (playbook) | 3 | type resolve, detail, host summaries |
 | `job show` (failed playbook) | 4 | plus failed events for the task rollup |
@@ -769,7 +772,7 @@ because they change what the output can look like:
 
 The home view is also the session-hook payload (§13), so it loads on every agent session and its token budget
 is the tightest in the CLI.
-Three blocks, hard-capped at 5 running, 5 pending approvals, and 3 recent failures, in 3 requests:
+Three blocks, hard-capped at 5 running, 5 pending approvals, and 3 failures from the last 24 hours, in 3 list requests, plus any first-use discovery (§4.2):
 
 ```
 $ awx-axi
@@ -784,7 +787,7 @@ approvals[1]{id,workflow,waiting}:
 failures[2]{id,name,status,finished}:
   1839,Deploy db tier,failed,"2026-07-27T13:41:02Z"
   1837,"Patch: all hosts",error,"2026-07-27T12:10:44Z"
-help[3]: Run `awx-axi job show <id>` for a job's result,Run `awx-axi approval show 57` to see what it gates,Run `awx-axi template list` to see what can be launched
+help[3]: Run `awx-axi job show <id>` for a job's result,Run `awx-axi approval show <id>` to see what it gates,Run `awx-axi template list` to see what can be launched
 ```
 
 The aggregates come from filtered list counts, never from the deprecated dashboard endpoint (§4.2).
@@ -1264,7 +1267,7 @@ awx-axi setup hooks
 ```
 
 The hook runs the home view at session start.
-The live dashboard described in §8.1 remains a design target.
+The live dashboard described in §8.1 is implemented.
 `installSessionStartHooks` from `axi-sdk-js` handles all three targets, including the path-repair and
 idempotency rules AXI §7 requires.
 

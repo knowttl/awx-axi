@@ -1,9 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildLiveEnv, runLiveCli } from "./live/support/live.js";
 import { fixtureFetch } from "./support/fixtures.js";
 
 describe("live suite gate behavior", () => {
+  let testHome: string;
+  let isolatedEnv: { HOME: string; AWX_AXI_HOME: string; XDG_CONFIG_HOME: string };
+  beforeEach(() => {
+    testHome = mkdtempSync(join(tmpdir(), "awx-live-gate-test-"));
+    isolatedEnv = { HOME: testHome, AWX_AXI_HOME: join(testHome, "legacy"), XDG_CONFIG_HOME: join(testHome, ".config") };
+  });
+  afterEach(() => { rmSync(testHome, { recursive: true, force: true }); });
+
   it("fails when live mode is not opt-in", () => {
     expect(() => buildLiveEnv({})).toThrowError(
       /AWX_AXI_LIVE=1 to run the live suite/,
@@ -29,6 +40,7 @@ describe("live suite gate behavior", () => {
       AWX_AXI_ORIGIN: "https://awx.example.com",
       AWX_AXI_TOKEN: "test-token",
       AWX_AXI_READ_ONLY: "0",
+      ...isolatedEnv,
     });
 
     expect(env.AWX_AXI_READ_ONLY).toBe("1");
@@ -44,6 +56,7 @@ describe("live suite gate behavior", () => {
           AWX_AXI_LIVE: "1",
           AWX_AXI_ORIGIN: "https://awx.example.com",
           AWX_AXI_TOKEN: "test-token",
+          ...isolatedEnv,
         },
       });
 

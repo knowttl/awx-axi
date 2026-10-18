@@ -1,0 +1,404 @@
+import { AxiError } from "axi-sdk-js";
+import { decode } from "@toon-format/toon";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, request as httpRequest, type ClientRequest } from "node:http";
+import type { request as httpsRequest } from "node:https";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { main } from "../src/cli.js";
+import { registerSecret } from "../src/core/redact.js";
+import { RecordedTransport } from "../src/core/transport.js";
+import * as tlsFetch from "../src/core/tls-fetch.js";
+import { exchange, fixtureFetch, loadFixture } from "./support/fixtures.js";
+import { runCli } from "./support/run.js";
+
+let env: { HOME: string; AWX_AXI_HOME: string; XDG_CONFIG_HOME: string; AWX_AXI_ORIGIN: string; AWX_AXI_TOKEN: string };
+const previousExitCode = process.exitCode;
+const discovery = ["controller-api-root", "controller-ping"];
+beforeEach(() => {
+  const home = mkdtempSync(join(tmpdir(), "awx-home-test-"));
+  env = {
+    HOME: home, AWX_AXI_HOME: join(home, "legacy"), XDG_CONFIG_HOME: join(home, ".config"),
+    AWX_AXI_ORIGIN: "https://awx.example.com", AWX_AXI_TOKEN: "synthetic-test-token",
+  };
+});
+afterEach(() => {
+  process.exitCode = previousExitCode;
+  vi.restoreAllMocks();
+  rmSync(env.HOME, { recursive: true, force: true });
+});
+
+describe("session dashboard", () => {
+  it.each([
+    { stage: "API discovery", paths: ["/api/"], pending: 1, partial: false },
+    { stage: "API discovery", paths: ["/api/"], pending: 1, partial: true },
+    { stage: "release discovery", paths: ["/api/v2/ping/"], pending: 1, partial: false },
+    { stage: "release discovery", paths: ["/api/v2/ping/"], pending: 1, partial: true },
+    { stage: "dashboard", paths: ["/api/v2/jobs/", "/api/v2/workflow_approvals/"], pending: 3, partial: false },
+    { stage: "dashboard", paths: ["/api/v2/jobs/", "/api/v2/workflow_approvals/"], pending: 3, partial: true },
+  ])("closes stalled $stage requests before reporting a safe diagnostic (partial body: $partial)", async ({ paths, pending, partial }) => {
+    const requests: ClientRequest[] = [];
+    const createFetch = tlsFetch.createTlsFetch;
+    const send = ((...args: Parameters<typeof httpRequest>) => {
+      const outgoing = httpRequest(...args);
+      requests.push(outgoing);
+      return outgoing;
+    }) as typeof httpsRequest;
+    vi.spyOn(tlsFetch, "createTlsFetch").mockImplementation((verifySsl) => createFetch(verifySsl, send));
+    let started!: () => void;
+    const stalled = new Promise<void>((resolve) => { started = resolve; });
+    let waiting = 0;
+    const server = createServer((request, response) => {
+      const path = new URL(request.url!, "http://localhost").pathname;
+      if (paths.includes(path)) {
+        if (partial) {
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.write('{"unfinished":');
+        }
+        waiting += 1;
+        if (waiting === pending) started();
+        return;
+      }
+      const body = path === "/api/" ? loadFixture("controller-api-root").body : loadFixture("controller-ping").body;
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const address = server.address() as { port: number };
+      let text = "";
+      let closedAtOutput = false;
+      const run = main({ argv: [], env: {
+        ...env, AWX_AXI_ORIGIN: `http://127.0.0.1:${address.port}`, AWX_AXI_ALLOW_HTTP: "1",
+      }, stdout: { write: (chunk) => {
+        closedAtOutput = requests.every((request) => request.closed);
+        text += chunk;
+      } } });
+      await stalled;
+      await vi.advanceTimersByTimeAsync(7_999);
+      expect(text).toBe("");
+      await vi.advanceTimersByTimeAsync(1);
+      await run;
+      expect(text.trim().split("\n")).toHaveLength(1);
+      expect(text).toMatch(/^awx: .*; Run `awx-axi auth status`/);
+      expect(text).not.toContain("unfinished");
+      expect(closedAtOutput).toBe(true);
+      expect(process.exitCode).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("does not impose the home deadline on explicit commands", async () => {
+    let started!: () => void;
+    let finish!: () => void;
+    const stalled = new Promise<void>((resolve) => { started = resolve; });
+    const response = new Promise<void>((resolve) => { finish = resolve; });
+    const fixtures = fixtureFetch(["unified-jobs-page-1"]);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(async (url, init) => {
+      expect(init.signal).toBeUndefined();
+      started();
+      await response;
+      return fixtures.fetch(url, init);
+    });
+    vi.useFakeTimers();
+    try {
+      let text = "";
+      const run = main({ argv: ["job", "list"], env, stdout: { write: (chunk) => { text += chunk; } } });
+      await stalled;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(text).toBe("");
+      finish();
+      await run;
+      expect(text).toContain("Deploy web tier");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("discovers and persists the release and API path for later home invocations", async () => {
+    const first = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    expect(first.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");
+    expect(first.transport.requests.map((request) => request.route)).toEqual([
+      "api/", "api/v2/ping/", "jobs/", "workflow_approvals/", "jobs/",
+    ]);
+    const cached = await runCli([], { env, script: ["home-empty", "home-empty", "home-empty"] });
+    expect(cached.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");
+    expect(cached.transport.requests.map((request) => request.route)).toEqual(["jobs/", "workflow_approvals/", "jobs/"]);
+    expect(cached.exitCode).toBe(0);
+  });
+
+  it("discovers releases separately for different controller origins", async () => {
+    await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    const other = await runCli([], { env: { ...env, AWX_AXI_ORIGIN: "https://other.example.com" }, script: [
+      "controller-api-root", { status: 200, body: { version: "24.6.2" } }, "home-empty", "home-empty", "home-empty",
+    ] });
+    expect(other.stdout).toContain("controller: other.example.com (AWX 24.6.2)");
+    expect(other.transport.requests).toHaveLength(5);
+  });
+
+  it("reuses the advertised API path when following a home history suggestion", async () => {
+    const fixtures = fixtureFetch([
+      "controller-api-root-gateway", "controller-ping", "home-empty", "home-empty", "home-empty",
+      "home-empty", "home-empty", "home-empty",
+      "unified-jobs-page-1",
+    ]);
+    const fetch = vi.fn(fixtures.fetch);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fetch);
+    let text = "";
+    const stdout = { write: (chunk: string) => { text += chunk; } };
+    await main({ argv: [], env, stdout });
+    const home = decode(text) as { help: string[] };
+    await main({ argv: [], env, stdout });
+    expect(text.match(/controller: awx.example.com \(AWX 24.6.1\)/g)).toHaveLength(2);
+    const command = home.help[0]!.slice(5, home.help[0]!.lastIndexOf("`"));
+    const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+      .toString().split("\0").slice(0, -1);
+    expect(args).toEqual(["job", "list"]);
+    text = "";
+    await main({ argv: args, env, stdout });
+    expect(text).toContain("Deploy web tier");
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([
+      "/api/", "/api/controller/v2/ping/",
+      "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+      "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+      "/api/controller/v2/unified_jobs/",
+    ]);
+    expect(fetch.mock.calls[0]![1].headers).not.toHaveProperty("Authorization");
+    expect(fetch.mock.calls[1]![1].headers).not.toHaveProperty("Authorization");
+  });
+
+  it.each([
+    { name: "explicit API override", argv: ["job", "list"], extraEnv: { AWX_AXI_API_BASE_PATH: "/api/override/v2/" }, fixture: "unified-jobs-page-1", path: "/api/override/v2/unified_jobs/", output: "Deploy web tier", exitCode: 0 },
+    { name: "different origin", argv: ["job", "list"], extraEnv: { AWX_AXI_ORIGIN: "https://other.example.com" }, fixture: "unified-jobs-page-1", path: "/api/v2/unified_jobs/", output: "Deploy web tier", exitCode: 0 },
+    { name: "auth status", argv: ["auth", "status"], extraEnv: {}, fixture: "user-detail", path: "/api/controller/v2/me/", output: "valid: true", exitCode: 0 },
+    { name: "doctor", argv: ["doctor"], extraEnv: {}, fixture: "user-detail", path: "/api/controller/v2/me/", output: "valid: true", exitCode: 0 },
+    { name: "basic auth error", argv: ["auth", "login"], extraEnv: {}, fixture: "named-url-403-as-404", path: "/api/controller/v2/tokens/", output: "code: NOT_FOUND", exitCode: 1 },
+    { name: "domain command error", argv: ["job", "list"], extraEnv: {}, fixture: "named-url-403-as-404", path: "/api/controller/v2/unified_jobs/", output: "code: NOT_FOUND", exitCode: 1 },
+  ])("preserves cached transport routing and command behavior for $name", async ({ argv, extraEnv, fixture, path, output, exitCode }) => {
+    await runCli([], { env, script: ["controller-api-root-gateway", "controller-ping", "home-empty", "home-empty", "home-empty"] });
+    const fixtures = fixtureFetch([fixture]);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fixtures.fetch);
+    let text = "";
+    process.exitCode = 0;
+    await main({ argv, env: {
+      ...env, XDG_STATE_HOME: join(env.HOME, ".local/state"),
+      AWX_AXI_USERNAME: "synthetic-user", AWX_AXI_PASSWORD: "synthetic-password", ...extraEnv,
+    }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([path]);
+    expect(text).toContain(output);
+    expect(process.exitCode).toBe(exitCode);
+  });
+
+  it("uses an explicit API path for unauthenticated ping and all dashboard reads", async () => {
+    await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    const fixtures = fixtureFetch(["controller-ping", "home-empty", "home-empty", "home-empty", "home-empty", "home-empty", "home-empty"]);
+    const fetch = vi.fn(fixtures.fetch);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fetch);
+    const overrideEnv = { ...env, AWX_AXI_API_BASE_PATH: "/api/controller/v2/" };
+    let text = "";
+    const stdout = { write: (chunk: string) => { text += chunk; } };
+    await main({ argv: [], env: overrideEnv, stdout });
+    expect(text).toContain("controller: awx.example.com (AWX 24.6.1)");
+    await main({ argv: [], env: overrideEnv, stdout });
+    expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([
+      "/api/controller/v2/ping/", "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+      "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+    ]);
+    expect(fetch.mock.calls[0]![1].headers).not.toHaveProperty("Authorization");
+    expect(fetch.mock.calls[1]![1].headers).toHaveProperty("Authorization", "Bearer synthetic-test-token");
+  });
+
+  it.each([
+    { status: 403, body: { detail: "sensitive\nresponse" } },
+    { status: 200, body: { version: "sensitive\nresponse" } },
+  ])("keeps discovery failure $status safe and does not cache it", async (ping) => {
+    const failed = await runCli([], { env, script: ["controller-api-root", ping] });
+    expect(failed.stdout.trim().split("\n")).toHaveLength(1);
+    expect(failed.stdout).not.toContain("sensitive");
+    expect(failed.exitCode).toBe(0);
+    const retry = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    expect(retry.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");
+    expect(retry.transport.requests).toHaveLength(5);
+  });
+
+  it("keeps a selected profile when following the home history suggestion", async () => {
+    const config = join(env.HOME, "controllers.json");
+    writeFileSync(config, JSON.stringify({ version: 1, defaultProfile: "dev", profiles: {
+      dev: { origin: "https://dev.example.com", token: { env: "AWX_AXI_TOKEN" } },
+      prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
+    } }), { mode: 0o600 });
+    const fixtures = fixtureFetch([...discovery, "home-empty", "home-empty", "home-empty", "unified-jobs-page-1"]);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fixtures.fetch);
+    let text = "";
+    const stdout = { write: (chunk: string) => { text += chunk; } };
+    await main({ argv: ["--config", config, "--profile", "prod"], env, stdout });
+    expect(text).toContain("controller: prod.example.com");
+    const home = decode(text) as { help: string[] };
+    const command = home.help[0]!.slice(5, home.help[0]!.lastIndexOf("`"));
+    const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+      .toString().split("\0").slice(0, -1);
+    expect(args).toEqual(["--config", config, "--profile", "prod", "job", "list"]);
+    text = "";
+    await main({ argv: args, env, stdout });
+    expect(text).toContain("Deploy web");
+    expect(fixtures.calls.map((call) => call.url.host)).toEqual(Array(6).fill("prod.example.com"));
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it.each(["controllers 'quoted' $(printf unsafe) `printf unsafe`.json", "controllers\n\r\t'\\.json"])(
+    "preserves shell arguments across all home suggestions with config %j", async (filename) => {
+      const config = join(env.HOME, filename);
+      writeFileSync(config, JSON.stringify({ version: 1, profiles: {
+        prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
+      } }), { mode: 0o600 });
+      const selectors = ["--config", config, "--profile", "prod", "--origin", "https://override.example.com", "--verify-ssl", "false"];
+      const result = await runCli(selectors, { env, script: [...discovery, "home-dashboard", "home-dashboard", "home-dashboard"] });
+      const home = decode(result.stdout) as { help: string[] };
+      const commands = home.help.map((hint) => hint.slice(5, hint.lastIndexOf("`")).replace("<id>", "101"));
+      const args = commands.map((command) => execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+        .toString().split("\0").slice(0, -1));
+      expect(args).toEqual([
+        [...selectors, "job", "show", "101"],
+        [...selectors, "approval", "show", "101"],
+        [...selectors, "template", "list"],
+        [...selectors, "job", "list"],
+        [...selectors, "approval", "list"],
+        [...selectors, "job", "list", "--failed", "--since", "24h"],
+      ]);
+      expect(commands.every((command) => !/[\n\r]/.test(command))).toBe(true);
+      expect(result.exitCode).toBe(0);
+    },
+  );
+
+  it.each([[401, "login"], [403, "status"]] as const)(
+    "preserves shell arguments in the single-line diagnostic for HTTP %s", async (status, action) => {
+      const config = join(env.HOME, "missing\n'$(printf unsafe)`printf unsafe`\\.json");
+      const selectors = ["--config", config, "--profile", "prod", "--origin", "https://override.example.com", "--verify-ssl", "false"];
+      const result = await runCli(selectors, { env, script: [] });
+      expect(result.stdout.trim().split("\n")).toHaveLength(1);
+      const recovery = result.stdout.slice(result.stdout.indexOf("Run `") + 5, result.stdout.lastIndexOf("`"));
+      const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${recovery}`])
+        .toString().split("\0").slice(0, -1);
+      expect(args).toEqual([...selectors, "auth", "status"]);
+      writeFileSync(config, JSON.stringify({ version: 1, profiles: {
+        prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
+      } }), { mode: 0o600 });
+      const failed = await runCli(selectors, { env, script: [
+        ...discovery,
+        exchange("home-empty"), { status, body: { detail: "unsafe\nresponse" } }, exchange("home-empty"),
+      ] });
+      expect(failed.stdout.trim().split("\n")).toHaveLength(1);
+      const command = failed.stdout.slice(failed.stdout.indexOf("Run `") + 5, failed.stdout.lastIndexOf("`"));
+      const failedArgs = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+        .toString().split("\0").slice(0, -1);
+      expect(failedArgs).toEqual([...selectors, "auth", action]);
+      expect(failed.stdout).not.toContain("unsafe\nresponse");
+      expect(failed.exitCode).toBe(0);
+    },
+  );
+
+  it("shows bounded live blocks from exactly three filtered reads without following next", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-27T14:20:11Z"));
+    const result = await runCli([], { env, script: [
+      ...discovery,
+      exchange("home-dashboard"), exchange("approval-list-pending"),
+      { status: 200, body: { count: 1, results: [{ id: 99, name: "Deploy db", status: "failed", finished: "2026-07-27T13:41:02Z" }] } },
+    ] });
+    expect(result.stdout).toContain("controller: awx.example.com");
+    expect(result.stdout).toContain("running[5]{id,name,status,elapsed}:");
+    expect(result.stdout).toContain("101,Deploy web,running,142");
+    expect(result.stdout).not.toContain("Beyond cap");
+    expect(result.stdout).toContain("57,Release pipeline,18m");
+    expect(result.stdout).toContain("99,Deploy db,failed");
+    expect(result.stdout).toContain("5 of 8 shown");
+    expect(result.transport.requests).toEqual([
+      { method: "GET", route: "api/", query: {} },
+      { method: "GET", route: "api/v2/ping/", query: {} },
+      { method: "GET", route: "jobs/", query: { status__in: "new,pending,waiting,running", order_by: "-id", page_size: 5 } },
+      { method: "GET", route: "workflow_approvals/", query: { status: "pending", order_by: "created", page_size: 5 } },
+      { method: "GET", route: "jobs/", query: { status__in: "failed,error", finished__gte: "2026-07-26T14:20:11.000Z", order_by: "-finished", page_size: 3 } },
+    ]);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("states all three zeros on a quiet controller", async () => {
+    const result = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    expect(result.stdout).toContain("running: 0 jobs running");
+    expect(result.stdout).toContain("approvals: 0 approvals pending");
+    expect(result.stdout).toContain("failures: 0 failures in the last 24h");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it.each([401, 403, 500])("keeps partial request failure %s to one safe line and exits zero", async (status) => {
+    const result = await runCli([], { env, script: [
+      ...discovery,
+      exchange("home-empty"), { status, body: { detail: "sensitive response\nsecond line" } }, exchange("home-empty"),
+    ] });
+    expect(result.stdout.trim().split("\n")).toHaveLength(1);
+    expect(result.stdout).toContain("awx:");
+    expect(result.stdout).toContain("Run `awx-axi auth");
+    expect(result.stdout).not.toMatch(/sensitive|second line|0 jobs/);
+    expect(result.transport.requests).toHaveLength(5);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("handles missing configuration without network access", async () => {
+    let text = "";
+    const createTransport = vi.fn();
+    await main({ argv: [], env: { HOME: env.HOME, AWX_AXI_HOME: env.AWX_AXI_HOME, XDG_CONFIG_HOME: env.XDG_CONFIG_HOME }, createTransport, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(text).toBe("awx: controller configuration required; Run `awx-axi auth status` to check configuration and access\n");
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("does not expose arbitrary exception messages in hook output", async () => {
+    let text = "";
+    await main({ argv: [], env, createTransport: () => { throw new Error("token=secret\nstack trace"); }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(text).toBe("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("does not mistake a malformed list response for a zero state", async () => {
+    const result = await runCli([], { env, script: [
+      ...discovery,
+      "home-empty", { status: 200, body: { count: 4, results: [] } }, "home-empty",
+    ] });
+    expect(result.stdout).toBe("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("keeps unreachable controller failures safe and exits zero", async () => {
+    let text = "";
+    await main({ argv: [], env, createTransport: () => { throw new AxiError("unsafe network details", "CONTROLLER_UNREACHABLE"); }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(text).toBe("awx: controller unreachable; Run `awx-axi auth status` to check configuration and access\n");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("redacts registered credentials and URL userinfo from dashboard rows", async () => {
+    const transport = new RecordedTransport([
+      exchange("controller-api-root"), exchange("controller-ping"),
+      { status: 200, body: { count: 1, results: [{ id: 1, name: "synthetic-test-token https://user:pass@example.com", status: "running", elapsed: 1 }] } },
+      exchange("home-empty"), exchange("home-empty"),
+    ]);
+    let text = "";
+    await main({ argv: [], env, createTransport: () => { registerSecret(env.AWX_AXI_TOKEN); return transport; }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(text).toContain("*** https://***@example.com");
+    expect(text).not.toMatch(/synthetic-test-token|user:pass/);
+  });
+
+  it("preserves explicit command authentication errors and nonzero exits", async () => {
+    let text = "";
+    await main({ argv: ["job", "list"], env, createTransport: () => { throw new AxiError("credential expired", "AUTH_REQUIRED"); }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(text).toContain("error: credential expired");
+    expect(text).toContain("code: AUTH_REQUIRED");
+    expect(process.exitCode).toBe(1);
+  });
+});

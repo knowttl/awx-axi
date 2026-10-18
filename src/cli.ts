@@ -5,14 +5,16 @@ import { encode } from "@toon-format/toon";
 import { runAxiCli, type AxiCliCommand } from "axi-sdk-js";
 
 import { AUTH_HELP, authCommand, type AuthContext } from "./commands/auth.js";
-import { homeCommand } from "./commands/home.js";
+import { homeCommand, homeDiagnostic } from "./commands/home.js";
 import { SETUP_HELP, setupCommand } from "./commands/setup.js";
 import {
   createBasicAuthTransport,
   createTransport,
+  resolveController,
   type Credential,
   type Env,
 } from "./core/auth.js";
+import { discoverController } from "./core/controller-discovery.js";
 import { formatError, validationError } from "./core/errors.js";
 import { configPath, loadConfig, normalizeEnv, type Selection } from "./core/profiles.js";
 import { clearSecrets, redact } from "./core/redact.js";
@@ -21,7 +23,7 @@ import {
   type Domain,
   type DomainContext,
 } from "./core/registry.js";
-import type { AwxTransport } from "./core/transport.js";
+import { HttpTransport, type AwxTransport } from "./core/transport.js";
 import { organizationDomain } from "./domains/organization/index.js";
 import { approvalDomain } from "./domains/approval/index.js";
 import { adHocDomain } from "./domains/ad-hoc/index.js";
@@ -84,7 +86,7 @@ export interface MainOptions {
   readonly stdout?: { write: (chunk: string) => unknown };
   readonly env?: Env;
   /** Injected offline by the test suite; `HttpTransport` in production. */
-  readonly createTransport?: (env: Env) => AwxTransport;
+  readonly createTransport?: (env: Env, signal?: AbortSignal) => AwxTransport;
   readonly createBasicAuthTransport?: (env: Env) => AwxTransport;
   /** Injected offline so `HttpTransport` in production. */
   readonly sleep?: (ms: number) => Promise<void>;
@@ -121,18 +123,37 @@ export async function main(options: MainOptions = {}): Promise<void> {
     process.exitCode = error.exitCode;
     return;
   }
+  const homeCancellation = argv.length === 0 ? new AbortController() : undefined;
   const context: DomainContext & AuthContext = {
     env,
     selection,
     createTransport: (credential?: Credential) => options.createTransport === undefined
-      ? createTransport(env, selection, credential)
-      : options.createTransport(env),
+      ? createTransport(env, selection, credential, homeCancellation?.signal)
+      : options.createTransport(env, homeCancellation?.signal),
     createBasicAuthTransport: () => options.createBasicAuthTransport === undefined
       ? createBasicAuthTransport(env, selection)
       : options.createBasicAuthTransport(env),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
   };
   const commands = buildCommands(context);
+  let home: Record<string, unknown> | undefined;
+  if (argv.length === 0) {
+    const deadline = setTimeout(() => homeCancellation!.abort(), 8_000);
+    try {
+      const controller = resolveController(env, selection);
+      const metadata = await discoverController(controller, env, () => options.createTransport === undefined
+        ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1, signal: homeCancellation!.signal })
+        : options.createTransport(env, homeCancellation!.signal));
+      home = await homeCommand(context, bareHome ? env : {}, metadata.release);
+    } catch (error) {
+      (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));
+      process.exitCode = 0;
+      return;
+    } finally {
+      clearTimeout(deadline);
+      homeCancellation!.abort();
+    }
+  }
 
   await runAxiCli({
     argv,
@@ -166,7 +187,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
           ?.help ?? domain?.help;
       return help === undefined || help.endsWith("\n") ? help : `${help}\n`;
     },
-    home: () => homeCommand(bareHome ? env : {}),
+    home: () => home!,
   });
 }
 

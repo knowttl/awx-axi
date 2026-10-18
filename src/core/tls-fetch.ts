@@ -8,10 +8,13 @@ export function createTlsFetch(verifySsl: boolean, send?: typeof request): Fetch
   return (url, init) => new Promise((resolve, reject) => {
   const plainHttp = new URL(url).protocol === "http:";
   const agent = plainHttp ? new HttpAgent() : new Agent({ rejectUnauthorized: verifySsl });
-  const outgoing = (send ?? (plainHttp ? httpRequest : request))(url, { method: init.method, headers: init.headers, agent }, (incoming) => {
+  const outgoing = (send ?? (plainHttp ? httpRequest : request))(url, {
+    method: init.method, headers: init.headers, agent,
+    ...(init.signal === undefined ? {} : { signal: init.signal }),
+  }, (incoming) => {
     const chunks: Buffer[] = [];
     incoming.on("data", (chunk: Buffer) => chunks.push(chunk));
-    incoming.on("error", (error) => { agent.destroy(); reject(error); });
+    incoming.on("error", fail);
     incoming.on("end", () => {
       agent.destroy();
       const headers = new Headers();
@@ -23,7 +26,12 @@ export function createTlsFetch(verifySsl: boolean, send?: typeof request): Fetch
       resolve(new Response([204, 205, 304].includes(status) ? null : Buffer.concat(chunks), { status, headers }));
     });
   });
-  outgoing.on("error", (error) => { agent.destroy(); reject(error); });
+  function fail(error: Error): void {
+    agent.destroy();
+    if (outgoing.closed) reject(error);
+    else outgoing.once("close", () => reject(error));
+  }
+  outgoing.on("error", fail);
   outgoing.end(init.body);
   });
 }

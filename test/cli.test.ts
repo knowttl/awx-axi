@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DESCRIPTION, DOMAINS, main } from "../src/cli.js";
 import type { Domain } from "../src/core/registry.js";
+import { RecordedTransport } from "../src/core/transport.js";
+import { exchange } from "./support/fixtures.js";
 
 vi.mock("node:fs", { spy: true });
 
@@ -152,12 +154,21 @@ describe("the CLI shell", () => {
     });
     try {
       const stdout = capture();
+      const transport = new RecordedTransport([
+        exchange("controller-api-root"), exchange("controller-ping"),
+        { status: 200, body: { count: 0, results: [] } },
+        { status: 200, body: { count: 0, results: [] } },
+        { status: 200, body: { count: 0, results: [] } },
+      ]);
       await main({
         argv: "argv" in testCase ? testCase.argv : [],
         stdout,
+        createTransport: () => transport,
         env: {
           ...env,
           HOME: home,
+          AWX_AXI_ORIGIN: "https://awx.example.com",
+          AWX_AXI_TOKEN: "synthetic-test-token",
           ...(process.env.ProgramFiles ? { ProgramFiles: process.env.ProgramFiles } : {}),
           ...(env.CLAUDE_CONFIG_DIR ? { CLAUDE_CONFIG_DIR: join(root, env.CLAUDE_CONFIG_DIR) } : {}),
           ...(env.CODEX_HOME ? { CODEX_HOME: join(root, env.CODEX_HOME) } : {}),
@@ -174,7 +185,7 @@ describe("the CLI shell", () => {
       if (hint) expect(stdout.text().match(/npx skills add/g)).toHaveLength(1);
       if (!("argv" in testCase)) {
         expect(stdout.text()).toContain(`help[${hint ? 3 : 2}]:`);
-        expect(stdout.text()).toContain("Run `awx-axi auth status` to check the configured controller");
+        expect(stdout.text()).toContain("Run `awx-axi job list` for recent job history");
       } else {
         const baseline = capture();
         await main({ argv: testCase.argv, stdout: baseline, env: { HOME: home } });
@@ -195,10 +206,11 @@ describe("the CLI shell", () => {
     try {
       const stdout = capture();
       await main({ argv: [], stdout, env: { CODEX_THREAD_ID: "thread", HOME: "/missing-awx-axi-test-home" } });
-      expect(stdout.text()).toContain("help[2]:");
-      expect(process.exitCode).toBe(previousExitCode);
+      expect(stdout.text()).toContain("awx: controller configuration required;");
+      expect(process.exitCode).toBe(0);
     } finally {
       cwdSpy.mockRestore();
+      process.exitCode = previousExitCode;
     }
   });
 

@@ -202,6 +202,7 @@ export type FetchLike = (
     method: string;
     headers: Record<string, string>;
     body?: string;
+    signal?: AbortSignal;
   },
 ) => Promise<Response>;
 
@@ -225,6 +226,7 @@ export interface HttpTransportOptions {
   readonly sleep?: (ms: number) => Promise<void>;
   /** Attempts for a retryable GET, including the first. */
   readonly attempts?: number;
+  readonly signal?: AbortSignal;
 }
 
 /** The production transport uses a scoped Node HTTP or HTTPS agent. */
@@ -305,6 +307,7 @@ export class HttpTransport implements AwxTransport {
     query: Query,
     body: unknown,
   ): Promise<AwxResponse> {
+    this.#options.signal?.throwIfAborted();
     const url = new URL(route, this.#apiRoot);
     if (url.origin !== new URL(this.#options.baseUrl).origin || url.username || url.password) {
       throw new AxiError("refused to send credentials outside the configured origin", "CONFIG_INVALID");
@@ -333,6 +336,7 @@ export class HttpTransport implements AwxTransport {
         method,
         headers,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(this.#options.signal === undefined ? {} : { signal: this.#options.signal }),
       });
     } catch (cause) {
       throw networkError(cause, url.host);
