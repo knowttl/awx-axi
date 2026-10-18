@@ -21,20 +21,26 @@ export async function discoverController(
   env: Env,
   createTransport: () => AwxTransport,
 ): Promise<ControllerMetadata> {
-  const key = createHash("sha256").update(JSON.stringify([
-    controller.baseUrl, env.AWX_AXI_API_BASE_PATH ?? null,
-  ])).digest("hex");
-  const path = join(toolDirectory("state", env, process.platform, env.HOME || homedir()), "controllers", `${key}.json`);
-  const files = new PrivateFiles();
-  const cached = files.read(path);
-  if (cached !== undefined) {
-    let metadata: unknown;
-    try { metadata = JSON.parse(cached); } catch { throw invalidResponse(); }
-    if (!validMetadata(metadata, controller.baseUrl)) throw invalidResponse();
-    return metadata;
-  }
+  const cached = readControllerMetadata(controller.baseUrl, env);
+  if (cached !== undefined) return cached;
   const metadata = await runPlan(discoveryPlan(controller, env), { transport: createTransport() });
-  files.write(path, `${JSON.stringify(metadata)}\n`);
+  new PrivateFiles().write(controllerCachePath(controller.baseUrl, env), `${JSON.stringify(metadata)}\n`);
+  return metadata;
+}
+
+function controllerCachePath(origin: string, env: Env): string {
+  const key = createHash("sha256").update(JSON.stringify([
+    origin, env.AWX_AXI_API_BASE_PATH ?? null,
+  ])).digest("hex");
+  return join(toolDirectory("state", env, process.platform, env.HOME || homedir()), "controllers", `${key}.json`);
+}
+
+export function readControllerMetadata(origin: string, env: Env): ControllerMetadata | undefined {
+  const cached = new PrivateFiles().read(controllerCachePath(origin, env));
+  if (cached === undefined) return undefined;
+  let metadata: unknown;
+  try { metadata = JSON.parse(cached); } catch { throw invalidResponse(); }
+  if (!validMetadata(metadata, origin)) throw invalidResponse();
   return metadata;
 }
 

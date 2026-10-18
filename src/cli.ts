@@ -142,7 +142,6 @@ export async function main(options: MainOptions = {}): Promise<void> {
       const metadata = await discoverController(controller, env, () => options.createTransport === undefined
         ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1 })
         : options.createTransport(env));
-      env.AWX_AXI_API_BASE_PATH = metadata.apiBasePath;
       home = await homeCommand(context, bareHome ? env : {}, metadata.release);
     } catch (error) {
       (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));

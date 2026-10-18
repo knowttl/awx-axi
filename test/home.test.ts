@@ -51,25 +51,58 @@ describe("session dashboard", () => {
     expect(other.transport.requests).toHaveLength(5);
   });
 
-  it("reuses the advertised API path along with the cached release", async () => {
+  it("reuses the advertised API path when following a home history suggestion", async () => {
     const fixtures = fixtureFetch([
       "controller-api-root-gateway", "controller-ping", "home-empty", "home-empty", "home-empty",
       "home-empty", "home-empty", "home-empty",
+      "unified-jobs-page-1",
     ]);
     const fetch = vi.fn(fixtures.fetch);
     vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fetch);
     let text = "";
     const stdout = { write: (chunk: string) => { text += chunk; } };
     await main({ argv: [], env, stdout });
+    const home = decode(text) as { help: string[] };
     await main({ argv: [], env, stdout });
     expect(text.match(/controller: awx.example.com \(AWX 24.6.1\)/g)).toHaveLength(2);
+    const command = home.help[0]!.slice(5, home.help[0]!.lastIndexOf("`"));
+    const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+      .toString().split("\0").slice(0, -1);
+    expect(args).toEqual(["job", "list"]);
+    text = "";
+    await main({ argv: args, env, stdout });
+    expect(text).toContain("Deploy web tier");
+    expect(process.exitCode ?? 0).toBe(0);
     expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([
       "/api/", "/api/controller/v2/ping/",
       "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
       "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+      "/api/controller/v2/unified_jobs/",
     ]);
     expect(fetch.mock.calls[0]![1].headers).not.toHaveProperty("Authorization");
     expect(fetch.mock.calls[1]![1].headers).not.toHaveProperty("Authorization");
+  });
+
+  it.each([
+    { name: "explicit API override", argv: ["job", "list"], extraEnv: { AWX_AXI_API_BASE_PATH: "/api/override/v2/" }, fixture: "unified-jobs-page-1", path: "/api/override/v2/unified_jobs/", output: "Deploy web tier", exitCode: 0 },
+    { name: "different origin", argv: ["job", "list"], extraEnv: { AWX_AXI_ORIGIN: "https://other.example.com" }, fixture: "unified-jobs-page-1", path: "/api/v2/unified_jobs/", output: "Deploy web tier", exitCode: 0 },
+    { name: "auth status", argv: ["auth", "status"], extraEnv: {}, fixture: "user-detail", path: "/api/controller/v2/me/", output: "valid: true", exitCode: 0 },
+    { name: "doctor", argv: ["doctor"], extraEnv: {}, fixture: "user-detail", path: "/api/controller/v2/me/", output: "valid: true", exitCode: 0 },
+    { name: "basic auth error", argv: ["auth", "login"], extraEnv: {}, fixture: "named-url-403-as-404", path: "/api/controller/v2/tokens/", output: "code: NOT_FOUND", exitCode: 1 },
+    { name: "domain command error", argv: ["job", "list"], extraEnv: {}, fixture: "named-url-403-as-404", path: "/api/controller/v2/unified_jobs/", output: "code: NOT_FOUND", exitCode: 1 },
+  ])("preserves cached transport routing and command behavior for $name", async ({ argv, extraEnv, fixture, path, output, exitCode }) => {
+    await runCli([], { env, script: ["controller-api-root-gateway", "controller-ping", "home-empty", "home-empty", "home-empty"] });
+    const fixtures = fixtureFetch([fixture]);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fixtures.fetch);
+    let text = "";
+    process.exitCode = 0;
+    await main({ argv, env: {
+      ...env, XDG_STATE_HOME: join(env.HOME, ".local/state"),
+      AWX_AXI_USERNAME: "synthetic-user", AWX_AXI_PASSWORD: "synthetic-password", ...extraEnv,
+    }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([path]);
+    expect(text).toContain(output);
+    expect(process.exitCode).toBe(exitCode);
   });
 
   it("uses an explicit API path for unauthenticated ping and all dashboard reads", async () => {
