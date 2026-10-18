@@ -227,6 +227,13 @@ function unknownFlag(
   subcommand: string,
   flags: readonly FlagSpec[],
 ): Error {
+  if (subcommand === "approval list" && name === "--all") {
+    return validationError(
+      "--all was renamed to --include-decided for `approval list`; --all is reserved for pagination",
+      ["Run `awx-axi approval list --include-decided` to include decided approvals; keep --limit to bound the rows"],
+    );
+  }
+
   const renamed = RENAMED[name];
   const suggestion =
     renamed !== undefined && flags.some((flag) => `--${flag.name}` === renamed)

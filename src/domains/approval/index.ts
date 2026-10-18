@@ -55,12 +55,12 @@ function toRow(raw: unknown): ApprovalRow {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const all = input.flags.all === true;
+  const includeDecided = input.flags["include-decided"] === true;
   const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT);
 
   const paged = yield* readPaged(
     "workflow_approvals/",
-    all ? {} : { status: "pending" },
+    includeDecided ? {} : { status: "pending" },
     limit,
   );
 
@@ -70,13 +70,13 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
-    empty: all ? "0 approvals found" : "0 approvals pending",
+    empty: includeDecided ? "0 approvals found" : "0 approvals pending",
     help:
       rows.length === 0
-        ? all
+        ? includeDecided
           ? []
           : [
-              "Run `awx-axi approval list --all` to include approvals that were already decided",
+              "Run `awx-axi approval list --include-decided` to include approvals that were already decided",
             ]
         : [
             "Run `awx-axi approval show <id>` to see what an approval gates before deciding",
@@ -228,7 +228,7 @@ function* approvePlan(input: SubcommandInput): Plan<DomainResult> {
         throw new AxiError(
           `approval ${id} was already denied and cannot be approved`,
           "ALREADY_DECIDED",
-          ["Run `awx-axi approval list --all` to see decided approvals"],
+          ["Run `awx-axi approval list --include-decided` to see decided approvals"],
         );
       }
     }
@@ -288,7 +288,7 @@ function* denyPlan(input: SubcommandInput): Plan<DomainResult> {
         throw new AxiError(
           `approval ${id} was already approved and cannot be denied`,
           "ALREADY_DECIDED",
-          ["Run `awx-axi approval list --all` to see decided approvals"],
+          ["Run `awx-axi approval list --include-decided` to see decided approvals"],
         );
       }
     }
@@ -332,7 +332,7 @@ export const approvalDomain: Domain = defineDomain({
     "approval: the workflow approval inbox - what is waiting on a human decision",
     "",
     "Subcommands:",
-    "  list      [--all] [--limit <n>]   pending approvals, or all with --all",
+    "  list      [--include-decided] [--limit <n>]   pending approvals by default",
     "  show      <id|name>               what one approval gates before deciding",
     "  approve   <id|name>               approve a pending workflow approval",
     "  deny      <id|name>               deny a pending workflow approval",
@@ -347,21 +347,24 @@ export const approvalDomain: Domain = defineDomain({
     {
       name: "list",
       help: [
-        "awx-axi approval list [--all] [--limit <n>]",
+        "awx-axi approval list [--include-decided] [--limit <n>]",
         "",
         "Lists pending workflow approvals - the inbox of decisions waiting on a human.",
         "",
         "Flags:",
-        "  --all           include approvals that were already approved or denied",
-        `  --limit <n>     rows to return (default ${DEFAULT_LIST_LIMIT})`,
+        "  --include-decided   include approvals that were already approved or denied",
+        `  --limit <n>         rows to return (default ${DEFAULT_LIST_LIMIT})`,
+        "",
+        "Migration: --all was renamed to --include-decided; --all is reserved for pagination.",
+        "Old --all invocations fail with exit 2 during this transition; no alias is retained.",
         "",
         "Examples:",
         "  awx-axi approval list",
-        "  awx-axi approval list --all --limit 50",
+        "  awx-axi approval list --include-decided --limit 50",
       ].join("\n"),
       flags: [
         {
-          name: "all",
+          name: "include-decided",
           description: "include decided approvals, not just pending",
           takesValue: false,
         },
@@ -383,7 +386,7 @@ export const approvalDomain: Domain = defineDomain({
         {
           outcome: "empty",
           suggestions: [
-            "Run `awx-axi approval list --all` to include approvals that were already decided",
+            "Run `awx-axi approval list --include-decided` to include approvals that were already decided",
           ],
         },
       ],

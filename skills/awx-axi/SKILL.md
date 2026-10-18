@@ -38,6 +38,12 @@ For the AWX 24.6.1 smart inventory API, use `inventory create <name> --kind smar
 AWX documents smart inventories as deprecated and encourages constructed inventories for new configurations, but this controller's smart inventory support remains available.
 Use `organization`, `credential`, `execution-environment`, `notification-template`, `team`, `user`, and `role` for identity, security, RBAC, notifications, and execution configuration.
 Common reads include `schedule list`, `execution-environment list`, `organization list`, `credential show <id|name>`, `user show <id|name>`, `system-job-template show <id|name>`, and `system-job notifications`.
+`approval list` defaults to pending approvals, limited to 20 rows.
+Use `approval list --include-decided --limit 50` to include approved or denied approvals within that row limit.
+Replace the former `approval list --all` spelling with `--include-decided`, keeping any `--limit` value.
+Old `--all` invocations fail with exit 2 and a migration hint before any request during this transition.
+Renamed flags normally retain a deprecated alias for one minor release; this collision is an explicit exception because `--all` is reserved for future pagination and cannot retain its old runtime meaning.
+Pagination via `approval list --all` is not enabled during this transition.
 
 ## Safety and secrets
 

@@ -28,16 +28,39 @@ describe("approval list (design.md §7.7)", () => {
     expect(run.stdout).toContain("awx-axi approval show <id>");
   });
 
-  it("drops the pending filter under --all", async () => {
-    const run = await runCli(["approval", "list", "--all"], {
-      script: ["approval-list-pending"],
+  it("includes decided approvals under --include-decided", async () => {
+    const run = await runCli(["approval", "list", "--include-decided"], {
+      script: [{
+        status: 200,
+        body: {
+          count: 1,
+          next: null,
+          results: [{ id: 58, name: "Release gate", status: "approved" }],
+        },
+      }],
     });
 
     expect(run.exitCode).toBe(0);
     expect(run.transport.requests[0]?.query).toEqual({ page_size: 20 });
+    expect(run.stdout).toContain("58,Release gate,null,approved");
   });
 
-  it("states the definitive empty inbox and points at --all", async () => {
+  it.each([
+    ["--all"],
+    ["--all", "--limit", "50"],
+    ["--all", "--include-decided"],
+    ["--all=true"],
+  ])("rejects old usage %j with migration guidance before any read", async (...flags) => {
+    const run = await runCli(["approval", "list", ...flags]);
+
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    expect(run.stdout).toContain("--all was renamed to --include-decided");
+    expect(run.stdout).toContain("reserved for pagination");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it("states the definitive empty inbox and points at --include-decided", async () => {
     const run = await runCli(["approval", "list"], {
       script: ["approval-list-empty"],
     });
@@ -45,7 +68,7 @@ describe("approval list (design.md §7.7)", () => {
     expect(run.exitCode).toBe(0);
     // AXI §5: the zero is stated with the filter that produced it.
     expect(run.stdout).toContain("approvals: 0 approvals pending");
-    expect(run.stdout).toContain("awx-axi approval list --all");
+    expect(run.stdout).toContain("awx-axi approval list --include-decided");
   });
 
   it("honors --limit as a row count", async () => {
