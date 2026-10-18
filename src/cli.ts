@@ -138,7 +138,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     try {
       home = await homeCommand(context, bareHome ? env : {});
     } catch (error) {
-      (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error)));
+      (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));
       process.exitCode = 0;
       return;
     }

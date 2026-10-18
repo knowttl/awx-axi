@@ -28,19 +28,20 @@ export async function homeCommand(
       status__in: "failed,error", finished__gte: new Date(now - 86_400_000).toISOString(), order_by: "-finished",
     }, 3), { transport }),
   ]);
+  const command = homeInvocation(context.selection);
   const help = [
     running.rows.length || failures.rows.length
-      ? "Run `awx-axi job show <id>` for a job's result"
-      : "Run `awx-axi job list` for recent job history",
-    ...(approvals.rows.length ? ["Run `awx-axi approval show <id>` to see what it gates"] : []),
-    "Run `awx-axi template list` to see what can be launched",
+      ? `Run \`${command} job show <id>\` for a job's result`
+      : `Run \`${command} job list\` for recent job history`,
+    ...(approvals.rows.length ? [`Run \`${command} approval show <id>\` to see what it gates`] : []),
+    `Run \`${command} template list\` to see what can be launched`,
   ];
-  for (const [label, list, command] of [
+  for (const [label, list, action] of [
     ["running", running, "job list"],
     ["approvals", approvals, "approval list"],
     ["failures", failures, "job list --failed --since 24h"],
   ] as const) {
-    if (list.count > list.rows.length) help.push(`Run \`awx-axi ${command}\` for more ${label} (${list.rows.length} of ${list.count} shown)`);
+    if (list.count > list.rows.length) help.push(`Run \`${command} ${action}\` for more ${label} (${list.rows.length} of ${list.count} shown)`);
   }
   return {
     controller: controller.host,
@@ -79,7 +80,7 @@ function* homeList(path: string, query: Query, limit: number): Plan<{ rows: Reco
 }
 
 /** Never expose controller response bodies or arbitrary exception text in session context. */
-export function homeDiagnostic(error: unknown): string {
+export function homeDiagnostic(error: unknown, selection?: Selection): string {
   const code = error instanceof AxiError ? error.code : "UNKNOWN";
   const problem = code === "AUTH_REQUIRED" ? "authentication required"
     : code === "FORBIDDEN" ? "dashboard access denied"
@@ -87,9 +88,29 @@ export function homeDiagnostic(error: unknown): string {
     : code === "TLS_UNTRUSTED" ? "controller certificate could not be verified"
     : code.startsWith("PROFILE_") || code.startsWith("CONFIG_") ? "controller configuration required"
     : "dashboard unavailable";
-  const fix = code === "AUTH_REQUIRED" ? "Run `awx-axi auth login` to configure credentials"
-    : "Run `awx-axi auth status` to check configuration and access";
+  const command = homeInvocation(selection);
+  const fix = code === "AUTH_REQUIRED" ? `Run \`${command} auth login\` to configure credentials`
+    : `Run \`${command} auth status\` to check configuration and access`;
   return `awx: ${problem}; ${fix}\n`;
+}
+
+function homeInvocation(selection: Selection = {}): string {
+  const args = ["awx-axi"];
+  for (const [flag, value] of [
+    ["--config", selection.configPath],
+    ["--profile", selection.profile],
+    ["--origin", selection.origin],
+    ["--verify-ssl", selection.verifySsl],
+  ] as const) {
+    if (value === undefined) continue;
+    const text = String(value);
+    const quoted = /^[A-Za-z0-9_./:-]+$/.test(text) ? text
+      : /\p{Cc}/u.test(text)
+        ? `$'${text.replace(/[\\'\p{Cc}]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`)}'`
+        : `'${text.replaceAll("'", "'\\''")}'`;
+    args.push(flag, quoted);
+  }
+  return args.join(" ");
 }
 
 function needsSkillHint(env: Env): boolean {

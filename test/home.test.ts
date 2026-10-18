@@ -1,5 +1,7 @@
 import { AxiError } from "axi-sdk-js";
-import { mkdtempSync, rmSync } from "node:fs";
+import { decode } from "@toon-format/toon";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { main } from "../src/cli.js";
 import { registerSecret } from "../src/core/redact.js";
 import { RecordedTransport } from "../src/core/transport.js";
-import { exchange } from "./support/fixtures.js";
+import * as tlsFetch from "../src/core/tls-fetch.js";
+import { exchange, fixtureFetch } from "./support/fixtures.js";
 import { runCli } from "./support/run.js";
 
 let env: { HOME: string; AWX_AXI_HOME: string; XDG_CONFIG_HOME: string; AWX_AXI_ORIGIN: string; AWX_AXI_TOKEN: string };
@@ -26,6 +29,81 @@ afterEach(() => {
 });
 
 describe("session dashboard", () => {
+  it("keeps a selected profile when following the home history suggestion", async () => {
+    const config = join(env.HOME, "controllers.json");
+    writeFileSync(config, JSON.stringify({ version: 1, defaultProfile: "dev", profiles: {
+      dev: { origin: "https://dev.example.com", token: { env: "AWX_AXI_TOKEN" } },
+      prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
+    } }));
+    const fixtures = fixtureFetch(["home-empty", "home-empty", "home-empty", "home-dashboard"]);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fixtures.fetch);
+    let text = "";
+    const stdout = { write: (chunk: string) => { text += chunk; } };
+    await main({ argv: ["--config", config, "--profile", "prod"], env, stdout });
+    expect(text).toContain("controller: prod.example.com");
+    const home = decode(text) as { help: string[] };
+    const command = home.help[0]!.slice(5, home.help[0]!.lastIndexOf("`"));
+    const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+      .toString().split("\0").slice(0, -1);
+    expect(args).toEqual(["--config", config, "--profile", "prod", "job", "list"]);
+    text = "";
+    await main({ argv: args, env, stdout });
+    expect(text).toContain("Deploy web");
+    expect(fixtures.calls.map((call) => call.url.host)).toEqual(Array(4).fill("prod.example.com"));
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it.each(["controllers 'quoted' $(printf unsafe) `printf unsafe`.json", "controllers\n\r\t'\\.json"])(
+    "preserves shell arguments across all home suggestions with config %j", async (filename) => {
+      const config = join(env.HOME, filename);
+      writeFileSync(config, JSON.stringify({ version: 1, profiles: {
+        prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
+      } }));
+      const selectors = ["--config", config, "--profile", "prod", "--origin", "https://override.example.com", "--verify-ssl", "false"];
+      const result = await runCli(selectors, { env, script: ["home-dashboard", "home-dashboard", "home-dashboard"] });
+      const home = decode(result.stdout) as { help: string[] };
+      const commands = home.help.map((hint) => hint.slice(5, hint.lastIndexOf("`")).replace("<id>", "101"));
+      const args = commands.map((command) => execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+        .toString().split("\0").slice(0, -1));
+      expect(args).toEqual([
+        [...selectors, "job", "show", "101"],
+        [...selectors, "approval", "show", "101"],
+        [...selectors, "template", "list"],
+        [...selectors, "job", "list"],
+        [...selectors, "approval", "list"],
+        [...selectors, "job", "list", "--failed", "--since", "24h"],
+      ]);
+      expect(commands.every((command) => !/[\n\r]/.test(command))).toBe(true);
+      expect(result.exitCode).toBe(0);
+    },
+  );
+
+  it.each([[401, "login"], [403, "status"]] as const)(
+    "preserves shell arguments in the single-line diagnostic for HTTP %s", async (status, action) => {
+      const config = join(env.HOME, "missing\n'$(printf unsafe)`printf unsafe`\\.json");
+      const selectors = ["--config", config, "--profile", "prod", "--origin", "https://override.example.com", "--verify-ssl", "false"];
+      const result = await runCli(selectors, { env, script: [] });
+      expect(result.stdout.trim().split("\n")).toHaveLength(1);
+      const recovery = result.stdout.slice(result.stdout.indexOf("Run `") + 5, result.stdout.lastIndexOf("`"));
+      const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${recovery}`])
+        .toString().split("\0").slice(0, -1);
+      expect(args).toEqual([...selectors, "auth", "status"]);
+      writeFileSync(config, JSON.stringify({ version: 1, profiles: {
+        prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
+      } }));
+      const failed = await runCli(selectors, { env, script: [
+        exchange("home-empty"), { status, body: { detail: "unsafe\nresponse" } }, exchange("home-empty"),
+      ] });
+      expect(failed.stdout.trim().split("\n")).toHaveLength(1);
+      const command = failed.stdout.slice(failed.stdout.indexOf("Run `") + 5, failed.stdout.lastIndexOf("`"));
+      const failedArgs = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
+        .toString().split("\0").slice(0, -1);
+      expect(failedArgs).toEqual([...selectors, "auth", action]);
+      expect(failed.stdout).not.toContain("unsafe\nresponse");
+      expect(failed.exitCode).toBe(0);
+    },
+  );
+
   it("shows bounded live blocks from exactly three filtered reads without following next", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-27T14:20:11Z"));
     const result = await runCli([], { env, script: [
