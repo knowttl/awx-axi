@@ -86,7 +86,7 @@ export interface MainOptions {
   readonly stdout?: { write: (chunk: string) => unknown };
   readonly env?: Env;
   /** Injected offline by the test suite; `HttpTransport` in production. */
-  readonly createTransport?: (env: Env) => AwxTransport;
+  readonly createTransport?: (env: Env, signal?: AbortSignal) => AwxTransport;
   readonly createBasicAuthTransport?: (env: Env) => AwxTransport;
   /** Injected offline so `HttpTransport` in production. */
   readonly sleep?: (ms: number) => Promise<void>;
@@ -123,12 +123,13 @@ export async function main(options: MainOptions = {}): Promise<void> {
     process.exitCode = error.exitCode;
     return;
   }
+  const homeCancellation = argv.length === 0 ? new AbortController() : undefined;
   const context: DomainContext & AuthContext = {
     env,
     selection,
     createTransport: (credential?: Credential) => options.createTransport === undefined
-      ? createTransport(env, selection, credential)
-      : options.createTransport(env),
+      ? createTransport(env, selection, credential, homeCancellation?.signal)
+      : options.createTransport(env, homeCancellation?.signal),
     createBasicAuthTransport: () => options.createBasicAuthTransport === undefined
       ? createBasicAuthTransport(env, selection)
       : options.createBasicAuthTransport(env),
@@ -137,16 +138,20 @@ export async function main(options: MainOptions = {}): Promise<void> {
   const commands = buildCommands(context);
   let home: Record<string, unknown> | undefined;
   if (argv.length === 0) {
+    const deadline = setTimeout(() => homeCancellation!.abort(), 8_000);
     try {
       const controller = resolveController(env, selection);
       const metadata = await discoverController(controller, env, () => options.createTransport === undefined
-        ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1 })
-        : options.createTransport(env));
+        ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1, signal: homeCancellation!.signal })
+        : options.createTransport(env, homeCancellation!.signal));
       home = await homeCommand(context, bareHome ? env : {}, metadata.release);
     } catch (error) {
       (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));
       process.exitCode = 0;
       return;
+    } finally {
+      clearTimeout(deadline);
+      homeCancellation!.abort();
     }
   }
 

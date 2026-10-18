@@ -78,7 +78,7 @@ export function resolveBasicAuth(envInput: Env): BasicAuth | undefined {
   return { username, password };
 }
 
-export function createTransport(env: Env, selection: Selection = {}, override?: Credential): AwxTransport {
+export function createTransport(env: Env, selection: Selection = {}, override?: Credential, signal?: AbortSignal): AwxTransport {
   const config = resolveController(env, selection);
   const credential = override ?? requireCredential(env, selection);
   registerSecret(credential.token);
@@ -86,6 +86,7 @@ export function createTransport(env: Env, selection: Selection = {}, override?: 
     baseUrl: config.baseUrl, apiBasePath: config.apiBasePath,
     verifySsl: config.verifySsl, authorization: `Bearer ${credential.token}`,
     readOnly: isReadOnly(env), env,
+    ...(signal === undefined ? {} : { signal }),
   });
 }
 

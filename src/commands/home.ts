@@ -22,13 +22,17 @@ export async function homeCommand(
   const controller = resolveController(context.env, context.selection);
   const transport = context.createTransport();
   const now = Date.now();
-  const [running, approvals, failures] = await Promise.all([
+  const requests = [
     runPlan(homeList("jobs/", { status__in: "new,pending,waiting,running", order_by: "-id" }, 5), { transport }),
     runPlan(homeList("workflow_approvals/", { status: "pending", order_by: "created" }, 5), { transport }),
     runPlan(homeList("jobs/", {
       status__in: "failed,error", finished__gte: new Date(now - 86_400_000).toISOString(), order_by: "-finished",
     }, 3), { transport }),
-  ]);
+  ] as const;
+  const [running, approvals, failures] = await Promise.all(requests).catch(async (error: unknown) => {
+    await Promise.allSettled(requests);
+    throw error;
+  });
   const command = homeInvocation(context.selection);
   const help = [
     running.rows.length || failures.rows.length

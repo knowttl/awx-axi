@@ -2,6 +2,8 @@ import { AxiError } from "axi-sdk-js";
 import { decode } from "@toon-format/toon";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, request as httpRequest, type ClientRequest } from "node:http";
+import type { request as httpsRequest } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,7 +12,7 @@ import { main } from "../src/cli.js";
 import { registerSecret } from "../src/core/redact.js";
 import { RecordedTransport } from "../src/core/transport.js";
 import * as tlsFetch from "../src/core/tls-fetch.js";
-import { exchange, fixtureFetch } from "./support/fixtures.js";
+import { exchange, fixtureFetch, loadFixture } from "./support/fixtures.js";
 import { runCli } from "./support/run.js";
 
 let env: { HOME: string; AWX_AXI_HOME: string; XDG_CONFIG_HOME: string; AWX_AXI_ORIGIN: string; AWX_AXI_TOKEN: string };
@@ -30,6 +32,96 @@ afterEach(() => {
 });
 
 describe("session dashboard", () => {
+  it.each([
+    { stage: "API discovery", paths: ["/api/"], pending: 1, partial: false },
+    { stage: "API discovery", paths: ["/api/"], pending: 1, partial: true },
+    { stage: "release discovery", paths: ["/api/v2/ping/"], pending: 1, partial: false },
+    { stage: "release discovery", paths: ["/api/v2/ping/"], pending: 1, partial: true },
+    { stage: "dashboard", paths: ["/api/v2/jobs/", "/api/v2/workflow_approvals/"], pending: 3, partial: false },
+    { stage: "dashboard", paths: ["/api/v2/jobs/", "/api/v2/workflow_approvals/"], pending: 3, partial: true },
+  ])("closes stalled $stage requests before reporting a safe diagnostic (partial body: $partial)", async ({ paths, pending, partial }) => {
+    const requests: ClientRequest[] = [];
+    const createFetch = tlsFetch.createTlsFetch;
+    const send = ((...args: Parameters<typeof httpRequest>) => {
+      const outgoing = httpRequest(...args);
+      requests.push(outgoing);
+      return outgoing;
+    }) as typeof httpsRequest;
+    vi.spyOn(tlsFetch, "createTlsFetch").mockImplementation((verifySsl) => createFetch(verifySsl, send));
+    let started!: () => void;
+    const stalled = new Promise<void>((resolve) => { started = resolve; });
+    let waiting = 0;
+    const server = createServer((request, response) => {
+      const path = new URL(request.url!, "http://localhost").pathname;
+      if (paths.includes(path)) {
+        if (partial) {
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.write('{"unfinished":');
+        }
+        waiting += 1;
+        if (waiting === pending) started();
+        return;
+      }
+      const body = path === "/api/" ? loadFixture("controller-api-root").body : loadFixture("controller-ping").body;
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(body));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const address = server.address() as { port: number };
+      let text = "";
+      let closedAtOutput = false;
+      const run = main({ argv: [], env: {
+        ...env, AWX_AXI_ORIGIN: `http://127.0.0.1:${address.port}`, AWX_AXI_ALLOW_HTTP: "1",
+      }, stdout: { write: (chunk) => {
+        closedAtOutput = requests.every((request) => request.closed);
+        text += chunk;
+      } } });
+      await stalled;
+      await vi.advanceTimersByTimeAsync(7_999);
+      expect(text).toBe("");
+      await vi.advanceTimersByTimeAsync(1);
+      await run;
+      expect(text.trim().split("\n")).toHaveLength(1);
+      expect(text).toMatch(/^awx: .*; Run `awx-axi auth status`/);
+      expect(text).not.toContain("unfinished");
+      expect(closedAtOutput).toBe(true);
+      expect(process.exitCode).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("does not impose the home deadline on explicit commands", async () => {
+    let started!: () => void;
+    let finish!: () => void;
+    const stalled = new Promise<void>((resolve) => { started = resolve; });
+    const response = new Promise<void>((resolve) => { finish = resolve; });
+    const fixtures = fixtureFetch(["unified-jobs-page-1"]);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(async (url, init) => {
+      expect(init.signal).toBeUndefined();
+      started();
+      await response;
+      return fixtures.fetch(url, init);
+    });
+    vi.useFakeTimers();
+    try {
+      let text = "";
+      const run = main({ argv: ["job", "list"], env, stdout: { write: (chunk) => { text += chunk; } } });
+      await stalled;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(text).toBe("");
+      finish();
+      await run;
+      expect(text).toContain("Deploy web tier");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
   it("discovers and persists the release and API path for later home invocations", async () => {
     const first = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
     expect(first.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");

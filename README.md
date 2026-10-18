@@ -70,6 +70,7 @@ On first use, `/api/` discovers the API path unless `AWX_AXI_API_BASE_PATH` over
 These two values are cached together under the tool's state directory in `controllers/`, separately for each origin and API-path override; later home invocations need only the three list reads.
 Quiet controllers show explicit zero states.
 Dashboard failures print a safe, single-line diagnostic and exit 0 so session startup can continue; explicit commands retain their normal errors and exit codes.
+Home cancels outstanding network requests after eight seconds, before the hooks' ten-second timeout.
 Restart your agent session after running `awx-axi setup hooks` so the hook is active.
 
 ### Direct install
