@@ -248,6 +248,14 @@ awx-axi system-job-template launch cleanup-jobs
 
 ### TOON output behavior
 
+`approval list` defaults to pending approvals and at most 20 rows.
+Use `awx-axi approval list --include-decided --limit 50` to include approved or denied approvals within that row limit.
+The former `approval list --all` spelling now fails with exit 2 and a migration hint before any request.
+Replace it with `--include-decided`, keeping any `--limit` value.
+Renamed flags normally retain a deprecated alias for one minor release.
+This collision is an explicit exception: `--all` is reserved for future pagination, so retaining the old runtime alias would make its meaning ambiguous.
+Pagination via `approval list --all` is not enabled during this transition.
+
 - List views project to a small schema by default.
 - `--fields` lets callers ask for additional keys when needed.
 - Pagination is surfaced with `count: N of M total`.
