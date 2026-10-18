@@ -1,0 +1,6 @@
+no_ci: true
+commands:
+  test: npm run build && npm run typecheck && npm test
+  lint: npm run lint
+pr:
+  base_branch: main

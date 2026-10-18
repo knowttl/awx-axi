@@ -6,7 +6,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Do not edit the design to fit an implementation; escalate instead.
 - `src/skill.ts` owns the shipped AWX skill; `skills/awx-axi/SKILL.md` and `.agents/skills/axi/SKILL.md` are generated copies checked by `test/skill.test.ts`.
 - Commands: `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`. Scripts are in `package.json`.
-- There is deliberately no CI workflow: GitHub Actions is disabled on this account, so the local commands above are the only gate. Do not add a workflow file without the captain's word.
+- Hosted PR test CI is not used; `.no-mistakes.yaml` declares `no_ci: true` and the local commands above are the required gate. Release automation remains in `.github/workflows/release-please.yml`.
 - `axi-sdk-js` and `@toon-format/toon` are pinned to exact versions on purpose (design §12): the encoder's emitted syntax is observable output, so an upgrade must be a reviewed change with a snapshot diff.
 - `axi-sdk-js@0.1.8` root-exports only `runAxiCli`, `AxiError`, `exitCodeForError`, `installSessionStartHooks`, `RESERVED_COMMANDS`, and the `update` helpers. The rendering helpers (`renderOutput`, `errorOutput`, `renderError`, `homeHeaderOutput`) and the `AxiRenderable` type are **not** importable: render by returning a value to the loop, report errors by throwing an `AxiError` at it.
 - The captain's AWX controller is read-only by standing order: read-only GETs only, and minting a token is a POST and therefore also forbidden. Never read, print, or commit any value from `~/.config/awx-axi/live-smoke.env`.
@@ -19,10 +19,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - This repository should treat `https://docs.ansible.com/projects/awx/en/latest/rest_api/api_ref.html` as the current AWX reference, and `https://docs.ansible.com/projects/awx/en/24.6.1/rest_api/` plus existing `docs/design.md` and `$tag` checks as the compatibility anchor for behavior currently frozen in 24.6.1.
 - Keep the safety-gate contract in place by preserving `src/core/registry.ts` request kinds, `test/write-safety.test.ts`, and the captain's controller boundary.
-- `docs/read-coverage-audit.md` owns the prioritized read-coverage gaps and small-PR sequence; `src/cli.ts` owns the current shipped domain inventory.
+- The historical read-coverage audit is preserved on `archive/internal-docs`; `src/cli.ts` owns the current shipped domain inventory.
 - Use `https://raw.githubusercontent.com/surgex-labs/awx-mcp-server/main/AWX_MCP_QUERY_REFERENCE.md` as the awx-mcp capability source, and treat sections 13, 14, 15, 16, and 17 in that file as local Ansible/workspace capabilities rather than AWX REST API resources.
 - `AwxTransport` exports `post`, `put`, `patch`, `delete` guarded by `assertWritable` and safety environment variables (`AWX_AXI_READ_ONLY`, `AWX_AXI_ALLOW_CONFIG_WRITES`, `AWX_AXI_ALLOW_DELETES`, `AWX_AXI_ALLOW_SECURITY_WRITES`). Mutating subcommands default to `--dry-run` TOON preview unless `--confirm` is passed.
-- Beyond the read-coverage sequence, remaining roadmap priorities are ad hoc command diagnostic depth and fine-grained role inspection.
+- The historical read-coverage sequence is retired; ad hoc command diagnostic depth and fine-grained role inspection remain roadmap priorities.
 - Keep this AGENTS file high-level, and continue to point to authoritative files or sources rather than rewriting endpoint schemas.
 
 ## Maintaining this file
