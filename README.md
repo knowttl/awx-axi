@@ -66,9 +66,9 @@ awx-axi setup hooks
 This installs optional integration hooks for Claude Code, Codex, and OpenCode.
 The bare `awx-axi` command and session hooks show up to 5 active jobs, 5 pending approvals, and 3 failures from the last 24 hours using three bounded list reads.
 The controller header includes the AWX release discovered from `ping/`.
-On first use, `/api/` discovers the API path unless `AWX_AXI_API_BASE_PATH` overrides it, and `ping/` reads the release without credentials.
-These two values are cached together under the tool's state directory in `controllers/`, separately for each origin and API-path override; later home invocations need only the three list reads.
+The first home invocation discovers and caches controller metadata; see [controller discovery](docs/design.md#42-the-surfaces-that-move-between-versions) for request costs, storage and refresh behavior.
 Quiet controllers show explicit zero states.
+Suggested follow-up and recovery commands preserve explicitly supplied `--config`, `--profile`, `--origin` and `--verify-ssl` selectors.
 Dashboard failures print a safe, single-line diagnostic and exit 0 so session startup can continue; explicit commands retain their normal errors and exit codes.
 Home cancels outstanding network requests after eight seconds, before the hooks' ten-second timeout.
 Restart your agent session after running `awx-axi setup hooks` so the hook is active.
@@ -344,7 +344,7 @@ When only a legacy token exists, `CONFIG_MOVED` names the new path and profile f
 | `AWX_AXI_CONFIG` / `AWX_AXI_PROFILE` | Config file path / selected profile |
 | `AWX_AXI_ORIGIN` | Controller origin for the environment profile, HTTPS by default |
 | `AWX_AXI_ALLOW_HTTP` | Environment profile HTTP opt-in, default false; accepts `1`/`true` or `0`/`false`, rejects other values |
-| `AWX_AXI_API_BASE_PATH` | API path override, default `/api/v2/` |
+| `AWX_AXI_API_BASE_PATH` | API path override; otherwise commands use the cached discovered path, falling back to `/api/v2/` before discovery |
 | `AWX_AXI_TOKEN` | Direct token used by the environment profile or an explicit env SecretRef |
 | `AWX_AXI_USERNAME` / `AWX_AXI_PASSWORD` | Used only by `auth login` |
 | `AWX_AXI_VERIFY_SSL` | Environment profile TLS verification, default `true` |
