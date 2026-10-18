@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DESCRIPTION, DOMAINS, main } from "../src/cli.js";
 import type { Domain } from "../src/core/registry.js";
 import { RecordedTransport } from "../src/core/transport.js";
+import { exchange } from "./support/fixtures.js";
 
 vi.mock("node:fs", { spy: true });
 
@@ -153,14 +154,16 @@ describe("the CLI shell", () => {
     });
     try {
       const stdout = capture();
+      const transport = new RecordedTransport([
+        exchange("controller-api-root"), exchange("controller-ping"),
+        { status: 200, body: { count: 0, results: [] } },
+        { status: 200, body: { count: 0, results: [] } },
+        { status: 200, body: { count: 0, results: [] } },
+      ]);
       await main({
         argv: "argv" in testCase ? testCase.argv : [],
         stdout,
-        createTransport: () => new RecordedTransport([
-          { status: 200, body: { count: 0, results: [] } },
-          { status: 200, body: { count: 0, results: [] } },
-          { status: 200, body: { count: 0, results: [] } },
-        ]),
+        createTransport: () => transport,
         env: {
           ...env,
           HOME: home,

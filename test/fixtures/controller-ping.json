@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/root.py:145-161",
+  "$note": "Synthetic unauthenticated ping response containing the AWX release.",
+  "status": 200,
+  "body": { "version": "24.6.1" }
+}

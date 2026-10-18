@@ -15,6 +15,7 @@ import { runCli } from "./support/run.js";
 
 let env: { HOME: string; AWX_AXI_HOME: string; XDG_CONFIG_HOME: string; AWX_AXI_ORIGIN: string; AWX_AXI_TOKEN: string };
 const previousExitCode = process.exitCode;
+const discovery = ["controller-api-root", "controller-ping"];
 beforeEach(() => {
   const home = mkdtempSync(join(tmpdir(), "awx-home-test-"));
   env = {
@@ -29,13 +30,87 @@ afterEach(() => {
 });
 
 describe("session dashboard", () => {
+  it("discovers and persists the release and API path for later home invocations", async () => {
+    const first = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    expect(first.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");
+    expect(first.transport.requests.map((request) => request.route)).toEqual([
+      "api/", "api/v2/ping/", "jobs/", "workflow_approvals/", "jobs/",
+    ]);
+    const cached = await runCli([], { env, script: ["home-empty", "home-empty", "home-empty"] });
+    expect(cached.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");
+    expect(cached.transport.requests.map((request) => request.route)).toEqual(["jobs/", "workflow_approvals/", "jobs/"]);
+    expect(cached.exitCode).toBe(0);
+  });
+
+  it("discovers releases separately for different controller origins", async () => {
+    await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    const other = await runCli([], { env: { ...env, AWX_AXI_ORIGIN: "https://other.example.com" }, script: [
+      "controller-api-root", { status: 200, body: { version: "24.6.2" } }, "home-empty", "home-empty", "home-empty",
+    ] });
+    expect(other.stdout).toContain("controller: other.example.com (AWX 24.6.2)");
+    expect(other.transport.requests).toHaveLength(5);
+  });
+
+  it("reuses the advertised API path along with the cached release", async () => {
+    const fixtures = fixtureFetch([
+      "controller-api-root-gateway", "controller-ping", "home-empty", "home-empty", "home-empty",
+      "home-empty", "home-empty", "home-empty",
+    ]);
+    const fetch = vi.fn(fixtures.fetch);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fetch);
+    let text = "";
+    const stdout = { write: (chunk: string) => { text += chunk; } };
+    await main({ argv: [], env, stdout });
+    await main({ argv: [], env, stdout });
+    expect(text.match(/controller: awx.example.com \(AWX 24.6.1\)/g)).toHaveLength(2);
+    expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([
+      "/api/", "/api/controller/v2/ping/",
+      "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+      "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+    ]);
+    expect(fetch.mock.calls[0]![1].headers).not.toHaveProperty("Authorization");
+    expect(fetch.mock.calls[1]![1].headers).not.toHaveProperty("Authorization");
+  });
+
+  it("uses an explicit API path for unauthenticated ping and all dashboard reads", async () => {
+    await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    const fixtures = fixtureFetch(["controller-ping", "home-empty", "home-empty", "home-empty", "home-empty", "home-empty", "home-empty"]);
+    const fetch = vi.fn(fixtures.fetch);
+    vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fetch);
+    const overrideEnv = { ...env, AWX_AXI_API_BASE_PATH: "/api/controller/v2/" };
+    let text = "";
+    const stdout = { write: (chunk: string) => { text += chunk; } };
+    await main({ argv: [], env: overrideEnv, stdout });
+    expect(text).toContain("controller: awx.example.com (AWX 24.6.1)");
+    await main({ argv: [], env: overrideEnv, stdout });
+    expect(fixtures.calls.map((call) => call.url.pathname)).toEqual([
+      "/api/controller/v2/ping/", "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+      "/api/controller/v2/jobs/", "/api/controller/v2/workflow_approvals/", "/api/controller/v2/jobs/",
+    ]);
+    expect(fetch.mock.calls[0]![1].headers).not.toHaveProperty("Authorization");
+    expect(fetch.mock.calls[1]![1].headers).toHaveProperty("Authorization", "Bearer synthetic-test-token");
+  });
+
+  it.each([
+    { status: 403, body: { detail: "sensitive\nresponse" } },
+    { status: 200, body: { version: "sensitive\nresponse" } },
+  ])("keeps discovery failure $status safe and does not cache it", async (ping) => {
+    const failed = await runCli([], { env, script: ["controller-api-root", ping] });
+    expect(failed.stdout.trim().split("\n")).toHaveLength(1);
+    expect(failed.stdout).not.toContain("sensitive");
+    expect(failed.exitCode).toBe(0);
+    const retry = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
+    expect(retry.stdout).toContain("controller: awx.example.com (AWX 24.6.1)");
+    expect(retry.transport.requests).toHaveLength(5);
+  });
+
   it("keeps a selected profile when following the home history suggestion", async () => {
     const config = join(env.HOME, "controllers.json");
     writeFileSync(config, JSON.stringify({ version: 1, defaultProfile: "dev", profiles: {
       dev: { origin: "https://dev.example.com", token: { env: "AWX_AXI_TOKEN" } },
       prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
-    } }));
-    const fixtures = fixtureFetch(["home-empty", "home-empty", "home-empty", "home-dashboard"]);
+    } }), { mode: 0o600 });
+    const fixtures = fixtureFetch([...discovery, "home-empty", "home-empty", "home-empty", "unified-jobs-page-1"]);
     vi.spyOn(tlsFetch, "createTlsFetch").mockReturnValue(fixtures.fetch);
     let text = "";
     const stdout = { write: (chunk: string) => { text += chunk; } };
@@ -49,7 +124,7 @@ describe("session dashboard", () => {
     text = "";
     await main({ argv: args, env, stdout });
     expect(text).toContain("Deploy web");
-    expect(fixtures.calls.map((call) => call.url.host)).toEqual(Array(4).fill("prod.example.com"));
+    expect(fixtures.calls.map((call) => call.url.host)).toEqual(Array(6).fill("prod.example.com"));
     expect(process.exitCode ?? 0).toBe(0);
   });
 
@@ -58,9 +133,9 @@ describe("session dashboard", () => {
       const config = join(env.HOME, filename);
       writeFileSync(config, JSON.stringify({ version: 1, profiles: {
         prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
-      } }));
+      } }), { mode: 0o600 });
       const selectors = ["--config", config, "--profile", "prod", "--origin", "https://override.example.com", "--verify-ssl", "false"];
-      const result = await runCli(selectors, { env, script: ["home-dashboard", "home-dashboard", "home-dashboard"] });
+      const result = await runCli(selectors, { env, script: [...discovery, "home-dashboard", "home-dashboard", "home-dashboard"] });
       const home = decode(result.stdout) as { help: string[] };
       const commands = home.help.map((hint) => hint.slice(5, hint.lastIndexOf("`")).replace("<id>", "101"));
       const args = commands.map((command) => execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
@@ -90,8 +165,9 @@ describe("session dashboard", () => {
       expect(args).toEqual([...selectors, "auth", "status"]);
       writeFileSync(config, JSON.stringify({ version: 1, profiles: {
         prod: { origin: "https://prod.example.com", token: { env: "AWX_AXI_TOKEN" } },
-      } }));
+      } }), { mode: 0o600 });
       const failed = await runCli(selectors, { env, script: [
+        ...discovery,
         exchange("home-empty"), { status, body: { detail: "unsafe\nresponse" } }, exchange("home-empty"),
       ] });
       expect(failed.stdout.trim().split("\n")).toHaveLength(1);
@@ -107,6 +183,7 @@ describe("session dashboard", () => {
   it("shows bounded live blocks from exactly three filtered reads without following next", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-27T14:20:11Z"));
     const result = await runCli([], { env, script: [
+      ...discovery,
       exchange("home-dashboard"), exchange("approval-list-pending"),
       { status: 200, body: { count: 1, results: [{ id: 99, name: "Deploy db", status: "failed", finished: "2026-07-27T13:41:02Z" }] } },
     ] });
@@ -118,6 +195,8 @@ describe("session dashboard", () => {
     expect(result.stdout).toContain("99,Deploy db,failed");
     expect(result.stdout).toContain("5 of 8 shown");
     expect(result.transport.requests).toEqual([
+      { method: "GET", route: "api/", query: {} },
+      { method: "GET", route: "api/v2/ping/", query: {} },
       { method: "GET", route: "jobs/", query: { status__in: "new,pending,waiting,running", order_by: "-id", page_size: 5 } },
       { method: "GET", route: "workflow_approvals/", query: { status: "pending", order_by: "created", page_size: 5 } },
       { method: "GET", route: "jobs/", query: { status__in: "failed,error", finished__gte: "2026-07-26T14:20:11.000Z", order_by: "-finished", page_size: 3 } },
@@ -126,7 +205,7 @@ describe("session dashboard", () => {
   });
 
   it("states all three zeros on a quiet controller", async () => {
-    const result = await runCli([], { env, script: ["home-empty", "home-empty", "home-empty"] });
+    const result = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
     expect(result.stdout).toContain("running: 0 jobs running");
     expect(result.stdout).toContain("approvals: 0 approvals pending");
     expect(result.stdout).toContain("failures: 0 failures in the last 24h");
@@ -135,13 +214,14 @@ describe("session dashboard", () => {
 
   it.each([401, 403, 500])("keeps partial request failure %s to one safe line and exits zero", async (status) => {
     const result = await runCli([], { env, script: [
+      ...discovery,
       exchange("home-empty"), { status, body: { detail: "sensitive response\nsecond line" } }, exchange("home-empty"),
     ] });
     expect(result.stdout.trim().split("\n")).toHaveLength(1);
     expect(result.stdout).toContain("awx:");
     expect(result.stdout).toContain("Run `awx-axi auth");
     expect(result.stdout).not.toMatch(/sensitive|second line|0 jobs/);
-    expect(result.transport.requests).toHaveLength(3);
+    expect(result.transport.requests).toHaveLength(5);
     expect(result.exitCode).toBe(0);
   });
 
@@ -163,6 +243,7 @@ describe("session dashboard", () => {
 
   it("does not mistake a malformed list response for a zero state", async () => {
     const result = await runCli([], { env, script: [
+      ...discovery,
       "home-empty", { status: 200, body: { count: 4, results: [] } }, "home-empty",
     ] });
     expect(result.stdout).toBe("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
@@ -178,6 +259,7 @@ describe("session dashboard", () => {
 
   it("redacts registered credentials and URL userinfo from dashboard rows", async () => {
     const transport = new RecordedTransport([
+      exchange("controller-api-root"), exchange("controller-ping"),
       { status: 200, body: { count: 1, results: [{ id: 1, name: "synthetic-test-token https://user:pass@example.com", status: "running", elapsed: 1 }] } },
       exchange("home-empty"), exchange("home-empty"),
     ]);

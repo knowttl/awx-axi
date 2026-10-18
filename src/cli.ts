@@ -10,9 +10,11 @@ import { SETUP_HELP, setupCommand } from "./commands/setup.js";
 import {
   createBasicAuthTransport,
   createTransport,
+  resolveController,
   type Credential,
   type Env,
 } from "./core/auth.js";
+import { discoverController } from "./core/controller-discovery.js";
 import { formatError, validationError } from "./core/errors.js";
 import { configPath, loadConfig, normalizeEnv, type Selection } from "./core/profiles.js";
 import { clearSecrets, redact } from "./core/redact.js";
@@ -21,7 +23,7 @@ import {
   type Domain,
   type DomainContext,
 } from "./core/registry.js";
-import type { AwxTransport } from "./core/transport.js";
+import { HttpTransport, type AwxTransport } from "./core/transport.js";
 import { organizationDomain } from "./domains/organization/index.js";
 import { approvalDomain } from "./domains/approval/index.js";
 import { adHocDomain } from "./domains/ad-hoc/index.js";
@@ -136,7 +138,12 @@ export async function main(options: MainOptions = {}): Promise<void> {
   let home: Record<string, unknown> | undefined;
   if (argv.length === 0) {
     try {
-      home = await homeCommand(context, bareHome ? env : {});
+      const controller = resolveController(env, selection);
+      const metadata = await discoverController(controller, env, () => options.createTransport === undefined
+        ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1 })
+        : options.createTransport(env));
+      env.AWX_AXI_API_BASE_PATH = metadata.apiBasePath;
+      home = await homeCommand(context, bareHome ? env : {}, metadata.release);
     } catch (error) {
       (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));
       process.exitCode = 0;

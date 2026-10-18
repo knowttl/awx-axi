@@ -1,0 +1,7 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/views/root.py:47-61",
+  "$note": "Synthetic API root advertisement for controller API path discovery.",
+  "status": 200,
+  "body": { "available_versions": { "v2": "/api/v2/" }, "current_version": "/api/v2/" }
+}

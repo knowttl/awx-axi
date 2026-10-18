@@ -17,6 +17,7 @@ import type { Query } from "../core/transport.js";
 export async function homeCommand(
   context: DomainContext & { readonly selection?: Selection },
   hintEnv: Env,
+  release: string,
 ): Promise<Record<string, unknown>> {
   const controller = resolveController(context.env, context.selection);
   const transport = context.createTransport();
@@ -44,7 +45,7 @@ export async function homeCommand(
     if (list.count > list.rows.length) help.push(`Run \`${command} ${action}\` for more ${label} (${list.rows.length} of ${list.count} shown)`);
   }
   return {
-    controller: controller.host,
+    controller: `${controller.host} (AWX ${release})`,
     running: running.rows.length ? running.rows.map((row) => ({
       id: row.id, name: row.name, status: row.status, elapsed: row.elapsed,
     })) : "0 jobs running",
