@@ -64,6 +64,9 @@ awx-axi setup hooks
 ```
 
 This installs optional integration hooks for Claude Code, Codex, and OpenCode.
+The bare `awx-axi` command and session hooks show up to 5 active jobs, 5 pending approvals, and 3 failures from the last 24 hours using three bounded list reads.
+Quiet controllers show explicit zero states.
+Dashboard failures print a safe, single-line diagnostic and exit 0 so session startup can continue; explicit commands retain their normal errors and exit codes.
 Restart your agent session after running `awx-axi setup hooks` so the hook is active.
 
 ### Direct install

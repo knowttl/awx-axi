@@ -5,7 +5,7 @@ import { encode } from "@toon-format/toon";
 import { runAxiCli, type AxiCliCommand } from "axi-sdk-js";
 
 import { AUTH_HELP, authCommand, type AuthContext } from "./commands/auth.js";
-import { homeCommand } from "./commands/home.js";
+import { homeCommand, homeDiagnostic } from "./commands/home.js";
 import { SETUP_HELP, setupCommand } from "./commands/setup.js";
 import {
   createBasicAuthTransport,
@@ -133,6 +133,16 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
   };
   const commands = buildCommands(context);
+  let home: Record<string, unknown> | undefined;
+  if (argv.length === 0) {
+    try {
+      home = await homeCommand(context, bareHome ? env : {});
+    } catch (error) {
+      (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error)));
+      process.exitCode = 0;
+      return;
+    }
+  }
 
   await runAxiCli({
     argv,
@@ -166,7 +176,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
           ?.help ?? domain?.help;
       return help === undefined || help.endsWith("\n") ? help : `${help}\n`;
     },
-    home: () => homeCommand(bareHome ? env : {}),
+    home: () => home!,
   });
 }
 

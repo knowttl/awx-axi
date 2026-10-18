@@ -1,0 +1,18 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/serializers.py",
+  "$note": "Synthetic job list response with active job fields used by the home dashboard. The next link must never be followed by the bounded home view.",
+  "status": 200,
+  "body": {
+    "count": 8,
+    "next": "/api/v2/jobs/?page=2",
+    "results": [
+      { "id": 101, "name": "Deploy web", "status": "running", "elapsed": 142, "finished": "2026-10-18T10:00:00Z" },
+      { "id": 102, "name": "Patch hosts", "status": "waiting", "elapsed": 0, "finished": null },
+      { "id": 103, "name": "Sync data", "status": "pending", "elapsed": 0, "finished": null },
+      { "id": 104, "name": "Build image", "status": "new", "elapsed": 0, "finished": null },
+      { "id": 105, "name": "Deploy api", "status": "running", "elapsed": 18, "finished": null },
+      { "id": 106, "name": "Beyond cap", "status": "running", "elapsed": 12, "finished": null }
+    ]
+  }
+}

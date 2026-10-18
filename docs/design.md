@@ -2,7 +2,7 @@
 
 Status: accepted v1 technical design, with commands implemented under `src/domains/`.
 The registry in `src/cli.ts` and README describe the current shipped surface.
-Unimplemented targets, including the home dashboard (§8.1), remain proposals.
+Unimplemented targets remain proposals.
 Historical process notes and audits are preserved on `archive/internal-docs`.
 
 Target controller: **Ansible AWX 24.6.1**.
@@ -1264,7 +1264,7 @@ awx-axi setup hooks
 ```
 
 The hook runs the home view at session start.
-The live dashboard described in §8.1 remains a design target.
+The live dashboard described in §8.1 is implemented.
 `installSessionStartHooks` from `axi-sdk-js` handles all three targets, including the path-repair and
 idempotency rules AXI §7 requires.
 
