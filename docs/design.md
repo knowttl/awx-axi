@@ -269,12 +269,9 @@ It is used by `auth login` alone, to mint a token.
 This keeps the password out of the request path of every other command, and it degrades gracefully on
 controllers where an administrator has disabled basic auth.
 
-**The read-only live suite is the one exception, and it exists because of §6.5.**
+The read-only live suite requires an externally supplied token in `AWX_AXI_TOKEN` and sends it as Bearer authentication for GET requests.
 Minting a token is a `POST /api/v2/tokens/`, which the live-instance boundary forbids.
-So the live suite authenticates with basic auth directly for its GETs rather than calling `auth login`, and
-`auth login` is itself one of the commands the live suite is forbidden to exercise.
-This is a deliberate inversion of the rule above, confined to `test/live/`, and it is the reason §6.5's
-enforcement lives in the transport rather than in the auth layer.
+The live suite therefore never calls `auth login`; §6.5's transport enforcement refuses every non-GET request.
 
 ### 5.2 `auth login` is non-interactive
 
@@ -402,7 +399,7 @@ Redaction is applied on the way to stdout, and the redaction pass is unit-tested
 
 Ordinary validation is offline and uses synthetic fixtures.
 Live smoke tests, when separately authorized, are restricted to GET requests.
-Minting a token is a POST and is also forbidden under that boundary; §5.1 describes the basic-auth exception.
+Minting a token is a POST and is also forbidden under that boundary; §5.1 describes the supplied-token authentication.
 
 `AWX_AXI_READ_ONLY=1` makes `HttpTransport` refuse every non-GET request before issuing it, raising `READ_ONLY_VIOLATION`.
 The live harness sets this variable unconditionally.
@@ -1233,7 +1230,7 @@ quietly wrong:
 
 `test/live/` requires separate authorization and `AWX_AXI_LIVE=1`.
 Its harness sets `AWX_AXI_READ_ONLY=1` rather than trusting the ambient environment.
-It uses basic auth for GET requests because minting a PAT would violate the read-only boundary.
+It requires an externally supplied token in `AWX_AXI_TOKEN` and uses Bearer authentication for GET requests because minting a token would violate the read-only boundary.
 Assertions cover response shape rather than controller-specific names or values.
 
 Write paths are verified through offline transports and synthetic fixtures.
@@ -1370,7 +1367,7 @@ Mutation safety is verified offline; no comparative performance or live mutation
     `AWX_AXI_READ_ONLY=1` refuses mutations before issuing a request. §6.5.
 22. **There is no live write suite.**
     Write paths use offline fixtures. §11.3.
-23. **The optional live suite uses basic auth.**
+23. **The optional live suite uses a supplied token with Bearer authentication.**
     Minting a token is itself a POST and violates the suite's read-only contract. §5.1.
 24. **The preflight safety claim is verified offline.**
     A live demonstration would require launching a playbook with deliberately incorrect scope.
