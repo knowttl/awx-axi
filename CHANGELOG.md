@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.7](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.6...awx-axi-v0.1.7) (2026-10-18)
+
+
+### Features
+
+* **cli:** add live home dashboard and controller discovery ([#47](https://github.com/knowttl/awx-axi/issues/47)) ([4abd2e9](https://github.com/knowttl/awx-axi/commit/4abd2e96b71c418eabe699b6ea2ce991a94f84b0))
+
+
+### Bug Fixes
+
+* migrate approval list to --include-decided ([#45](https://github.com/knowttl/awx-axi/issues/45)) ([028a72c](https://github.com/knowttl/awx-axi/commit/028a72c2ea02de87b71e680a11f075ac7126d68d))
+
 ## [0.1.6](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.5...awx-axi-v0.1.6) (2026-10-16)
 
 
