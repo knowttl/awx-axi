@@ -18,4 +18,5 @@ See [contributing](../CONTRIBUTING.md) for the offline validation boundary and c
 
 Config and stored credentials share the private-file module in `src/core/private-file.ts`.
 The README owns the platform permission behavior; tests use injected ACL operations for Windows permission checks.
+Native Windows config writes and `auth status` verification remain recommended before release; controller access requires separate authorization under the validation boundary in CONTRIBUTING.md.
 The published `axi-credential.schema.json` describes one profile and marks the token field with `x-secret: true`.

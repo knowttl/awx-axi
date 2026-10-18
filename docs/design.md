@@ -1089,21 +1089,11 @@ src/
     flags.ts            per-subcommand known-flag validation and the secret-name guard
     registry.ts         the domain contract types and the shared list/detail pipeline
   commands/             auth, home, setup
-  domains/
-    ad-hoc/              list, show, events, stdout
-    job/                list, show, stdout, events, hosts, cancel, relaunch, watch
-    template/           list, show, survey, launch
-    workflow/           list, show, survey, launch, nodes
-    approval/           list, show, approve, deny
-    project/            list, show, playbooks, updates, roles, sync
-    inventory/          list, show, groups, hosts, sources, updates, constructed-list, constructed-show
-    schedule/           list, show
-    execution-environment/ list, show
-  skill/                generated SKILL.md and the --check drift guard
+  domains/              registered domains and subcommands; see cli.ts and README
+  skill.ts              shipped skill source; see §13 for generated copies and drift checking
 test/
   fixtures/             recorded AWX 24.6.1 responses
   live/                 opt-in READ-ONLY live smoke suite, gated on AWX_AXI_LIVE=1 (§6.5)
-bench/                  the §14.3 comparison harness against the plain awx CLI
 ```
 
 The noun-to-domain map lives in `src/cli.ts` rather than in `core/registry.ts`, because every domain imports
@@ -1119,7 +1109,7 @@ Each domain exports exactly five things:
 2. Route descriptions: the path and query it needs, returned as data, not executed.
 3. Its TOON field schemas, including the `--fields` allowlist and which derived aggregates it wants.
 4. Its contextual-disclosure suggestions, as a match table.
-5. `mcpEquivalents: string[]`, the awx-mcp tool names it covers, which §14.2's drift tool consumes.
+5. `mcpEquivalents: string[]`, metadata naming the awx-mcp tools it covers; see §14.2 for tracking status.
 
 Everything else - auth, pagination, retry, error translation, redaction, TOON encoding, exit codes, help
 dispatch - lives in the core and is written once.
@@ -1128,12 +1118,10 @@ The consequences that matter:
 
 - Adding a domain is one directory under `src/domains/` plus one entry in `DOMAINS`.
   No core change, no cross-domain edit.
-  Growing from v1's 11 domains toward the §14 roadmap does not touch the core.
 - Because domains return route descriptions rather than executing them, every domain is unit-testable with no
   network and no mocking framework.
 - Because error translation is centralized, a new AWX error shape is fixed once for every command.
-- Because no domain declares a `DELETE` route and `registry.ts`'s route type does not include the verb, §2's
-  no-deletes property is enforced by the type system rather than by review.
+- Mutating plans use the transport safety gates described in §6.
 
 ### 10.3 The transport seam
 
@@ -1180,7 +1168,7 @@ That single interface is what makes §11 possible.
 
 Every test that gates changes runs offline against fixtures derived from the AWX 24.6.1 source.
 The optional live suite (§11.3) asserts response shape and is excluded from `npm test`.
-Local build, typecheck, lint, and tests are the required gate, as described in CONTRIBUTING.md.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the required local gate and environment isolation.
 
 ### 11.2 How offline testing works
 
@@ -1230,7 +1218,7 @@ quietly wrong:
 
 `test/live/` requires separate authorization and `AWX_AXI_LIVE=1`.
 Its harness sets `AWX_AXI_READ_ONLY=1` rather than trusting the ambient environment.
-It requires an externally supplied token in `AWX_AXI_TOKEN` and uses Bearer authentication for GET requests because minting a token would violate the read-only boundary.
+See §5.1 for the supplied-token authentication contract.
 Assertions cover response shape rather than controller-specific names or values.
 
 Write paths are verified through offline transports and synthetic fixtures.
@@ -1296,8 +1284,8 @@ Historical tool counts and staged read-coverage plans are preserved on `archive/
 
 ### 14.2 Retired coverage tracking proposal
 
-The proposed per-domain `mcpEquivalents` declarations, `npm run coverage` command, and coverage CI gate were never implemented and are retired.
-They are not release requirements.
+Per-domain `mcpEquivalents` metadata exists, but the proposed `npm run coverage` command and coverage CI gate were never implemented and are retired.
+Automated coverage tracking is not a release requirement.
 
 ### 14.3 Benchmark status
 
@@ -1367,8 +1355,8 @@ Mutation safety is verified offline; no comparative performance or live mutation
     `AWX_AXI_READ_ONLY=1` refuses mutations before issuing a request. §6.5.
 22. **There is no live write suite.**
     Write paths use offline fixtures. §11.3.
-23. **The optional live suite uses a supplied token with Bearer authentication.**
-    Minting a token is itself a POST and violates the suite's read-only contract. §5.1.
+23. **Live authentication must respect the read-only boundary.**
+    See §5.1 for the supplied-token contract.
 24. **The preflight safety claim is verified offline.**
     A live demonstration would require launching a playbook with deliberately incorrect scope.
 

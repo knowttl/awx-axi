@@ -360,7 +360,7 @@ export interface Domain {
   /** Noun-level `--help`. */
   readonly help: string;
   readonly subcommands: readonly SubcommandSpec[];
-  /** The awx-mcp tool names this domain covers, read by §14.2's coverage tool. */
+  /** The awx-mcp tool names this domain covers; tracking status is in §14.2. */
   readonly mcpEquivalents: readonly string[];
   /** Dispatch to a subcommand through the core pipeline. Issues no request itself. */
   run(args: string[], context: DomainContext): Promise<DomainResult>;

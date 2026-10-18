@@ -347,15 +347,8 @@ Legacy file paths have no transition period.
 
 ## Development & Testing
 
-Local build, typecheck, lint, and offline tests are the required validation gate; hosted PR test CI is not used.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and testing guidance.
-
-```sh
-npm run build
-npm run typecheck
-npm run lint
-npm test
-```
+Validation runs locally rather than through hosted PR test CI.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the required checks, setup, and offline testing guidance.
 
 ## License
 
