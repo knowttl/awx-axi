@@ -12,10 +12,10 @@ The README owns the replacement profile setup, login behavior and legacy environ
 After successful revocation or an upstream 404, the locked deletion removes the local entry only if its id, origin and token still match the revoked credential.
 A concurrent replacement is retained and reported in the success output.
 See the README for the required write gates.
-See [credential migration verification](credential-verification.md) for the offline boundary and release checks.
+See [contributing](../CONTRIBUTING.md) for the offline validation boundary and checks.
 
 ## Permission verification
 
 Config and stored credentials share the private-file module in `src/core/private-file.ts`.
-The README owns the platform permission behavior; the verification plan owns its test coverage and native Windows release recommendation.
+The README owns the platform permission behavior; tests use injected ACL operations for Windows permission checks.
 The published `axi-credential.schema.json` describes one profile and marks the token field with `x-secret: true`.

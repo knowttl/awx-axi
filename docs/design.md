@@ -1,8 +1,9 @@
 # awx-axi v1 design
 
-Status: design only.
-No command implementation ships with this document.
-Implementation lands as separate follow-up tasks against this design.
+Status: accepted v1 technical design, with commands implemented under `src/domains/`.
+The registry in `src/cli.ts` and README describe the current shipped surface.
+Unimplemented targets, including the home dashboard (§8.1), remain proposals.
+Historical process notes and audits are preserved on `archive/internal-docs`.
 
 Target controller: **Ansible AWX 24.6.1**.
 Every API behavior asserted here was read from `github.com/ansible/awx` at tag `24.6.1` and is cited to a file
@@ -14,8 +15,8 @@ Where a behavior is version-sensitive, §4 says so explicitly.
 `awx-axi` is an agent-facing CLI for operating an AWX controller from the shell, built to the AXI standard
 (the user-level `axi` skill).
 
-v1 buys depth in six domains an operator actually touches during an incident or a release, and declines
-breadth across AWX's configuration surface.
+The original v1 core focused on six operational domains.
+The shipped implementation also covers configuration and security resources listed in README.
 
 **v1 core:**
 
@@ -63,7 +64,7 @@ the boundary matters more than the heading's symmetry.
 - **Ad hoc command execution is in v1, and it is the sharpest command in the tool.**
   `ad-hoc launch` runs arbitrary modules against arbitrary hosts with no template review - with `shell` or
   `command` it is arbitrary remote execution across every host in the chosen inventory.
-  That reasoning once made it a non-goal; it was accepted into v1 by captain decision 2026-07-31 because the
+  That reasoning once made it a non-goal; it was accepted into v1 by maintainer decision because the
   inbox is useless without it, and the reasoning survives here because it is why the command deserves care.
   §7.9 documents it and §6.1 places it in a risk tier.
 - **No bulk job launch.**
@@ -82,7 +83,7 @@ It does not shell out to the `awx` CLI (awxkit).**
 
 Plain HTTP is supported only with explicit per-profile opt-in, as configured in [README configuration](../README.md#configuration).
 
-The commission permits either.
+Both backend approaches were considered.
 This section is the justification, and §3.4 is the honest statement of what that choice costs.
 
 ### 3.2 Why the REST API rather than wrapping awxkit
@@ -130,7 +131,7 @@ Four supporting reasons:
 
 ### 3.3 What "not reimplementing" means here
 
-The commission's hard requirement is not to reimplement auth, pagination, or job polling from scratch.
+The backend should reuse existing auth, pagination, and job-polling behavior where practical.
 awx-axi consumes AWX's own mechanisms rather than inventing parallel ones:
 
 - **Auth** is AWX's OAuth2 personal access token, minted by AWX at `POST /api/v2/tokens/` and presented as a
@@ -166,7 +167,7 @@ The one exception is `AWX_AXI_API_BASE_PATH` for the §4.2 gateway case, which d
 
 ### 4.1 Verified against 24.6.1
 
-The captain runs AWX 24.6.1.
+The compatibility anchor is AWX 24.6.1.
 Every fact in this document was read from that tag.
 The values that the design hard-codes or asserts:
 
@@ -290,7 +291,7 @@ not implement refresh.
 
 ### 5.3 No secret is ever a command-line argument
 
-This is a hard rule from the commission, and it is enforced structurally: **`core/flags.ts` rejects any flag
+This rule is enforced structurally: **`core/flags.ts` rejects any flag
 declaration whose name matches the secret pattern** (`token`, `password`, `secret`, `key`, `passphrase`) at
 module load, so a future contributor cannot add `--token` without the CLI failing its own unit test.
 
@@ -399,44 +400,15 @@ Redaction is applied on the way to stdout, and the redaction pass is unit-tested
 
 ### 6.5 The live-instance boundary: read-only, enforced in code
 
-The captain has provided credentials for a real AWX instance at `~/.config/awx-axi/live-smoke.env` (mode `0600`,
-carrying `CONTROLLER_HOST`, `CONTROLLER_USERNAME`, and `CONTROLLER_PASSWORD`).
+Ordinary validation is offline and uses synthetic fixtures.
+Live smoke tests, when separately authorized, are restricted to GET requests.
+Minting a token is a POST and is also forbidden under that boundary; §5.1 describes the basic-auth exception.
 
-**That account has full read and write permission, and the captain's order is that nothing on the instance may
-be modified.**
-This is a hard boundary on every live use by any worker, test, or benchmark, and it outranks every convenience
-in this document:
-
-- Live traffic is **read-only GETs only**.
-  No job or workflow launch, relaunch, or cancel.
-  No project sync.
-  No approve or deny.
-  No create, update, or delete of any object.
-  No `POST`, `PUT`, `PATCH`, or `DELETE` of any kind.
-- The one conceivable exception, minting a read-scoped token, is itself a `POST` and is therefore **also
-  forbidden** unless the captain is asked first through the main firstmate.
-  §5.1 records the consequence: the live suite uses basic auth for its GETs instead.
-- The credential file is **sourced, never read for its values**.
-  Nothing prints, copies, commits, or writes those values anywhere, including test fixtures, recorded
-  responses, logs, error messages, benchmark output, and reports.
-- The benchmark (§14.3) uses read-only tasks only.
-
-**A promise in a document is not an enforcement mechanism, so this is enforced at the transport seam.**
-`AWX_AXI_READ_ONLY=1` makes `AwxTransport` refuse every non-GET request before it is issued, raising a `READ_ONLY_VIOLATION` error naming the method and route that was attempted.
-Other safety gates `AWX_AXI_ALLOW_CONFIG_WRITES`, `AWX_AXI_ALLOW_DELETES`, and `AWX_AXI_ALLOW_SECURITY_WRITES` enforce similar boundaries for configuration, delete, and security-sensitive write requests.
-The check sits in `HttpTransport` itself, below every domain module and every command, so no command, subcommand, retry path, or future contributor can route around it.
-The live harness sets the variable unconditionally rather than accepting it from the ambient environment, and `AWX_AXI_READ_ONLY=1` is also available to operators who simply want a safe posture.
-
-This mirrors awx-mcp's `AWX_MCP_READ_ONLY`, with one difference: awx-mcp's read-only mode changes which tools it
-*exposes*, while awx-axi's blocks the request at the wire, which is the stronger guarantee and the one the
-captain's boundary needs.
-
-Two tests carry this rather than a comment: one asserting that every tier-1 write command raises
-`READ_ONLY_VIOLATION` and issues no request when the flag is set, and one asserting that the live suite's own
-harness sets it and that no `test/live/` case **issues** a non-GET request.
-The rule is about what reaches the wire, not about which command names appear: §11.3 covers the write commands
-with `--dry-run` against the live instance, and a dry run constructs a payload without issuing anything, so it
-satisfies this test rather than contradicting it.
+`AWX_AXI_READ_ONLY=1` makes `HttpTransport` refuse every non-GET request before issuing it, raising `READ_ONLY_VIOLATION`.
+The live harness sets this variable unconditionally.
+The configuration, delete, and security gates also remain enforced at the transport seam.
+Tests verify write refusal and that the live suite issues no non-GET requests.
+Credentials and controller-specific values must never appear in fixtures, logs, reports, or committed files.
 
 ## 7. Command surface
 
@@ -1207,20 +1179,11 @@ That single interface is what makes §11 possible.
 
 ## 11. Offline testability and the live-smoke seam
 
-### 11.1 The constraint, stated honestly
+### 11.1 Offline validation
 
-A real AWX instance and credentials **are** available (§6.5), but only under the hard read-only boundary, and
-the `awx` CLI is **not** installed on the development machine.
-So the shape of the constraint is not "no instance" but "no writes, ever, and no comparison arm yet".
-
-Every test that gates the build runs offline against fixtures derived from the 24.6.1 source.
-The live suite (§11.3) is read-only, asserts shape rather than content, and is deliberately not the thing the
-build depends on.
-This limitation belongs in the README, not buried here.
-
-The benchmark the commission asks for (§14.3) still needs the `awx` CLI installed to have anything to compare
-against, so it remains blocked on that one step; both of its arms are read-only tasks when it does run.
-Nothing here blocks the core work.
+Every test that gates changes runs offline against fixtures derived from the AWX 24.6.1 source.
+The optional live suite (§11.3) asserts response shape and is excluded from `npm test`.
+Local build, typecheck, lint, and tests are the required gate, as described in CONTRIBUTING.md.
 
 ### 11.2 How offline testing works
 
@@ -1268,48 +1231,15 @@ quietly wrong:
 
 ### 11.3 The live smoke suite is read-only, and there is no write suite
 
-A real controller is now available, under the hard read-only boundary in §6.5.
-That boundary shapes this suite more than anything else in the design.
+`test/live/` requires separate authorization and `AWX_AXI_LIVE=1`.
+Its harness sets `AWX_AXI_READ_ONLY=1` rather than trusting the ambient environment.
+It uses basic auth for GET requests because minting a PAT would violate the read-only boundary.
+Assertions cover response shape rather than controller-specific names or values.
 
-`test/live/` runs only when `AWX_AXI_LIVE=1`, and its harness **sets
-`AWX_AXI_READ_ONLY=1` itself** rather than trusting the environment to carry it.
-It uses `HttpTransport` with basic auth sourced from `~/.config/awx-axi/live-smoke.env`, because minting a token
-is a `POST` and therefore forbidden (§5.1).
-It asserts **shape, not content**: every command exits 0 or a documented code, stdout parses, and required keys
-are present.
-It never asserts on specific job, template, project, or host names, so it stays valid as the instance's contents
-change and so no instance detail is baked into the repository.
-
-**There is no write-path suite, at any gate, in v1.**
-An earlier draft of this design proposed one behind a second environment variable.
-It is removed rather than merely disabled: a gate that exists can be opened by a future contributor who has not
-read the captain's order, and the whole point of §6.5 is that the guarantee must not depend on someone
-remembering.
-The nine tier-1 write commands are therefore covered **only** by the offline suite, which is where they were
-already covered anyway (§11.2), and by `--dry-run` against the live instance, which issues no mutation and is a
-genuinely useful live check of name resolution and payload construction.
-
-Coverage cost, stated plainly: nothing in v1 will ever have executed a real launch, cancel, sync, or approval
-against a real controller.
-Those paths are exercised against recorded fixtures and reasoned from the 24.6.1 source, and that is the honest
-limit of the evidence behind them.
-When the captain wants that verified, it needs a disposable instance or an explicit, scoped authorization, and
-it is a separate conversation rather than a flag.
-
-The suite doubles as a fixture recorder, which is read-only and therefore permitted: `AWX_AXI_RECORD=1` writes
-GET responses into `test/fixtures/` with the controller hostname, organization names, inventory hostnames, and
-any `$encrypted$` field scrubbed.
-A recorder-specific test asserts that no recorded fixture contains the credential file's username or any value
-sourced from it, so the §6.5 no-values-anywhere rule is checked rather than trusted.
-
-The whole live validation is:
-
-```
-set -a; . ~/.config/awx-axi/live-smoke.env; set +a
-AWX_AXI_LIVE=1 npm run test:live
-```
-
-No `auth login`, and no exported credential values beyond that subshell.
+Write paths are verified through offline transports and synthetic fixtures.
+Those tests do not establish that a real controller has executed a launch, cancel, sync, or approval.
+There is no live write suite.
+Do not read local credentials or contact a real controller as part of ordinary validation.
 
 ## 12. Implementation stack
 
@@ -1341,14 +1271,14 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
 
 ## 13. Session integration and skill
 
-Per AXI §7, both integration paths ship, and both are opt-in through an explicit setup command:
+Per AXI §7, session hooks are opt-in through the setup command:
 
 ```
 awx-axi setup hooks
 ```
 
-The hook runs the home view (§8.1) at session start, so an agent opens every session already knowing what is
-running, what needs an approval decision, and what recently broke.
+The hook runs the home view at session start.
+The live dashboard described in §8.1 remains a design target.
 `installSessionStartHooks` from `axi-sdk-js` handles all three targets, including the path-repair and
 idempotency rules AXI §7 requires.
 
@@ -1356,94 +1286,27 @@ The hook has a failure mode worth designing for: an unreachable controller or an
 break session start.
 On any error the hook prints a single line naming the problem and the fix, and exits 0.
 
-The installable skill is generated from the same content the home view prints, with live state stripped, and
-`npm run skill:check` fails CI when the committed `SKILL.md` drifts from the generator.
+The installable skill is generated from `src/skill.ts`.
+`test/skill.test.ts`, included in `npm test`, compares both committed skill copies against that generator.
+Run `npm test` to include that check in the offline suite.
 
-## 14. Coverage against awx-mcp, and roadmap
+## 14. External comparison
 
-### 14.1 What v1 covers
+### 14.1 Current command coverage
 
-`lycorp-jp/awx-mcp` is the feature checklist.
-The inventory captured for this design enumerates **145 tools**; the commission cites 146.
-The design tracks the enumerated list and treats the one-tool delta as an open item for §14.2's tool to
-reconcile against the upstream repository when it is built, rather than silently picking a number.
+The registered domains in `src/cli.ts` and the README command table own the shipped inventory.
+Historical tool counts and staged read-coverage plans are preserved on `archive/internal-docs`.
 
-v1 implements **56 of those tools** across 11 domains:
+### 14.2 Retired coverage tracking proposal
 
-| awx-mcp group | Tools | v1 covers | awx-axi commands |
-| --- | --- | --- | --- |
-| Jobs | 7 | 7 | `job list/show/stdout/events/hosts/cancel/relaunch` |
-| Job Templates | 13 | 4 | `template list/show/survey/launch` |
-| Workflow Templates & Nodes | 17 | 4 | `workflow list/show/survey/launch` |
-| Workflow Jobs & Approvals | 11 | 9 | `job list/show/cancel/relaunch`, `workflow nodes`, `approval list/show/approve/deny` |
-| Schedules | 5 | 2 | `schedule list/show` |
-| Execution Environments | 3 | 3 | `execution-environment list/show` |
-| Ad Hoc | 4 | 4 | `ad-hoc list/show/events/stdout` |
-| Projects | 11 | 9 | `project list/show/sync/playbooks/updates/roles`, `job stdout/cancel/show` |
-| Inventories | 8 | 8 | `inventory list/show/groups/hosts/sources/updates/constructed-list/constructed-show` |
-| System Jobs | 6 | 6 | `system-job list/show/events/notifications`, `system-job-template list/show` |
+The proposed per-domain `mcpEquivalents` declarations, `npm run coverage` command, and coverage CI gate were never implemented and are retired.
+They are not release requirements.
 
-The unified-job collapse (§7.2) is why the Projects row reaches 9 with only 6 project commands: project-update
-list, get, cancel, and stdout are served by the `job` noun.
-The same mechanism means `job watch`, which has no awx-mcp equivalent at all, works for every kind of run.
+### 14.3 Benchmark status
 
-### 14.2 Tracking the rest
-
-The remaining 89 tools (145 total against v1's 56) are roadmap, not omissions, and they are tracked in code
-rather than in prose.
-The groups enumerated below account for the largest missing surfaces; the balance is an ungrouped long tail that the
-coverage diff reports rather than this document enumerating it.
-
-Each domain declares `mcpEquivalents`.
-A `npm run coverage` script diffs the union of those declarations against a committed snapshot of the awx-mcp
-tool list and prints the delta in TOON.
-CI runs it in `--check` mode so a new domain that forgets its declaration fails the build, and a refreshed
-upstream snapshot shows up as a reviewable diff rather than as silent drift.
-
-Roadmap order, by what unblocks the most operator work per domain added:
-
-1. **Inventories, hosts, groups** (26 tools) - read first.
-   `job hosts` already answers "which host failed"; the follow-up is "what else is in that group".
-2. **Ad hoc commands** (4) - read now, execute only behind a §6-style gate.
-3. **Organizations, teams, RBAC** (17) - reads only; grants stay out.
-4. **Instances, notifications, labels**.
-5. **System jobs and activity stream** (9+) - `job` already reads system jobs; the activity stream is the audit
-   surface.
-6. **Credentials and users** (12) - reads before writes, and writes only under an explicit captain decision.
-
-### 14.3 Where awx-axi should win, and where awx-mcp will
-
-The commission asks for a benchmark against the plain `awx` CLI on success rate, token cost, duration, and
-turns, in the shape the AXI repo benchmarks `gh-axi` against `gh`.
-`bench/` holds that harness, and it needs a live controller, so it lands after the core commands work.
-
-**Every benchmark task is a read-only question, under §6.5.**
-The harness sets `AWX_AXI_READ_ONLY=1` for the awx-axi side, and the comparison tasks given to the plain `awx`
-CLI are restricted to read verbs by the same rule, since a benchmark that mutated the controller through the
-comparison arm would breach the boundary just as surely as one that mutated it through ours.
-That constrains what the benchmark can claim, and the "fewer wrong launches" hypothesis below is where it bites.
-
-The hypotheses it should test, stated in advance so the benchmark cannot be tuned to flatter the result:
-
-- **Fewer turns on the common questions.**
-  "What broke in the last two hours" is one `job list --type all --failed --since 2h` call, against four list
-  operations plus a client-side merge.
-- **Fewer tokens per answer.**
-  4-field TOON rows against full JSON serializer payloads, on a surface where AWX offers no sparse fieldsets so
-  every alternative pays full payload cost at the model.
-- **Fewer wrong launches - measured offline, not live.**
-  The §7.5 preflight is the design's one measurable safety claim, and the natural way to demonstrate it is to
-  pass `--limit` to a template that does not prompt for it and watch awx-axi refuse while everything else
-  launches with the wrong scope.
-  That experiment **launches a real playbook**, so it cannot run against the captain's instance.
-  It moves to the offline suite as a paired fixture case, and the benchmark reports it as offline evidence
-  rather than quietly dropping the claim or quietly running it live.
-- **Where awx-mcp stays ahead.**
-  It has 145 tools to v1's 37, so any task touching inventories, credentials, or RBAC is out of
-  awx-axi's reach entirely.
-  It also has MCP's form-mode elicitation for sensitive input, which is a genuinely better secret channel than
-  anything a CLI can offer; §6.3's gated file is a weaker substitute, and the benchmark should say so rather
-  than skip the comparison.
+No comparative benchmark harness ships in this repository.
+Any future benchmark requires a separately scoped proposal and must use read-only tasks for live comparisons.
+Mutation safety is verified offline; no comparative performance or live mutation claim follows from those tests.
 
 ## 15. Deliberate judgment calls
 
@@ -1489,8 +1352,8 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
     Silently picking one of two production templates is the exact failure AXI §6 exists to prevent.
 14. **`count_disabled` is never sent.**
     It would drop the total count that AXI §4's `count: N of M total` line depends on.
-15. **No deletes, enforced by the route type rather than by review.**
-    §2 and §10.2.
+15. **Deletes require confirmation and the delete gate.**
+    §2 and §6 describe the shipped mutation boundary.
 16. **Secrets cannot be flags, enforced by a registration-time guard.**
     A name-pattern check in `core/flags.ts` that fails its own unit test if someone adds `--token`. §5.3.
 17. **`job watch` has a hard default timeout of 600s and exits with the job's outcome.**
@@ -1501,24 +1364,17 @@ The hypotheses it should test, stated in advance so the benchmark cannot be tune
     clean. §6.4.
 19. **Aggregates come from filtered counts, not the dashboard endpoint.**
     `/api/v2/dashboard/` is deprecated at 24.6.1, and awx-mcp's stats tool targets it. §4.2.
-20. **The benchmark's hypotheses are written before the benchmark runs.**
-    Including the two places awx-mcp is expected to stay ahead. §14.3.
-21. **The live instance's read-only boundary is enforced at the transport, not promised in prose.**
-    The captain's instance has full write permission and must not be modified, so `AWX_AXI_READ_ONLY=1` makes the
-    single mutating function on the seam refuse before issuing anything.
-    A document that only *says* read-only is one forgetful contributor away from being wrong. §6.5.
-22. **The write-path live suite is deleted, not gated.**
-    An earlier draft put it behind a second environment variable.
-    A gate that exists can be opened by someone who never read the order, so the suite is gone and the coverage
-    cost is stated openly instead. §11.3.
-23. **The live suite uses basic auth, inverting §5.1's own rule.**
-    Minting a token is a `POST`, so the tool's preferred credential path is itself forbidden on this instance.
-    The exception is confined to `test/live/` and is the reason the read-only check lives in the transport rather
-    than the auth layer. §5.1, §6.5.
-24. **The preflight safety claim is demonstrated offline rather than dropped.**
-    Proving it live would require launching a real playbook with a deliberately wrong scope.
-    The benchmark reports it as offline evidence and says so, rather than quietly omitting the strongest claim in
-    the design. §14.3.
+20. **Comparative performance remains unmeasured.**
+    No benchmark harness ships. §14.3.
+21. **Read-only mode is enforced at the transport.**
+    `AWX_AXI_READ_ONLY=1` refuses mutations before issuing a request. §6.5.
+22. **There is no live write suite.**
+    Write paths use offline fixtures. §11.3.
+23. **The optional live suite uses basic auth.**
+    Minting a token is itself a POST and violates the suite's read-only contract. §5.1.
+24. **The preflight safety claim is verified offline.**
+    A live demonstration would require launching a playbook with deliberately incorrect scope.
+
 25. **Plain-HTTP controller support was accepted by maintainer decision on 2026-10-12.**
     This is an approved awx-axi exception to the [AXI credential standard](https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md), because some controllers use unencrypted HTTP.
     The consent contract is owned by [README configuration](../README.md#configuration); the transport implementation is described in §12.

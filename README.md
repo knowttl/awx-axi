@@ -2,7 +2,6 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/awx-axi"><img alt="npm" src="https://img.shields.io/npm/v/awx-axi?style=flat-square" /></a>
-  <img alt="CI" src="https://img.shields.io/badge/CI-not%20configured-lightgrey?style=flat-square" />
   <a href="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square"><img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square" /></a>
   <a href="https://github.com/kunchenguid/axi"><img alt="AXI" src="https://img.shields.io/badge/AXI-Agent%20eXperience%20Interface-green?style=flat-square" /></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/knowttl/awx-axi?style=flat-square" /></a>
@@ -342,12 +341,14 @@ When only a legacy token exists, `CONFIG_MOVED` names the new path and profile f
 
 Boolean environment settings accept `1`, `true`, `0` or `false`, case-insensitively; other values fail closed.
 For one minor release, `CONTROLLER_HOST`, `CONTROLLER_OAUTH_TOKEN`, `CONTROLLER_USERNAME`, `CONTROLLER_PASSWORD` and `CONTROLLER_VERIFY_SSL` remain deprecated aliases with stderr notices.
+These aliases will be removed after that one-minor-release transition; migrate to the `AWX_AXI_*` names now.
 The new names win when both are set.
 Legacy file paths have no transition period.
 
 ## Development & Testing
 
-Run the standard build and test pipeline.
+Local build, typecheck, lint, and offline tests are the required validation gate; hosted PR test CI is not used.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and testing guidance.
 
 ```sh
 npm run build
