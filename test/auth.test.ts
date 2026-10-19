@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, sym
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { decode } from "@toon-format/toon";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBasicAuthTransport, createTransport, resolveController, resolveCredential } from "../src/core/auth.js";
@@ -499,6 +500,20 @@ describe("authentication through the CLI", () => {
     expect(run.stdout).toContain(code);
     expect(run.transport.requests).toHaveLength(0);
     expect(resolveCredential(env)?.token).toBe("bound-token");
+  });
+
+  it.each([
+    { results: [{ username: `echo ${commandSecret}` }] },
+    { results: [{ username: `echo ${JSON.stringify(commandSecret).slice(1, -1)}` }] },
+    { results: [{ username: `echo ${encodeURIComponent(commandSecret)}` }] },
+    { username: `echo ${JSON.stringify(commandSecret).slice(1, -1)}` },
+  ])("redacts credential representations before rendering auth identity: %j", async (body) => {
+    const env = { ...environment(), PRODUCTION_PAT: commandSecret };
+    configure(env, { production });
+    const run = await runCli(["auth", "status"], { env, script: [{ status: 200, body }] });
+    expect(run.exitCode).toBe(0);
+    expect(decode(run.stdout)).toMatchObject({ auth: { user: "echo ***" } });
+    expect(run.transport.requests).toMatchObject([{ method: "GET", route: "me/" }]);
   });
 
   it("reports the selected profile, source and cheap identity", async () => {
