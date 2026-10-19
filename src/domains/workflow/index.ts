@@ -7,6 +7,7 @@
  * for the full graph.
  */
 import { parse as parseYaml } from "yaml";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
@@ -75,39 +76,22 @@ function toRoleRow(raw: unknown): Row {
 }
 
 function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "workflow_job_templates/",
     noun: "workflow job template",
     listCommand: "workflow list",
     command: "workflow object-roles",
   });
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "object-roles");
   const paged = yield* readPaged(`workflow_job_templates/${id}/object_roles/`, {}, limit);
   return listOutput({
     label: "object_roles",
     rows: paged.rows.map(toRoleRow),
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 object roles found for workflow",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });
-}
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`workflow ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi workflow ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
 }
 
 function workflowNodeId(raw: string, argument = "workflow node id"): number {
@@ -263,7 +247,7 @@ function notificationAssociationPlan(remove: boolean) {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -277,6 +261,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 workflow job templates found",
     help: [
       "Run `awx-axi workflow show <id|name>` for template detail",
@@ -800,7 +785,7 @@ function toEdgeNode(raw: unknown): RecordValue {
 }
 
 function* templateNodesPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, NODES_LIMIT, "template-nodes");
+  const limit = pageBudget(input.flags, NODES_LIMIT);
   const workflow = yield* resolveId(input.args[0] ?? "", {
     listRoute: "workflow_job_templates/",
     noun: "workflow job template",
@@ -817,6 +802,7 @@ function* templateNodesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "workflow_template_nodes",
     rows: paged.rows.map(toTemplateNodeRow),
     count: paged.count,
+    pagination: paged.pagination,
     empty: `0 workflow template nodes found for workflow template ${workflow}`,
     help: [
       "Run `awx-axi workflow template-node <id>` for node detail and edge targets",
@@ -827,7 +813,7 @@ function* templateNodesPlan(input: SubcommandInput): Plan<DomainResult> {
 
 function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
   const id = workflowNodeId(input.args[0] ?? "", "workflow template node id");
-  const limit = positiveLimit(input.flags.limit, NODES_LIMIT, "template-node");
+  const limit = pageBudget(input.flags, NODES_LIMIT).maxRows;
   const detail = yield* read(`workflow_job_template_nodes/${id}/`);
   if (detail.status !== 200) {
     throw errorForResponse(detail, { subject: `workflow template node ${id}` });
@@ -906,6 +892,7 @@ function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* nodesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, NODES_LIMIT);
   const runIdArg = input.args[0] ?? "";
   const runId = yield* resolveId(runIdArg, {
     listRoute: "workflow_jobs/",
@@ -914,7 +901,7 @@ function* nodesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "workflow nodes",
   });
 
-  const paged = yield* readPaged(`workflow_jobs/${runId}/workflow_nodes/`, {}, NODES_LIMIT);
+  const paged = yield* readPaged(`workflow_jobs/${runId}/workflow_nodes/`, {}, limit);
   const rows = paged.rows.map((r) => {
     const rec = (r ?? {}) as Record<string, unknown>;
     const summary = (rec.summary_fields ?? {}) as Record<string, unknown>;
@@ -936,6 +923,7 @@ function* nodesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "nodes",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 workflow nodes found",
     help: [
       `Run \`awx-axi job show ${runId}\` for workflow run detail`,
@@ -1126,8 +1114,8 @@ export const workflowDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "object-roles",
-      help: "awx-axi workflow object-roles <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi workflow object-roles <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: { label: "object_roles", defaultFields: ["id", "name", "description", "type"], fieldAllowlist: [] },
       suggestions: [],
@@ -1230,10 +1218,10 @@ export const workflowDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi workflow list [--search <s>] [--limit <n>]",
+      help: "awx-axi workflow list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search workflow templates", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
@@ -1280,8 +1268,8 @@ export const workflowDomain: Domain = defineDomain({
     },
     {
       name: "nodes",
-      help: "awx-axi workflow nodes <run-id>",
-      flags: [],
+      help: "awx-axi workflow nodes <run-id>" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<run-id>"], required: 1 },
       schema: { label: "nodes", defaultFields: ["id", "template", "job", "status"], fieldAllowlist: [] },
       suggestions: [],
@@ -1298,9 +1286,10 @@ export const workflowDomain: Domain = defineDomain({
         "Examples:",
         "  awx-axi workflow template-nodes 10",
         "  awx-axi workflow template-nodes \"Release pipeline\" --limit 50",
+        PAGINATION_HELP,
       ].join("\n"),
       flags: [
-        { name: "limit", description: "nodes to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {

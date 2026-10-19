@@ -257,11 +257,22 @@ awx-axi system-job-template launch cleanup-jobs
 
 `approval list` defaults to pending approvals and at most 20 rows.
 Use `awx-axi approval list --include-decided --limit 50` to include approved or denied approvals within that row limit.
-The former `approval list --all` spelling now fails with exit 2 and a migration hint before any request.
-Replace it with `--include-decided`, keeping any `--limit` value.
+Use `--include-decided` to include decided approvals; `--all` now controls pagination only and preserves the pending-only default.
 Renamed flags normally retain a deprecated alias for one minor release.
-This collision is an explicit exception: `--all` is reserved for future pagination, so retaining the old runtime alias would make its meaning ambiguous.
-Pagination via `approval list --all` is not enabled during this transition.
+The former meaning of `approval list --all` is replaced by `--include-decided`.
+
+Collection reads share a hard ceiling of 1,000 rows for a positive integer `--limit` and a maximum of 100 pages per collection.
+`job list`, `job events`, `job hosts`, `approval list`, `workflow list`, `workflow nodes`, `workflow template-nodes`, and `workflow object-roles` also support `--all [--max-rows <n>]`.
+`--all` walks pages up to a default and maximum of 10,000 rows; `--max-rows` selects a smaller positive budget and requires `--all`.
+Combining `--all` and `--limit` fails with exit 2 before a request.
+For example, use `awx-axi job list --all --max-rows 5000` or `awx-axi approval list --include-decided --all`.
+Existing default row limits stay unchanged.
+
+These collections report `pagination` with the row/page budgets, pages read, stop reason, truncation, and the server's next page link while preserving the server's total count.
+`stop: complete` means the server supplied no further page; row/page budget stops and empty or repeated continuation pages disclose incomplete results.
+`next` is the server's next page, not a command or a lossless cursor: when `partial_page: true`, the row budget cut a page and following `next` would skip undisplayed rows from that page.
+Re-run the original filtered command with a larger budget to include those rows.
+Launch commands still use `--limit` as an Ansible host pattern.
 
 - List views project to a small schema by default.
 - `--fields` lets callers ask for additional keys when needed.

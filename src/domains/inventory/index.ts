@@ -616,7 +616,7 @@ function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
     listQuery = parsed.query;
   }
 
-  const paged: PagedResult = {
+  const paged: Pick<PagedResult, "rows" | "count"> = {
     rows: rows.slice(0, limit),
     count,
   };

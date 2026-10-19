@@ -8,6 +8,7 @@
  */
 import { AxiError } from "axi-sdk-js";
 import { booleanEnv } from "../../core/profiles.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { parseExtraVars, readPasswordsFile } from "../template/index.js";
@@ -130,24 +131,6 @@ function parseSince(since: string): string {
   return since;
 }
 
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`job ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi job ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
-
 const LIST_SCHEMA = {
   label: "jobs",
   defaultFields: ["id", "name", "status", "finished"],
@@ -184,7 +167,7 @@ function toJobRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   const typeFlag = typeof input.flags.type === "string" ? input.flags.type : undefined;
@@ -229,6 +212,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: statusFlag !== undefined
       ? `0 ${statusFlag} jobs found`
       : input.flags.failed === true
@@ -406,7 +390,7 @@ function* stdoutPlan(input: SubcommandInput): Plan<DomainResult> {
 
 function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = parseJobId(input.args[0], "events");
-  const limit = positiveLimit(input.flags.limit, EVENTS_LIMIT, "events");
+  const limit = pageBudget(input.flags, EVENTS_LIMIT);
 
   const query: Record<string, string | number | boolean> = {};
 
@@ -437,6 +421,7 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "events",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 events found",
     help: [
       `Run \`awx-axi job stdout ${id}\` for the full output`,
@@ -446,7 +431,7 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
 
 function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = parseJobId(input.args[0], "hosts");
-  const paged = yield* readPaged(`jobs/${id}/job_host_summaries/`, {}, 200);
+  const paged = yield* readPaged(`jobs/${id}/job_host_summaries/`, {}, pageBudget(input.flags, 200));
 
   const rows = paged.rows.map((r) => {
     const rec = (r ?? {}) as Record<string, unknown>;
@@ -466,6 +451,7 @@ function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "hosts",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 host summaries found",
   });
 }
@@ -789,14 +775,14 @@ export const jobDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "list",
-      help: "awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]",
+      help: "awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]" + PAGINATION_HELP,
       flags: [
         { name: "status", description: "filter by status", takesValue: true },
         { name: "type", description: "job type (job, workflow, project-update, all)", takesValue: true },
         { name: "template", description: "filter by template", takesValue: true },
         { name: "failed", description: "filter to failed jobs", takesValue: false },
         { name: "since", description: "filter jobs since relative time (e.g. 2h)", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
@@ -837,12 +823,12 @@ export const jobDomain: Domain = defineDomain({
     },
     {
       name: "events",
-      help: "awx-axi job events <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
+      help: "awx-axi job events <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "failed", description: "only failed events", takesValue: false },
         { name: "host", description: "filter by host name", takesValue: true },
         { name: "task", description: "filter by task name", takesValue: true },
-        { name: "limit", description: "max events", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "type", description: "concrete job type", takesValue: true },
       ],
       positionals: { names: ["<id>"], required: 1 },
@@ -852,8 +838,8 @@ export const jobDomain: Domain = defineDomain({
     },
     {
       name: "hosts",
-      help: "awx-axi job hosts <id>",
-      flags: [],
+      help: "awx-axi job hosts <id>" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id>"], required: 1 },
       schema: { label: "hosts", defaultFields: ["host", "ok", "changed", "failed", "unreachable"], fieldAllowlist: [] },
       suggestions: [],

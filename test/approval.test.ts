@@ -46,17 +46,13 @@ describe("approval list (design.md §7.7)", () => {
   });
 
   it.each([
-    ["--all"],
     ["--all", "--limit", "50"],
-    ["--all", "--include-decided"],
     ["--all=true"],
-  ])("rejects old usage %j with migration guidance before any read", async (...flags) => {
+  ])("rejects incompatible pagination usage %j before any read", async (...flags) => {
     const run = await runCli(["approval", "list", ...flags]);
 
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toContain("code: VALIDATION_ERROR");
-    expect(run.stdout).toContain("--all was renamed to --include-decided");
-    expect(run.stdout).toContain("reserved for pagination");
     expect(run.transport.requests).toHaveLength(0);
   });
 

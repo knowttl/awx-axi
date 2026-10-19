@@ -9,6 +9,7 @@
 import { encode } from "@toon-format/toon";
 
 import { redact, redactValue } from "./redact.js";
+import type { PagedResult } from "./transport.js";
 
 /** Row values after projection: whatever the encoder can put in a cell. */
 export type Row = Record<string, string | number | boolean | null>;
@@ -25,6 +26,7 @@ export interface ListOutputOptions {
    */
   readonly empty: string;
   readonly help?: readonly string[];
+  readonly pagination?: PagedResult["pagination"];
 }
 
 /**
@@ -34,6 +36,15 @@ export interface ListOutputOptions {
  * there are (AXI §4).
  */
 export function listOutput(options: ListOutputOptions): Record<string, unknown> {
+  if (options.pagination !== undefined) {
+    const output: Record<string, unknown> = {};
+    if (options.count !== undefined) output.count = countLine(options.rows.length, options.count);
+    output.pagination = options.pagination;
+    output[options.label] = options.rows.length === 0
+      ? options.pagination.truncated ? "0 rows returned; collection is incomplete" : options.empty
+      : options.rows.map(redactValue);
+    return withHelp(output, options.help);
+  }
   if (options.rows.length === 0) {
     return withHelp({ [options.label]: options.empty }, options.help);
   }

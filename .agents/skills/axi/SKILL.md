@@ -40,10 +40,12 @@ Use `organization`, `credential`, `execution-environment`, `notification-templat
 Common reads include `schedule list`, `execution-environment list`, `organization list`, `credential show <id|name>`, `user show <id|name>`, `system-job-template show <id|name>`, and `system-job notifications`.
 `approval list` defaults to pending approvals, limited to 20 rows.
 Use `approval list --include-decided --limit 50` to include approved or denied approvals within that row limit.
-Replace the former `approval list --all` spelling with `--include-decided`, keeping any `--limit` value.
-Old `--all` invocations fail with exit 2 and a migration hint before any request during this transition.
-Renamed flags normally retain a deprecated alias for one minor release; this collision is an explicit exception because `--all` is reserved for future pagination and cannot retain its old runtime meaning.
-Pagination via `approval list --all` is not enabled during this transition.
+The former meaning of `approval list --all` is replaced by `--include-decided`.
+`--all` now walks pages while preserving the pending-only default; combine it with `--include-decided` to include decided approvals.
+Job list/events/hosts, approval list, and workflow list/nodes/template-nodes/object-roles accept `--all [--max-rows <n>]` (default and maximum 10000 rows, at most 100 pages per collection).
+`--limit` accepts 1-1000 rows and conflicts with `--all`; `--max-rows` requires `--all`.
+These collections disclose pagination budgets, stop reason, truncation, and the server's next page while preserving server counts.
+If `partial_page` is true, following `next` skips undisplayed rows from the current page; rerun the filtered command with a larger budget.
 
 ## Safety and secrets
 

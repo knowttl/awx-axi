@@ -7,6 +7,7 @@
  * `mcpEquivalents` - and the core owns everything else.
  */
 import { validationError } from "./errors.js";
+import type { PageBudget } from "./paginate.js";
 import { registerSecret } from "./redact.js";
 import {
   assertNoSecretFlags,
@@ -109,7 +110,7 @@ export type AwxRequest =
       readonly kind: "readPaged";
       readonly route: RouteDescription;
       /** Rows the caller wants, not a page size (§10.3). */
-      readonly limit: number;
+      readonly limit: number | PageBudget;
     }
   | { readonly kind: "readText"; readonly route: RouteDescription }
   | {
@@ -176,7 +177,7 @@ export function* read(path: string, query?: Query): Plan<AwxResponse> {
 export function* readPaged(
   path: string,
   query: Query,
-  limit: number,
+  limit: number | PageBudget,
 ): Plan<PagedResult> {
   assertBaseRelative(path);
   const result = yield { kind: "readPaged", route: { path, query }, limit };

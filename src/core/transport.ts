@@ -7,7 +7,7 @@
 import { AxiError } from "axi-sdk-js";
 
 import { networkError } from "./errors.js";
-import { walkPages } from "./paginate.js";
+import { walkPages, type PageBudget } from "./paginate.js";
 import { booleanEnv, writeLogPath } from "./profiles.js";
 import { PrivateFiles } from "./private-file.js";
 import { redact } from "./redact.js";
@@ -29,6 +29,16 @@ export interface PagedResult {
   readonly rows: readonly unknown[];
   /** AWX's `count`. Never inferred from the rows returned (§4.3 case 2). */
   readonly count: number | undefined;
+  readonly pagination: {
+    readonly max_rows: number;
+    readonly max_pages: number;
+    readonly pages: number;
+    readonly stop: "complete" | "row-budget" | "page-budget" | "empty-page" | "repeated-page";
+    readonly truncated: boolean;
+    /** The server's next page, not a lossless cursor when partial_page is true. */
+    readonly next: string | null;
+    readonly partial_page: boolean;
+  };
 }
 
 /** A stdout read. The oversized-output apology is a typed condition (§4.3 case 4). */
@@ -56,7 +66,7 @@ export interface AwxTransport {
   patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
   /** Takes the caller's row limit, not a page size; walks `next` itself. */
-  getPaged(route: string, query: Query, limit: number): Promise<PagedResult>;
+  getPaged(route: string, query: Query, limit: number | PageBudget): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 
@@ -292,7 +302,7 @@ export class HttpTransport implements AwxTransport {
   async getPaged(
     route: string,
     query: Query,
-    limit: number,
+    limit: number | PageBudget,
   ): Promise<PagedResult> {
     return walkPages((page, pageQuery) => this.get(page, pageQuery), route, query, limit);
   }
@@ -448,7 +458,7 @@ export class RecordedTransport implements AwxTransport {
   async getPaged(
     route: string,
     query: Query,
-    limit: number,
+    limit: number | PageBudget,
   ): Promise<PagedResult> {
     return walkPages((page, pageQuery) => this.get(page, pageQuery), route, query, limit);
   }
