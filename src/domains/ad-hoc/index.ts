@@ -1,6 +1,7 @@
 /**
  * The `ad-hoc` domain: inspect and launch ad hoc command runs (design.md §7.2).
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { AxiError } from "axi-sdk-js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
@@ -28,29 +29,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "status", "created", "started", "finished"],
   fieldAllowlist: ["inventory", "credential", "elapsed", "type", "arguments"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(`--limit needs a value for \`ad-hoc ${subcommand}\`, got --limit`, [
-      `Run \`awx-axi ad-hoc ${subcommand} --limit ${fallback}\``,
-    ]);
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`ad-hoc ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi ad-hoc ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function parseAdHocId(raw: string | undefined, command: string): number {
   if (raw === undefined || !/^\d+$/.test(raw)) {
@@ -97,7 +75,7 @@ function toEventRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -328,8 +306,8 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, EVENTS_LIMIT);
   const id = parseAdHocId(input.args[0], "events");
-  const limit = positiveLimit(input.flags.limit, EVENTS_LIMIT, "events");
 
   const query: Record<string, string | number | boolean> = {};
   if (typeof input.flags.host === "string") {
@@ -399,10 +377,10 @@ export const adHocDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi ad-hoc list [--search <s>] [--limit <n>]",
+      help: "awx-axi ad-hoc list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search ad-hoc commands", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
@@ -421,11 +399,11 @@ export const adHocDomain: Domain = defineDomain({
     },
     {
       name: "events",
-      help: "awx-axi ad-hoc events <id> [--host <h>] [--task <t>] [--limit <n>]",
+      help: "awx-axi ad-hoc events <id> [--host <h>] [--task <t>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "host", description: "filter by host name", takesValue: true },
         { name: "task", description: "filter by task name", takesValue: true },
-        { name: "limit", description: "max events", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id>"], required: 1 },
       schema: { label: "events", defaultFields: ["id", "event", "host", "task", "failed"], fieldAllowlist: [] },

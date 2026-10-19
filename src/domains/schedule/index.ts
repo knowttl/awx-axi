@@ -1,6 +1,7 @@
 /**
  * The `schedule` domain: scheduled unified-job runs (design.md §7.9).
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { readFileSync } from "node:fs";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
@@ -65,24 +66,6 @@ function toScheduleRow(raw: unknown): Row {
           : null,
     next_run: typeof record.next_run === "string" ? record.next_run : null,
   };
-}
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`schedule ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi schedule ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
 }
 
 function parseTemplateId(raw: string | undefined): number {
@@ -285,7 +268,7 @@ function schedulePreview(body: Record<string, unknown>): string {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
 
   if (input.flags.enabled !== undefined && input.flags.disabled !== undefined) {
     throw validationError("choose one of --enabled or --disabled, not both");
@@ -651,7 +634,7 @@ export const scheduleDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi schedule list [--search <s>] [--template <id>] [--enabled|--disabled] [--limit <n>]",
+      help: "awx-axi schedule list [--search <s>] [--template <id>] [--enabled|--disabled] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search schedules", takesValue: true },
         {
@@ -669,7 +652,7 @@ export const scheduleDomain: Domain = defineDomain({
           description: "show only disabled schedules",
           takesValue: false,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

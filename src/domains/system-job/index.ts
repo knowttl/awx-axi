@@ -1,6 +1,7 @@
 /**
  * The `system-job` domain: read-only access to system job runs.
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
@@ -37,29 +38,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "template", "status", "started", "finished"],
   fieldAllowlist: ["type", "created", "elapsed", "stdout", "created_by", "modified"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(`--limit needs a value for \`system-job ${subcommand}\`, got --limit`, [
-      `Run \`awx-axi system-job ${subcommand} --limit ${fallback}\``,
-    ]);
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`system-job ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi system-job ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function parseSystemJobId(raw: string | undefined, command: string): number {
   if (raw === undefined || !/^\d+$/.test(raw)) {
@@ -118,7 +96,7 @@ function parseTemplateId(raw: string | undefined, command: string): number {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -219,8 +197,8 @@ function toEventRow(raw: unknown): Row {
 }
 
 function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, EVENTS_LIMIT);
   const id = yield* resolveSystemJobId(input.args[0], "events");
-  const limit = positiveLimit(input.flags.limit, EVENTS_LIMIT, "events");
 
   const query: Record<string, string | number | boolean> = {};
 
@@ -263,8 +241,8 @@ function toNotificationRow(raw: unknown): Row {
 }
 
 function* notificationsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, RELATION_LIMIT);
   const id = yield* resolveSystemJobId(input.args[0], "notifications");
-  const limit = positiveLimit(input.flags.limit, RELATION_LIMIT, "notifications");
 
   const paged = yield* readPaged(`system_jobs/${id}/notifications/`, {}, limit);
   const rows = paged.rows.map(toNotificationRow);
@@ -306,12 +284,12 @@ export const systemJobDomain: Domain = defineDomain({
     {
       name: "list",
       help:
-        "awx-axi system-job list [--search <s>] [--template <id>] [--status <s>] [--limit <n>]",
+        "awx-axi system-job list [--search <s>] [--template <id>] [--status <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search system jobs", takesValue: true },
         { name: "template", description: "filter by template", takesValue: true },
         { name: "status", description: "filter by status", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
@@ -343,12 +321,12 @@ export const systemJobDomain: Domain = defineDomain({
     },
     {
       name: "events",
-      help: "awx-axi system-job events <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
+      help: "awx-axi system-job events <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "failed", description: "only failed events", takesValue: false },
         { name: "host", description: "filter by host", takesValue: true },
         { name: "task", description: "filter by task", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id>"], required: 1 },
       schema: { label: "events", defaultFields: [], fieldAllowlist: [] },
@@ -357,9 +335,9 @@ export const systemJobDomain: Domain = defineDomain({
     },
     {
       name: "notifications",
-      help: "awx-axi system-job notifications <id> [--limit <n>]",
+      help: "awx-axi system-job notifications <id> [--limit <n>]" + PAGINATION_HELP,
       flags: [
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id>"], required: 1 },
       schema: { label: "notifications", defaultFields: [], fieldAllowlist: [] },

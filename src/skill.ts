@@ -58,12 +58,7 @@ Common reads include \`schedule list\`, \`execution-environment list\`, \`organi
 Use \`approval list --include-decided --limit 50\` to include approved or denied approvals within that row limit.
 The former meaning of \`approval list --all\` is replaced by \`--include-decided\`.
 \`--all\` now walks pages while preserving the pending-only default; combine it with \`--include-decided\` to include decided approvals.
-Job list/events/hosts, approval list, and workflow list/nodes/template-nodes/object-roles accept \`--all [--max-rows <n>]\` (default and maximum 10000 rows, at most 100 pages per collection).
-\`--limit\` accepts 1-1000 rows and conflicts with \`--all\`; \`--max-rows\` requires \`--all\`.
-All native collections under \`activity-stream\`, \`credential\`, \`group\`, \`host\`, \`inventory\`, \`notification\`, \`notification-template\`, \`organization\`, \`role\`, \`team\`, \`user\` accept these controls, including related collections and \`inventory constructed-list\`.
-\`inventory updates\` keeps its separate aggregate contract.
-These collections disclose pagination budgets, stop reason, truncation, and the server's next page while preserving server counts.
-If \`partial_page\` is true, following \`next\` skips undisplayed rows from the current page; rerun the filtered command with a larger budget.
+See [TOON output behavior](https://github.com/knowttl/awx-axi#toon-output-behavior) for supported collection commands, pagination controls, budgets, and completeness metadata.
 
 ## Safety and secrets
 

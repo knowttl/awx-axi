@@ -1,6 +1,7 @@
 /**
  * The `execution-environment` domain: container images for job execution (design.md §7.10).
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
@@ -55,26 +56,6 @@ function toTemplateRef(raw: unknown): {
   };
 }
 
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`execution-environment ${subcommand}\`, got ${raw}`,
-      [
-        `Run \`awx-axi execution-environment ${subcommand} --limit ${fallback}\``,
-      ],
-    );
-  }
-  return value;
-}
-
 function parseOrganization(raw: string | undefined, subcommand: string): number {
   if (raw === undefined) {
     throw validationError(
@@ -91,7 +72,7 @@ function parseOrganization(raw: string | undefined, subcommand: string): number 
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
 
   const query: Record<string, string | number | boolean> = {};
 
@@ -279,7 +260,7 @@ export const executionEnvironmentDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi execution-environment list [--search <s>] [--organization <id>] [--type <type>] [--limit <n>]",
+      help: "awx-axi execution-environment list [--search <s>] [--organization <id>] [--type <type>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search execution environments", takesValue: true },
         {
@@ -292,7 +273,7 @@ export const executionEnvironmentDomain: Domain = defineDomain({
           description: "filter by execution environment type",
           takesValue: true,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

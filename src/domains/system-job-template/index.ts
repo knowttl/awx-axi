@@ -1,7 +1,8 @@
 /**
  * The `system-job-template` domain: run templates for maintenance jobs.
  */
-import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
+import { errorForResponse } from "../../core/errors.js";
 import { dryRun, isLive, parseJsonObject } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
@@ -23,29 +24,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "type", "last_run", "status"],
   fieldAllowlist: ["description", "organization", "created", "modified", "interval"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(`--limit needs a value for \`system-job-template ${subcommand}\`, got --limit`, [
-      `Run \`awx-axi system-job-template ${subcommand} --limit ${fallback}\``,
-    ]);
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`system-job-template ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi system-job-template ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function formatRef(raw: unknown): string | null {
   const summary = (raw ?? {}) as Record<string, unknown>;
@@ -72,7 +50,7 @@ function toSystemJobTemplateRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
 
   const query: Record<string, string | number | boolean> = {};
   if (typeof input.flags.search === "string") {
@@ -218,10 +196,10 @@ export const systemJobTemplateDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi system-job-template list [--search <s>] [--limit <n>]",
+      help: "awx-axi system-job-template list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search system job templates", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

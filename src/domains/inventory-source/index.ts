@@ -4,6 +4,7 @@
  * Source creation, updates, and associations remain under `inventory`; this
  * noun exposes only GET-backed inspection.
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { parse } from "yaml";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
@@ -105,25 +106,6 @@ function inventoryContext(raw: unknown): {
   };
 }
 
-function positiveLimit(raw: string | true | undefined): number {
-  if (raw === true) {
-    throw validationError("--limit needs a value for `inventory-source list`", [
-      "Run `awx-axi inventory-source list --limit 100`",
-    ]);
-  }
-  if (raw === undefined) {
-    return DEFAULT_LIST_LIMIT;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`inventory-source list\`, got ${raw}`,
-      ["Run `awx-axi inventory-source list --limit 100`"],
-    );
-  }
-  return value;
-}
-
 function parseInventory(raw: string): number {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) {
@@ -204,7 +186,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const paged = yield* readPaged(
     "inventory_sources/",
     query,
-    positiveLimit(input.flags.limit),
+    pageBudget(input.flags, DEFAULT_LIST_LIMIT),
   );
   const rows = paged.rows.map(toSourceRow);
 
@@ -309,14 +291,14 @@ export const inventorySourceDomain: Domain = defineDomain({
         "Examples:",
         "  awx-axi inventory-source list --source ec2 --status successful",
         "  awx-axi inventory-source list --inventory 11 --limit 50",
-      ].join("\n"),
+      ].join("\n") + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search source names and descriptions", takesValue: true },
         { name: "name", description: "filter by exact source name", takesValue: true },
         { name: "inventory", description: "filter by inventory id", takesValue: true },
         { name: "source", description: "filter by source type", takesValue: true },
         { name: "status", description: "filter by current source status", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: [], required: 0 },
       schema: LIST_SCHEMA,
