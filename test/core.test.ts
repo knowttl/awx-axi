@@ -12,7 +12,7 @@ import {
   parseFlags,
 } from "../src/core/flags.js";
 import { countLine, detailOutput, listOutput, rawRegion, truncate } from "../src/core/output.js";
-import { redact, redactValue } from "../src/core/redact.js";
+import { clearSecrets, redact, redactValue, registerSecret } from "../src/core/redact.js";
 import {
   defineDomain,
   read,
@@ -283,6 +283,28 @@ describe("the base-relative route guard (design.md §4.2)", () => {
 });
 
 describe("redaction (design.md §6.4)", () => {
+  it.each(["t", "token", "1234567"])("keeps short secrets out of substring replacement while masking sensitive fields: %s", (secret) => {
+    clearSecrets();
+    try {
+      registerSecret(secret);
+      expect(redactValue({ token: secret, nested: { password: secret }, description: `ordinary text token 1234567 ${secret}` })).toEqual({
+        token: "***", nested: { password: "***" }, description: `ordinary text token 1234567 ${secret}`,
+      });
+    } finally {
+      clearSecrets();
+    }
+  });
+
+  it.each(["12345678", 'synthetic-sentinel/secret"value'])("masks registered secrets and their encoded forms at or above the minimum: %s", (secret) => {
+    clearSecrets();
+    try {
+      registerSecret(secret);
+      expect(redact(`denied ${secret} ${JSON.stringify(secret).slice(1, -1)} ${encodeURIComponent(secret)}`)).toBe("denied *** *** ***");
+    } finally {
+      clearSecrets();
+    }
+  });
+
   it("removes credentials embedded in an SCM URL", () => {
     const body = loadFixture("stdout-ranged").body as {
       content: string;

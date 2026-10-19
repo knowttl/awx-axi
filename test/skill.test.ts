@@ -13,7 +13,7 @@ import {
 describe("skill definition (design.md §13)", () => {
   it("exports the required Hermes skill metadata constants", () => {
     expect(typeof SKILL_AUTHOR).toBe("string");
-    expect(SKILL_AUTHOR).toBe("Kun Chen (kunchenguid)");
+    expect(SKILL_AUTHOR).toBe("knowttl");
 
     expect(typeof SKILL_DESCRIPTION).toBe("string");
     expect(SKILL_DESCRIPTION.length).toBeGreaterThan(0);

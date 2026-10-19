@@ -5,7 +5,7 @@ import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
 import { PrivateFiles } from "../core/private-file.js";
 import { credentialsPath, deleteToken, loadConfig, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
-import { registerSecret } from "../core/redact.js";
+import { redact, registerSecret } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
 import type { AwxTransport } from "../core/transport.js";
 import { assertWritable } from "../core/transport.js";
@@ -86,7 +86,7 @@ async function status(context: AuthContext): Promise<Renderable> {
   const response = await context.createTransport().get("me/");
   const body = response.body as { results?: { username?: string }[]; username?: string } | null;
   return { auth: { profile: selected.name, origin: selected.profile.origin, controller: config.host, source: credential.path ?? credential.source,
-    user: response.status === 200 ? (body?.results?.[0]?.username ?? body?.username ?? "unknown") : "unknown", valid: response.status === 200 } };
+    user: response.status === 200 ? redact(body?.results?.[0]?.username ?? body?.username ?? "unknown") : "unknown", valid: response.status === 200 } };
 }
 
 async function logout(context: AuthContext): Promise<Renderable> {

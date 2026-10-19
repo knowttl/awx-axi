@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, sym
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { decode } from "@toon-format/toon";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBasicAuthTransport, createTransport, resolveController, resolveCredential } from "../src/core/auth.js";
@@ -28,6 +29,26 @@ const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["s
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
+  it("explains how to configure a missing profile before any request", async () => {
+    const run = await runCli(["auth", "status"], { env: environment() });
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("PROFILE_REQUIRED");
+    expect(run.stdout).toContain("AWX_AXI_ORIGIN");
+    expect(run.stdout).toContain("AWX_AXI_TOKEN");
+    expect(run.stdout).toContain("awx-axi config path");
+    expect(run.stdout).toContain("awx-axi profile list");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it.each(["t", "token", "1234567"])("preserves prose when a short token is resolved: %s", async (token) => {
+    const env = { ...environment(), PRODUCTION_PAT: token };
+    configure(env, { production });
+    const run = await runCli(["auth", "status"], { env, script: [{ status: 200, body: { results: [{ username: "operator-token-1234567" }] } }] });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("user: operator-token-1234567");
+    expect(run.stdout).toContain("profile: production");
+  });
+
   it.each([
     ["https://awx.example.com", false],
     ["https://awx.example.com", true],
@@ -479,6 +500,20 @@ describe("authentication through the CLI", () => {
     expect(run.stdout).toContain(code);
     expect(run.transport.requests).toHaveLength(0);
     expect(resolveCredential(env)?.token).toBe("bound-token");
+  });
+
+  it.each([
+    { results: [{ username: `echo ${commandSecret}` }] },
+    { results: [{ username: `echo ${JSON.stringify(commandSecret).slice(1, -1)}` }] },
+    { results: [{ username: `echo ${encodeURIComponent(commandSecret)}` }] },
+    { username: `echo ${JSON.stringify(commandSecret).slice(1, -1)}` },
+  ])("redacts credential representations before rendering auth identity: %j", async (body) => {
+    const env = { ...environment(), PRODUCTION_PAT: commandSecret };
+    configure(env, { production });
+    const run = await runCli(["auth", "status"], { env, script: [{ status: 200, body }] });
+    expect(run.exitCode).toBe(0);
+    expect(decode(run.stdout)).toMatchObject({ auth: { user: "echo ***" } });
+    expect(run.transport.requests).toMatchObject([{ method: "GET", route: "me/" }]);
   });
 
   it("reports the selected profile, source and cheap identity", async () => {

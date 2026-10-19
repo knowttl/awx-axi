@@ -766,7 +766,7 @@ export const jobDomain: Domain = defineDomain({
     "job: inspect and manage AWX unified jobs (playbooks, workflows, syncs)",
     "",
     "Subcommands:",
-    "  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--limit <n>]",
+    "  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]",
     "  show     <id> [--type <t>]",
     "  stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]",
     "  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
@@ -774,7 +774,7 @@ export const jobDomain: Domain = defineDomain({
     "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  cancel   <id> [--type <t>] [--confirm] [--dry-run]",
     "  relaunch <id> [--failed-only] [--type <t>] [--confirm] [--dry-run]",
-    "  watch    <id> [--timeout <s >] [--interval <s >]",
+    "  watch    <id> [--timeout <seconds>] [--interval <seconds>]",
   ].join("\n"),
   mcpEquivalents: [
     "list_jobs",
@@ -789,7 +789,7 @@ export const jobDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "list",
-      help: "awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--limit <n>]",
+      help: "awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]",
       flags: [
         { name: "status", description: "filter by status", takesValue: true },
         { name: "type", description: "job type (job, workflow, project-update, all)", takesValue: true },
