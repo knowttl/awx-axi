@@ -452,9 +452,16 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     all: true,
     maxRows: MAX_ROWS,
   });
+  const truncatedUpdates: {
+    source_id: number;
+    count: number | undefined;
+    pagination: PagedResult["pagination"];
+  }[] = [];
+  let incomplete = sources.pagination.truncated;
 
   for (const source of sources.rows) {
     if (updates.length >= limit) {
+      incomplete = true;
       break;
     }
     const sourceRecord = (source ?? {}) as Record<string, unknown>;
@@ -471,6 +478,14 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
       updatesQuery,
       remaining,
     );
+    if (sourceUpdates.pagination.truncated) {
+      incomplete = true;
+      truncatedUpdates.push({
+        source_id: sourceId,
+        count: sourceUpdates.count,
+        pagination: sourceUpdates.pagination,
+      });
+    }
 
     const filtered = sourceUpdates.rows
       .map((row) => toUpdateRow(row, sourceName, sourceId))
@@ -494,10 +509,10 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
   return { ...listOutput({
     label: UPDATES_SCHEMA.label,
     rows: updates,
-    count: updates.length,
+    count: undefined,
     empty:
-      sources.pagination.truncated
-        ? "0 updates returned; inventory source collection is incomplete"
+      incomplete
+        ? "0 updates returned; inventory update collection is incomplete"
         : status === undefined
         ? "0 inventory updates found"
         : `0 inventory updates found with status ${status}`,
@@ -505,7 +520,11 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
       "Run `awx-axi job list --type inventory-update` to inspect update outputs",
       ...(limit < MAX_LIMIT ? [`Run \`awx-axi inventory updates ${id} --limit ${Math.min(MAX_LIMIT, limit * 2)}\` for a longer history`] : []),
     ],
-  }), inventory_sources_pagination: sources.pagination };
+  }),
+    inventory_sources_pagination: sources.pagination,
+    inventory_updates_incomplete: incomplete,
+    truncated_inventory_update_walks: truncatedUpdates,
+  };
 }
 
 function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
