@@ -808,12 +808,20 @@ help[2]: Run `awx-axi job list` for recent job history,Run `awx-axi template lis
 ### 8.2 List output
 
 Default schemas are 4 fields.
-The total from the envelope's `count` is always present, so an agent never paginates to find out how many there
-are:
+When the server provides an envelope `count`, list output preserves that total rather than inferring it from returned rows.
+Collections assembled across endpoints, such as `inventory updates`, do not claim a combined server total.
 
 ```
 $ awx-axi job list --failed --limit 3
 count: 3 of 47 total
+pagination:
+  max_rows: 3
+  max_pages: 100
+  pages: 1
+  stop: row-budget
+  truncated: true
+  next: /api/v2/jobs/?page=2&page_size=3
+  partial_page: false
 jobs[3]{id,name,status,finished}:
   1839,Deploy db tier,failed,"2026-07-27T13:41:02Z"
   1838,"Sync inventory, nightly",failed,"2026-07-27T13:02:00Z"
@@ -827,13 +835,19 @@ inventory of launchable things in one call), 50 for `job events`.
 `--fields` extends the schema from a per-subcommand allowlist; an unknown field name is a `VALIDATION_ERROR`
 listing the valid names.
 
-Empty results state the zero with the filter that produced it:
+User-facing lists use the shared row/page-budget policy described in [README.md](../README.md#toon-output-behavior): a hard positive `--limit` ceiling, and `--all` with an optional `--max-rows` budget on supported commands.
+Budgeted results disclose the budgets, pages read, stop reason, truncation, next page link, and whether the final page was only partially returned.
+The next page link is not a lossless cursor when `partial_page` is true; see the README for continuation guidance and assembled inventory-update output.
+
+Complete empty results state the zero with the filter that produced it (count and pagination metadata omitted here):
 
 ```
 $ awx-axi job list --status failed --since 24h
 jobs: 0 failed jobs in the last 24h
 help[1]: Run `awx-axi job list --status all` for all recent jobs
 ```
+
+An incomplete walk with no returned rows states that the collection is incomplete instead of claiming there are no matches.
 
 ### 8.3 Detail output and pre-computed aggregates
 
@@ -1142,7 +1156,7 @@ interface AwxTransport {
   put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
-  getPaged(route: string, query: Query, limit: number): Promise<PagedResult>;
+  getPaged(route: string, query: Query, limit: number | PageBudget | null): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 ```
@@ -1155,9 +1169,13 @@ Putting the checks here rather than in each domain is what makes it a guarantee.
 central argument: the status code *is* the semantics for cancel, sync, approve, and launch.
 A transport that threw on every non-2xx would put the 405 disambiguation out of reach.
 
-`getPaged` takes the caller's row limit, not a page size.
-It walks the envelope's `next` links until it has that many rows and returns one assembled result plus the
-server's `count`, so no domain and no command ever sees a page boundary.
+`getPaged` takes a row limit or `PageBudget`, not a page size; `null` requires a complete collection.
+Both transports use the shared policy in `src/core/paginate.ts`, which validates positive row budgets against the hard ceilings and follows the envelope's `next` links within row and page budgets.
+User-facing flag rules and ceilings are documented in the README linked in §8.2.
+The assembled `PagedResult` preserves the server's `count` when provided and carries pagination metadata for complete, row-budget, page-budget, empty-page, and repeated-page stops.
+Domains expose this metadata for budgeted lists rather than silently treating partial rows as complete.
+Internal detail and aggregate reads pass `null` and are exempt from list row and page budgets.
+If an empty or repeated continuation prevents a complete read, the paginator throws `INCOMPLETE_COLLECTION` with count and pagination metadata rather than returning partial rows for a definitive aggregate.
 It never sends `count_disabled` (§4.3 case 2).
 
 `getText` handles the stdout endpoints, including detecting the oversized-output apology (§4.3 case 4) and
