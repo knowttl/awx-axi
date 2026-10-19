@@ -109,7 +109,7 @@ export type AwxRequest =
   | {
       readonly kind: "readPaged";
       readonly route: RouteDescription;
-      /** Rows the caller wants, not a page size (§10.3). */
+      /** Row budget, not a page size; null requires a complete collection. */
       readonly limit: number | PageBudget | null;
     }
   | { readonly kind: "readText"; readonly route: RouteDescription }
@@ -173,7 +173,7 @@ export function* read(path: string, query?: Query): Plan<AwxResponse> {
   return result as AwxResponse;
 }
 
-/** Declare a read of up to `limit` rows, however many pages that takes. */
+/** Declare a budgeted collection read, or a complete read with null. */
 export function* readPaged(
   path: string,
   query: Query,

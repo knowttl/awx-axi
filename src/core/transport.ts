@@ -65,7 +65,7 @@ export interface AwxTransport {
   put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
-  /** Takes the caller's row limit, not a page size; walks `next` itself. */
+  /** Walks `next` within a row/page budget; null requires a complete read. */
   getPaged(route: string, query: Query, limit: number | PageBudget | null): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }

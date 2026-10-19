@@ -264,6 +264,7 @@ The former meaning of `approval list --all` is replaced by `--include-decided`.
 List commands share a hard ceiling of 1,000 rows for a positive integer `--limit` and a maximum of 100 pages per collection.
 Internal reads for detail summaries read complete collections independently of list budgets.
 If an empty or repeated continuation prevents completion, the command reports `INCOMPLETE_COLLECTION` with the stop reason and continuation instead of computing a partial aggregate.
+`workflow template-node <id>` reads all credentials and edge targets and no longer accepts `--limit`.
 `job list`, `job events`, `job hosts`, `approval list`, `workflow list`, `workflow nodes`, `workflow template-nodes`, and `workflow object-roles` also support `--all [--max-rows <n>]`.
 `--all` walks pages up to a default and maximum of 10,000 rows; `--max-rows` selects a smaller positive budget and requires `--all`.
 Combining `--all` and `--limit` fails with exit 2 before a request.
@@ -274,11 +275,13 @@ These collections report `pagination` with the row/page budgets, pages read, sto
 `stop: complete` means the server supplied no further page; row/page budget stops and empty or repeated continuation pages disclose incomplete results.
 `next` is the server's next page, not a command or a lossless cursor: when `partial_page: true`, the row budget cut a page and following `next` would skip undisplayed rows from that page.
 Re-run the original filtered command with a larger budget to include those rows.
+`inventory updates` assembles updates across sources without claiming a combined server total.
+It reports the source walk in `inventory_sources_pagination`, overall incompleteness in `inventory_updates_incomplete`, and each truncated update walk's source ID, server count, and pagination in `truncated_inventory_update_walks`.
 Launch commands still use `--limit` as an Ansible host pattern.
 
 - List views project to a small schema by default.
 - `--fields` lets callers ask for additional keys when needed.
-- Pagination is surfaced with `count: N of M total`.
+- Server totals, when available, are surfaced with `count: N of M total`.
 - Empty and partial results use explicit language, so no follow-up query is needed to confirm emptiness.
 - Where log output is large, `job stdout` and `ad-hoc stdout` support focused reads with
   `--tail` and `--lines`, and `job stdout` also supports `--download`.

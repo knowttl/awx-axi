@@ -1,9 +1,9 @@
 /**
  * Envelope walking (design.md §4.3 cases 1-3, §10.3).
  *
- * The caller states how many rows it wants; this module turns that into as many
- * page reads as AWX requires and hands back one assembled result plus the
- * server's own `count`, so no domain and no command ever sees a page boundary.
+ * Collections return the server's count and continuation metadata alongside
+ * budgeted rows. Internal summaries request complete reads so a safety stop
+ * cannot silently produce a partial aggregate.
  */
 import { AwxAxiError, errorForResponse, validationError } from "./errors.js";
 import type { ParsedFlags } from "./flags.js";
@@ -65,7 +65,7 @@ export function assertNoCountDisabled(query: Query): void {
 }
 
 /**
- * Walk `next` until the caller's row limit is met.
+ * Walk `next` within the collection budget; null requires a complete read.
  *
  * Page boundaries are read from the envelope and never inferred: AWX silently
  * caps an oversized `page_size` rather than rejecting it, so a client that

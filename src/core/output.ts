@@ -32,8 +32,8 @@ export interface ListOutputOptions {
 /**
  * A list response: the total first, then the rows, then the next steps.
  *
- * The total is always present so an agent never paginates to find out how many
- * there are (AXI §4).
+ * Preserve a supplied server total rather than inferring it from returned rows
+ * (AXI §4); assembled collections may have no combined server total.
  */
 export function listOutput(options: ListOutputOptions): Record<string, unknown> {
   if (options.pagination !== undefined) {
