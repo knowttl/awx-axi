@@ -134,6 +134,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 roles found",
     help: [
       "Run `awx-axi role show <id|name>` to inspect one role",
@@ -220,6 +221,7 @@ function* parentsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "parents",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 parent roles found",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });
@@ -241,6 +243,7 @@ function* childrenPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "children",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 child roles found",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });
@@ -262,6 +265,7 @@ function* usersPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "users",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 users found holding role",
     help: [`Run \`awx-axi user show <id|name>\` to inspect user detail`],
   });
@@ -283,6 +287,7 @@ function* teamsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "teams",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 teams found holding role",
     help: [`Run \`awx-axi team show <id|name>\` to inspect team detail`],
   });

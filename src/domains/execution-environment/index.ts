@@ -17,7 +17,6 @@ import {
 import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
-const TEMPLATES_LIMIT = 200;
 
 const LIST_SCHEMA = {
   label: "execution_environments",
@@ -113,6 +112,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 execution environments found",
     help: [
       "Run `awx-axi execution-environment show <id|name>` to inspect templates using it",
@@ -197,7 +197,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const templates = yield* readPaged(
     `execution_environments/${id}/unified_job_templates/`,
     {},
-    TEMPLATES_LIMIT,
+    null,
   );
   const templateRefs = templates.rows.map(toTemplateRef).filter((template) => template.id > 0);
 

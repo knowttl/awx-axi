@@ -1,8 +1,31 @@
 import { describe, expect, it } from "vitest";
+import { decode } from "@toon-format/toon";
+import { MAX_LIMIT, MAX_PAGES } from "../src/core/paginate.js";
 
 import { runCli } from "./support/run.js";
 
 describe("inventory domain (design.md §7.1)", () => {
+  it.each([
+    { command: ["list"], label: "inventories", extraReads: [] },
+    { command: ["groups", "11"], label: "groups", extraReads: [] },
+    { command: ["hosts", "11"], label: "hosts", extraReads: [] },
+    { command: ["hosts", "11", "--facts"], label: "hosts", extraReads: [{ status: 200, body: {} }] },
+    { command: ["sources", "11"], label: "inventory_sources", extraReads: [] },
+  ])("inventory $command discloses partial rows", async ({ command, label, extraReads }) => {
+    const run = await runCli(["inventory", ...command, "--limit", "1"], {
+      script: [
+        { status: 200, body: { count: 3, next: "/api/v2/items/?page=2", results: [{ id: 1 }, { id: 2 }] } },
+        ...extraReads,
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    const output = decode(run.stdout);
+    expect(output).toMatchObject({ count: "1 of 3 total", pagination: {
+      stop: "row-budget", truncated: true, partial_page: true, next: "/api/v2/items/?page=2",
+    } });
+    expect(output).toHaveProperty(`${label}.length`, 1);
+  });
+
   it("inventory list returns paged rows and preserves totals for search", async () => {
     const run = await runCli(["inventory", "list", "--search", "site", "--limit", "1"], {
       script: ["inventory-list-page-1", "inventory-list-page-2"],
@@ -122,6 +145,113 @@ describe("inventory domain (design.md §7.1)", () => {
     });
     expect(run.stdout).toContain("inventory_updates");
     expect(run.stdout).toContain("initial sync");
+    expect(decode(run.stdout)).toMatchObject({
+      inventory_updates_incomplete: false,
+      truncated_inventory_update_walks: [],
+    });
+  });
+
+  it("inventory updates discloses source-update page exhaustion without inventing a total", async () => {
+    const run = await runCli(["inventory", "updates", "11", "--limit", "200"], {
+      script: [
+        { status: 200, body: { count: 1, next: null, results: [{ id: 21, name: "source" }] } },
+        ...Array.from({ length: MAX_PAGES }, (_, index) => ({
+          status: 200,
+          body: {
+            count: 150,
+            next: `/api/v2/inventory_sources/21/inventory_updates/?page=${index + 2}`,
+            results: [{ id: index + 1, name: `update ${index + 1}` }],
+          },
+        })),
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(MAX_PAGES + 1);
+    const output = decode(run.stdout);
+    expect(output).not.toHaveProperty("count");
+    expect(output).toMatchObject({
+      inventory_sources_pagination: { truncated: false },
+      inventory_updates_incomplete: true,
+      truncated_inventory_update_walks: [{
+        source_id: 21,
+        count: 150,
+        pagination: {
+          stop: "page-budget",
+          pages: MAX_PAGES,
+          truncated: true,
+          next: `/api/v2/inventory_sources/21/inventory_updates/?page=${MAX_PAGES + 1}`,
+          partial_page: false,
+        },
+      }],
+    });
+    expect(output).toHaveProperty("inventory_updates.length", MAX_PAGES);
+  });
+
+  it("inventory updates retains every incomplete update walk in an empty result", async () => {
+    const run = await runCli(["inventory", "updates", "11"], {
+      script: [
+        { status: 200, body: { count: 2, next: null, results: [{ id: 21 }, { id: 22 }] } },
+        { status: 200, body: { count: 7, next: "/api/v2/inventory_sources/21/inventory_updates/?page=2", results: [] } },
+        { status: 200, body: { count: 9, next: "/api/v2/inventory_sources/22/inventory_updates/?page=2", results: [] } },
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(decode(run.stdout)).toMatchObject({
+      inventory_updates: "0 updates returned; inventory update collection is incomplete",
+      inventory_updates_incomplete: true,
+      truncated_inventory_update_walks: [
+        { source_id: 21, count: 7, pagination: { stop: "empty-page", next: "/api/v2/inventory_sources/21/inventory_updates/?page=2" } },
+        { source_id: 22, count: 9, pagination: { stop: "empty-page", next: "/api/v2/inventory_sources/22/inventory_updates/?page=2" } },
+      ],
+    });
+  });
+
+  it("inventory updates retains partial-page continuation metadata", async () => {
+    const run = await runCli(["inventory", "updates", "11", "--limit", "1", "--status", "successful"], {
+      script: [
+        { status: 200, body: { count: 1, next: null, results: [{ id: 21 }] } },
+        { status: 200, body: { count: 3, next: "/api/v2/inventory_sources/21/inventory_updates/?page=2", results: [{ id: 1, status: "failed" }, { id: 2, status: "failed" }] } },
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(decode(run.stdout)).toMatchObject({
+      inventory_updates: "0 updates returned; inventory update collection is incomplete",
+      inventory_updates_incomplete: true,
+      truncated_inventory_update_walks: [{
+        source_id: 21,
+        count: 3,
+        pagination: {
+          stop: "row-budget",
+          truncated: true,
+          next: "/api/v2/inventory_sources/21/inventory_updates/?page=2",
+          partial_page: true,
+        },
+      }],
+    });
+  });
+
+  it.each([
+    { sourceIds: [21], incomplete: false },
+    { sourceIds: [21, 22], incomplete: true },
+  ])("inventory updates reports unvisited sources for $sourceIds", async ({ sourceIds, incomplete }) => {
+    const run = await runCli(["inventory", "updates", "11", "--limit", "1"], {
+      script: [
+        { status: 200, body: { count: sourceIds.length, next: null, results: sourceIds.map((id) => ({ id })) } },
+        { status: 200, body: { count: 1, next: null, results: [{ id: 1 }] } },
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(2);
+    const output = decode(run.stdout);
+    expect(output).not.toHaveProperty("count");
+    expect(output).toMatchObject({
+      inventory_updates_incomplete: incomplete,
+      truncated_inventory_update_walks: [],
+    });
   });
 
   it("inventory updates follows source pagination to find later matches", async () => {
@@ -188,8 +318,8 @@ describe("inventory domain (design.md §7.1)", () => {
     const run = await runCli(["inventory", "updates", "11"], {
       script: [
         firstPageSources,
-        ...Array.from({ length: 100 }, () => emptySourceUpdates),
         secondPageSource,
+        ...Array.from({ length: 100 }, () => emptySourceUpdates),
         lateUpdate,
       ],
     });
@@ -198,11 +328,11 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "inventories/11/inventory_sources/",
-      query: { page_size: 100 },
+      query: { page_size: 200 },
     });
-    expect(run.transport.requests[101]).toMatchObject({
+    expect(run.transport.requests[1]).toMatchObject({
       method: "GET",
-      route: "inventories/11/inventory_sources/",
+      route: "/api/v2/inventories/11/inventory_sources/",
       query: { page: "2", page_size: "100" },
     });
     expect(run.stdout).toContain("late sync");
@@ -227,6 +357,67 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("0 constructed inventories found");
     expect(run.stdout).toContain("This controller does not expose constructed inventories");
+  });
+
+  it.each([["constructed-list"], ["updates", "named inventory"]])(
+    "inventory %j rejects limits above the shared ceiling before reading",
+    async (...command) => {
+      const run = await runCli(["inventory", ...command, "--limit", String(MAX_LIMIT + 1)]);
+      expect(run.exitCode).toBe(2);
+      expect(run.transport.requests).toHaveLength(0);
+      expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    },
+  );
+
+  it.each([
+    { command: ["constructed-list"], requestCount: MAX_PAGES },
+    { command: ["updates", "11"], requestCount: MAX_PAGES * 2 },
+  ])(
+    "inventory $command stops at the shared page cap",
+    async ({ command, requestCount }) => {
+      const pages = Array.from({ length: MAX_PAGES }, (_, index) => ({
+        status: 200,
+        body: {
+          count: MAX_PAGES + 1,
+          next: `/api/v2/items/?page=${index + 2}`,
+          results: [{ id: index + 1, name: `item ${index + 1}` }],
+        },
+      }));
+      const emptyUpdates = Array.from({ length: MAX_PAGES }, () => ({
+        status: 200,
+        body: { count: 0, next: null, results: [] },
+      }));
+      const run = await runCli(["inventory", ...command, "--limit", String(MAX_LIMIT)], {
+        script: [...pages, ...emptyUpdates],
+      });
+      expect(run.exitCode).toBe(0);
+      expect(run.transport.requests).toHaveLength(requestCount);
+      expect(run.stdout).toContain("stop: page-budget");
+      expect(run.stdout).toContain("truncated: true");
+      expect(run.stdout).toContain(`next: /api/v2/items/?page=${MAX_PAGES + 1}`);
+    },
+  );
+
+  it("constructed list preserves totals and follows continuation links", async () => {
+    const run = await runCli(["inventory", "constructed-list", "--limit", "2"], {
+      script: [
+        { status: 200, body: { count: 3, next: "/api/v2/constructed_inventories/?page=2", results: [{ id: 1, name: "first" }] } },
+        { status: 200, body: { count: 3, next: "/api/v2/constructed_inventories/?page=3", results: [{ id: 2, name: "second" }] } },
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(2);
+    expect(run.stdout).toContain("count: 2 of 3 total");
+    expect(run.stdout).toContain("stop: row-budget");
+    expect(run.stdout).toContain("second");
+  });
+
+  it("constructed list propagates errors other than missing endpoints", async () => {
+    const run = await runCli(["inventory", "constructed-list"], {
+      script: [{ status: 403, body: {} }],
+    });
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("code: FORBIDDEN");
   });
 
   it("inventory constructed-show resolves by name and renders key fields", async () => {

@@ -145,6 +145,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 activity_stream entries found",
     help: [
       "Run `awx-axi activity-stream show <id>` to inspect one entry",

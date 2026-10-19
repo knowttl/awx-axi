@@ -7,6 +7,7 @@
  * `mcpEquivalents` - and the core owns everything else.
  */
 import { validationError } from "./errors.js";
+import type { PageBudget } from "./paginate.js";
 import { registerSecret } from "./redact.js";
 import {
   assertNoSecretFlags,
@@ -108,8 +109,8 @@ export type AwxRequest =
   | {
       readonly kind: "readPaged";
       readonly route: RouteDescription;
-      /** Rows the caller wants, not a page size (§10.3). */
-      readonly limit: number;
+      /** Row budget, not a page size; null requires a complete collection. */
+      readonly limit: number | PageBudget | null;
     }
   | { readonly kind: "readText"; readonly route: RouteDescription }
   | {
@@ -172,11 +173,11 @@ export function* read(path: string, query?: Query): Plan<AwxResponse> {
   return result as AwxResponse;
 }
 
-/** Declare a read of up to `limit` rows, however many pages that takes. */
+/** Declare a budgeted collection read, or a complete read with null. */
 export function* readPaged(
   path: string,
   query: Query,
-  limit: number,
+  limit: number | PageBudget | null,
 ): Plan<PagedResult> {
   assertBaseRelative(path);
   const result = yield { kind: "readPaged", route: { path, query }, limit };
@@ -244,7 +245,13 @@ export async function runPlan<T>(
 
   while (!step.done) {
     const request = step.value;
-    const result = await execute(request, runner);
+    let result: RequestResult;
+    try {
+      result = await execute(request, runner);
+    } catch (error) {
+      step = plan.throw(error);
+      continue;
+    }
     if (request.kind === "write") {
       const response = result as AwxResponse;
       if (response.body && typeof response.body === "object" &&

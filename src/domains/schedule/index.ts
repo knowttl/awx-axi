@@ -313,6 +313,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 schedules found",
     help: [
       "Run `awx-axi schedule show <id|name>` to inspect schedule detail and timing",

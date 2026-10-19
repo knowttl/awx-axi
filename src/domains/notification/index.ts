@@ -162,6 +162,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 notifications found",
     help: [
       "Run `awx-axi notification show <id>` to inspect one delivery",

@@ -97,6 +97,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 job templates found",
     help: [
       "Run `awx-axi template show <id|name>` to see what a template accepts at launch",
@@ -128,6 +129,7 @@ function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "object_roles",
     rows: paged.rows.map(toRoleRow),
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 object roles found for template",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });

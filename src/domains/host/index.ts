@@ -20,7 +20,6 @@ import {
 import type { Query } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
-const GROUP_LIMIT = 200;
 
 const LIST_SCHEMA = {
   label: "hosts",
@@ -251,6 +250,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 hosts found",
     help: [
       "Run `awx-axi host show <id|name>` for host detail",
@@ -266,7 +266,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(detail, { subject: `host ${id}` });
   }
 
-  const groups = yield* readPaged(`hosts/${id}/groups/`, {}, GROUP_LIMIT);
+  const groups = yield* readPaged(`hosts/${id}/groups/`, {}, null);
   const variables = yield* read(`hosts/${id}/variable_data/`);
   if (variables.status !== 200) {
     throw errorForResponse(variables, { subject: `host ${id} variables` });

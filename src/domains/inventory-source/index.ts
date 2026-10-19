@@ -22,7 +22,6 @@ import { resolveId } from "../../core/resolve.js";
 import type { Query } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
-const UPDATE_LIMIT = 25;
 
 const LIST_SCHEMA = {
   label: "inventory_sources",
@@ -213,6 +212,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 inventory sources found",
     help: [
       "Run `awx-axi inventory-source show <id|name>` for source detail",
@@ -237,7 +237,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const updates = yield* readPaged(
     `inventory_sources/${id}/inventory_updates/`,
     {},
-    UPDATE_LIMIT,
+    null,
   );
 
   const body = record(detail.body);

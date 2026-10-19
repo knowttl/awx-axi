@@ -17,7 +17,6 @@ import {
 import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 100;
-const RELATED_LIMIT = 5;
 
 const LIST_SCHEMA = {
   label: "system_job_templates",
@@ -87,6 +86,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 system job templates found",
     help: [
       `Run \`awx-axi system-job-template show <id|name>\` to inspect template detail`,
@@ -153,11 +153,11 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const org = (summary.organization ?? {}) as Record<string, unknown>;
   const lastJob = (summary.last_job ?? {}) as Record<string, unknown>;
 
-  const jobsPage = yield* readPaged(`system_job_templates/${id}/jobs/`, {}, RELATED_LIMIT);
+  const jobsPage = yield* readPaged(`system_job_templates/${id}/jobs/`, {}, null);
   const schedulesPage = yield* readPaged(
     `system_job_templates/${id}/schedules/`,
     {},
-    RELATED_LIMIT,
+    null,
   );
 
   const fields: Record<string, unknown> = {

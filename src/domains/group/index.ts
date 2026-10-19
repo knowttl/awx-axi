@@ -20,7 +20,6 @@ import { resolveId } from "../../core/resolve.js";
 import type { Query } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
-const RELATION_LIMIT = 200;
 
 const LIST_SCHEMA = {
   label: "groups",
@@ -171,6 +170,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 groups found",
     help: [
       "Run `awx-axi group show <id|name>` for group detail",
@@ -195,12 +195,12 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const hosts = yield* readPaged(
     `groups/${id}/hosts/`,
     {},
-    RELATION_LIMIT,
+    null,
   );
   const children = yield* readPaged(
     `groups/${id}/children/`,
     {},
-    RELATION_LIMIT,
+    null,
   );
   const variables = yield* read(`groups/${id}/variable_data/`);
   if (variables.status !== 200) {

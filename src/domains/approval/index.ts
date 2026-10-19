@@ -7,8 +7,9 @@
  * `approval show`, `approval approve`, and `approval deny`.
  */
 import { AxiError } from "axi-sdk-js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 
-import { errorForResponse, validationError } from "../../core/errors.js";
+import { errorForResponse } from "../../core/errors.js";
 import { detailOutput, listOutput } from "../../core/output.js";
 import {
   defineDomain,
@@ -24,7 +25,6 @@ import {
 import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 20;
-const NODE_LIMIT = 200;
 
 const LIST_SCHEMA = {
   label: "approvals",
@@ -56,7 +56,7 @@ function toRow(raw: unknown): ApprovalRow {
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const includeDecided = input.flags["include-decided"] === true;
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT);
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
 
   const paged = yield* readPaged(
     "workflow_approvals/",
@@ -70,6 +70,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: includeDecided ? "0 approvals found" : "0 approvals pending",
     help:
       rows.length === 0
@@ -160,7 +161,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
           (yield* readPaged(
             `workflow_jobs/${workflowId}/workflow_nodes/`,
             {},
-            NODE_LIMIT,
+            null,
           )).rows,
           id,
         );
@@ -309,23 +310,6 @@ function* denyPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`approval list\`, got ${raw}`,
-      ["Run `awx-axi approval list --limit 20` for the 20 most recent"],
-    );
-  }
-  return value;
-}
-
 export const approvalDomain: Domain = defineDomain({
   name: "approval",
   help: [
@@ -355,12 +339,13 @@ export const approvalDomain: Domain = defineDomain({
         "  --include-decided   include approvals that were already approved or denied",
         `  --limit <n>         rows to return (default ${DEFAULT_LIST_LIMIT})`,
         "",
-        "Migration: --all was renamed to --include-decided; --all is reserved for pagination.",
-        "Old --all invocations fail with exit 2 during this transition; no alias is retained.",
+        "--all walks pending approvals within budgets; add --include-decided to include decided approvals.",
+        "--all conflicts with --limit; --max-rows requires --all (maximum 10000).",
         "",
         "Examples:",
         "  awx-axi approval list",
         "  awx-axi approval list --include-decided --limit 50",
+        PAGINATION_HELP,
       ].join("\n"),
       flags: [
         {
@@ -368,11 +353,7 @@ export const approvalDomain: Domain = defineDomain({
           description: "include decided approvals, not just pending",
           takesValue: false,
         },
-        {
-          name: "limit",
-          description: "rows to return",
-          takesValue: true,
-        },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: [], required: 0 },
       schema: LIST_SCHEMA,
