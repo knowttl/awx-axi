@@ -5,6 +5,7 @@
  * read-only.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import { redactValue } from "../../core/redact.js";
 import {
@@ -81,25 +82,6 @@ function inventoryContext(raw: unknown): {
   };
 }
 
-function positiveLimit(raw: string | true | undefined): number {
-  if (raw === true) {
-    throw validationError("--limit needs a value for `group list`", [
-      "Run `awx-axi group list --limit 100`",
-    ]);
-  }
-  if (raw === undefined) {
-    return DEFAULT_LIST_LIMIT;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`group list\`, got ${raw}`,
-      ["Run `awx-axi group list --limit 100`"],
-    );
-  }
-  return value;
-}
-
 function parseInventory(raw: string): number {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) {
@@ -162,7 +144,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const paged = yield* readPaged(
     "groups/",
     query,
-    positiveLimit(input.flags.limit),
+    pageBudget(input.flags, DEFAULT_LIST_LIMIT),
   );
   const rows = paged.rows.map(toGroupRow);
 
@@ -260,12 +242,12 @@ export const groupDomain: Domain = defineDomain({
         "Examples:",
         "  awx-axi group list --search web",
         "  awx-axi group list --inventory 11 --limit 50",
-      ].join("\n"),
+      ].join("\n") + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search group names and descriptions", takesValue: true },
         { name: "name", description: "filter by exact group name", takesValue: true },
         { name: "inventory", description: "filter by inventory id", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: [], required: 0 },
       schema: LIST_SCHEMA,

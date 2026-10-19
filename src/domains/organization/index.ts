@@ -2,6 +2,7 @@
  * The `organization` domain: list and inspect AWX organizations (design.md v1 roadmap).
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
@@ -23,30 +24,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "max_hosts", "users", "projects"],
   fieldAllowlist: ["description", "custom_virtualenv", "created", "modified"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(
-      `--limit needs a value for \`organization ${subcommand}\`, got --limit`,
-      [`Run \`awx-axi organization ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`organization ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi organization ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function relatedCount(summary: unknown, key: string): number | null {
   if (summary === undefined || summary === null || typeof summary !== "object") {
@@ -71,7 +48,7 @@ function toOrganizationRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -298,10 +275,10 @@ export const organizationDomain: Domain = defineDomain({
     })),
     {
       name: "list",
-      help: "awx-axi organization list [--search <s>] [--limit <n>]",
+      help: "awx-axi organization list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search organizations", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

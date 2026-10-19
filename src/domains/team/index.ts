@@ -2,6 +2,7 @@
  * The `team` domain: list, show, create, edit, and delete AWX teams, membership, and access controls.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { readFileSync, statSync } from "node:fs";
 import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
@@ -25,30 +26,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "organization", "description"],
   fieldAllowlist: ["created", "modified"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(
-      `--limit needs a value for \`team ${subcommand}\`, got --limit`,
-      [`Run \`awx-axi team ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`team ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi team ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function parseOrganization(
   raw: string | true | undefined,
@@ -144,7 +121,7 @@ function toRoleRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -211,6 +188,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* usersPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "teams/",
     noun: "team",
@@ -218,7 +196,6 @@ function* usersPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "team users",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "users");
   const paged = yield* readPaged(`teams/${id}/users/`, {}, limit);
   const rows = paged.rows.map(toUserRow);
 
@@ -233,6 +210,7 @@ function* usersPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* projectsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "teams/",
     noun: "team",
@@ -240,7 +218,6 @@ function* projectsPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "team projects",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "projects");
   const paged = yield* readPaged(`teams/${id}/projects/`, {}, limit);
   const rows = paged.rows.map(toProjectRow);
 
@@ -255,6 +232,7 @@ function* projectsPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* credentialsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "teams/",
     noun: "team",
@@ -262,7 +240,6 @@ function* credentialsPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "team credentials",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "credentials");
   const paged = yield* readPaged(`teams/${id}/credentials/`, {}, limit);
   const rows = paged.rows.map(toCredentialRow);
 
@@ -277,6 +254,7 @@ function* credentialsPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "teams/",
     noun: "team",
@@ -284,7 +262,6 @@ function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "team roles",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "roles");
   const paged = yield* readPaged(`teams/${id}/roles/`, {}, limit);
   const rows = paged.rows.map(toRoleRow);
 
@@ -299,6 +276,7 @@ function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "teams/",
     noun: "team",
@@ -306,7 +284,6 @@ function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "team object-roles",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "object-roles");
   const paged = yield* readPaged(`teams/${id}/object_roles/`, {}, limit);
   const rows = paged.rows.map(toRoleRow);
 
@@ -321,6 +298,7 @@ function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* accessListPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "teams/",
     noun: "team",
@@ -328,7 +306,6 @@ function* accessListPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "team access-list",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "access-list");
   const paged = yield* readPaged(`teams/${id}/access_list/`, {}, limit);
   const rows = paged.rows.map(toUserRow);
 
@@ -642,7 +619,7 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi team list [--search <s>] [--organization <id>] [--limit <n>]",
+      help: "awx-axi team list [--search <s>] [--organization <id>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search teams", takesValue: true },
         {
@@ -650,7 +627,7 @@ export const teamDomain: Domain = defineDomain({
           description: "filter teams by organization id",
           takesValue: true,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
@@ -674,8 +651,8 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "users",
-      help: "awx-axi team users <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi team users <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "users",
@@ -687,8 +664,8 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "projects",
-      help: "awx-axi team projects <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi team projects <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "projects",
@@ -700,8 +677,8 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "credentials",
-      help: "awx-axi team credentials <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi team credentials <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "credentials",
@@ -713,8 +690,8 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "roles",
-      help: "awx-axi team roles <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi team roles <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "roles",
@@ -726,8 +703,8 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "object-roles",
-      help: "awx-axi team object-roles <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi team object-roles <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "object_roles",
@@ -739,8 +716,8 @@ export const teamDomain: Domain = defineDomain({
     },
     {
       name: "access-list",
-      help: "awx-axi team access-list <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi team access-list <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: {
         label: "access_list",

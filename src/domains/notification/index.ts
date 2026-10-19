@@ -2,6 +2,7 @@
  * The `notification` domain: read notification delivery records.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -30,27 +31,6 @@ const SCOPE_FLAGS = [
   { flag: "ad-hoc", route: "ad_hoc_commands" },
   { flag: "system-job", route: "system_jobs" },
 ] as const;
-
-function positiveLimit(raw: string | true | undefined): number {
-  if (raw === true) {
-    throw validationError("--limit needs a value for `notification list`", [
-      "Run `awx-axi notification list --limit 100`",
-    ]);
-  }
-  if (raw === undefined) {
-    return DEFAULT_LIST_LIMIT;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for ` +
-        "`notification list`, got " +
-        raw,
-      ["Run `awx-axi notification list --limit 100`"],
-    );
-  }
-  return value;
-}
 
 function parsePositiveId(raw: string, command: string): number {
   const value = Number(raw);
@@ -114,7 +94,7 @@ function toNotificationRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit);
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const scopeMatches = SCOPE_FLAGS.filter(
     (entry) => typeof (input.flags as Record<string, unknown>)[entry.flag] === "string",
   );
@@ -226,7 +206,7 @@ export const notificationDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "list",
-      help: "awx-axi notification list [--status <pending|successful|failed|all>] [--search <s>] [--template <id>] [--job <id>|--workflow-job <id>|--project-update <id>|--inventory-update <id>|--ad-hoc <id>|--system-job <id>] [--limit <n>]",
+      help: "awx-axi notification list [--status <pending|successful|failed|all>] [--search <s>] [--template <id>] [--job <id>|--workflow-job <id>|--project-update <id>|--inventory-update <id>|--ad-hoc <id>|--system-job <id>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "status", description: "filter by status", takesValue: true },
         { name: "search", description: "search notifications", takesValue: true },
@@ -257,7 +237,7 @@ export const notificationDomain: Domain = defineDomain({
           description: "scope by system job id",
           takesValue: true,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

@@ -5,6 +5,7 @@ import { readFileSync, statSync } from "node:fs";
 import { registerSecretValues } from "../../core/redact.js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
@@ -26,30 +27,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "organization", "credential_type", "managed"],
   fieldAllowlist: ["description", "kind", "cloud", "kubernetes", "created", "modified"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(
-      `--limit needs a value for \`credential ${subcommand}\`, got --limit`,
-      [`Run \`awx-axi credential ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`credential ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi credential ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function parseOrganization(raw: string | undefined, subcommand: string): number {
   if (raw === undefined) {
@@ -97,13 +74,13 @@ function toRoleRow(raw: unknown): Row {
 }
 
 function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "credentials/",
     noun: "credential",
     listCommand: "credential list",
     command: "credential object-roles",
   });
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "object-roles");
   const paged = yield* readPaged(`credentials/${id}/object_roles/`, {}, limit);
   return listOutput({
     label: "object_roles",
@@ -116,7 +93,7 @@ function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -439,8 +416,8 @@ export const credentialDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "object-roles",
-      help: "awx-axi credential object-roles <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi credential object-roles <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: { label: "object_roles", defaultFields: ["id", "name", "description", "type"], fieldAllowlist: [] },
       suggestions: [],
@@ -497,7 +474,7 @@ export const credentialDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi credential list [--search <s>] [--organization <id>] [--limit <n>]",
+      help: "awx-axi credential list [--search <s>] [--organization <id>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search credentials", takesValue: true },
         {
@@ -505,7 +482,7 @@ export const credentialDomain: Domain = defineDomain({
           description: "filter credentials by organization id",
           takesValue: true,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
