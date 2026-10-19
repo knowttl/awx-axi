@@ -52,7 +52,7 @@ It works without running an MCP server.
 | AAP 2.5+ gateway | Best-effort API-path support; gateway authentication and live compatibility are unverified |
 
 Commands default to `/api/v2/` before discovery.
-The first dashboard invocation probes `/api/` and the resolved `ping/`, caching the API path and release in the state directory.
+The first dashboard invocation probes `/api/` unless an API-path override is set, then reads the resolved `ping/`, caching the API path and release in the state directory.
 Explicit commands reuse that cache.
 Set `AWX_AXI_API_BASE_PATH=/api/controller/v2/` for a gateway path when needed; this does not add gateway token issuance.
 The cache has no automatic expiry; remove the corresponding controller cache file after an upgrade to rediscover metadata.
@@ -146,6 +146,8 @@ Profiles live in `$XDG_CONFIG_HOME/awx-axi/config.json`, defaulting to `~/.confi
 Stored PATs and `writes.log` live in `$XDG_STATE_HOME/awx-axi`, defaulting to `~/.local/state/awx-axi`.
 Relative XDG roots are ignored.
 Windows uses `%APPDATA%\awx-axi` for configuration and `%LOCALAPPDATA%\awx-axi` for state.
+`awx-axi profile list` lists configured names and origins without resolving secrets.
+`awx-axi auth status` reports the selected profile, origin, credential source and identity using at most one controller read.
 
 <details>
 <summary>Named profiles and SecretRefs</summary>
@@ -284,21 +286,7 @@ Use `awx-axi doctor` to inspect the selected identity and credential permissions
 
 ## Contributing
 
-Use Node.js 20 or newer and install locked dependencies with `npm ci`.
-Run the required local checks:
-
-```sh
-npm run build
-npm run typecheck
-npm run lint
-npm test
-npm run docs:commands -- --check
-```
-
-Hosted PR test CI is not used.
-The default tests use offline transports and synthetic fixtures.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for isolated test environments and contribution guidance.
-Generated skill copies are checked by the default test suite.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup, required checks and isolated offline test environments.
 
 ## License
 

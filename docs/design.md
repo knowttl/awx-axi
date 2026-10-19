@@ -617,7 +617,7 @@ awx-axi approval deny <id>           [--confirm] [--dry-run]
 Approvals are promoted to a top-level noun rather than living under `workflow` because they are the one thing in
 AWX that is *waiting on a human decision*, which makes them an inbox.
 `approval list` defaults to pending only; `--include-decided` includes decided ones.
-See [README migration guidance](../README.md#toon-output-behavior) for the former `--all` spelling.
+See [README migration guidance](../README.md#configuration) for the former `--all` spelling.
 The home view surfaces the pending count for the same reason.
 
 `approval show` prints what the step gates before anyone decides:
@@ -835,7 +835,7 @@ inventory of launchable things in one call), 50 for `job events`.
 `--fields` extends the schema from a per-subcommand allowlist; an unknown field name is a `VALIDATION_ERROR`
 listing the valid names.
 
-User-facing lists use the shared row/page-budget policy described in [README.md](../README.md#toon-output-behavior): a hard positive `--limit` ceiling, and `--all` with an optional `--max-rows` budget on supported commands.
+User-facing lists use the shared row/page-budget policy described in [README.md](../README.md#bounded-output): a hard positive `--limit` ceiling, and `--all` with an optional `--max-rows` budget on supported commands.
 Budgeted results disclose the budgets, pages read, stop reason, truncation, next page link, and whether the final page was only partially returned.
 The next page link is not a lossless cursor when `partial_page` is true; see the README for continuation guidance and assembled inventory-update output.
 

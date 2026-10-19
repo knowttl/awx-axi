@@ -12,7 +12,7 @@ npm run docs:commands -- --check
 ```
 
 Local validation is the required gate for changes; hosted PR test CI is not used.
-The repository validation configuration runs these existing package scripts.
+The repository validation configuration runs build, typecheck, tests and lint; also check command-documentation drift with the command above.
 Release automation remains separate and retains tags in the `awx-axi-vX.Y.Z` format.
 
 The default test suite uses offline transports and synthetic fixtures and excludes `test/live/`.
