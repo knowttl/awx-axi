@@ -5,6 +5,7 @@ import { readFileSync, statSync } from "node:fs";
 import { registerSecret } from "../../core/redact.js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { dryRun, isLive } from "../../core/mutations.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
@@ -33,30 +34,6 @@ const LIST_SCHEMA = {
   ],
   fieldAllowlist: ["auth", "external_account", "last_login", "created", "modified"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(
-      `--limit needs a value for \`user ${subcommand}\`, got --limit`,
-      [`Run \`awx-axi user ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`user ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi user ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 interface UserMatch {
   readonly id: number;
@@ -167,7 +144,7 @@ function* matchByUsernamePlan(
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -497,10 +474,10 @@ export const userDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi user list [--search <s>] [--limit <n>]",
+      help: "awx-axi user list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search users", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

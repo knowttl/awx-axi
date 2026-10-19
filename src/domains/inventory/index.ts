@@ -6,7 +6,7 @@ import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseJsonObject } from "../../core/mutations.js";
 import { readFileSync } from "node:fs";
 import { AxiError } from "axi-sdk-js";
-import { MAX_LIMIT, MAX_ROWS, pageBudget } from "../../core/paginate.js";
+import { MAX_LIMIT, MAX_ROWS, pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import {
   detailOutput,
   listOutput,
@@ -74,30 +74,6 @@ const UPDATE_STATUSES = [
   "running",
   "successful",
 ] as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(
-      `--limit needs a value for \`inventory ${subcommand}\`, got --limit`,
-      [`Run \`awx-axi inventory ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`inventory ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi inventory ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function formatState(value: unknown): string {
   return typeof value === "string" ? "configured" : "not set";
@@ -240,7 +216,7 @@ function assertValidStatus(raw: string | undefined): void {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -310,6 +286,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* groupsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "inventories/",
     noun: "inventory",
@@ -317,7 +294,6 @@ function* groupsPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "inventory groups",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "groups");
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -341,6 +317,7 @@ function* groupsPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "inventories/",
     noun: "inventory",
@@ -348,7 +325,6 @@ function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "inventory hosts",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "hosts");
   const query: Record<string, string | number | boolean> = {};
   const withFacts = input.flags.facts === true;
 
@@ -400,6 +376,7 @@ function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* sourcesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "inventories/",
     noun: "inventory",
@@ -407,7 +384,6 @@ function* sourcesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "inventory sources",
   });
 
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "sources");
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -1358,10 +1334,10 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi inventory list [--search <s>] [--limit <n>]",
+      help: "awx-axi inventory list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search inventories", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: [], required: 0 },
       schema: INVENTORY_LIST_SCHEMA,
@@ -1384,10 +1360,10 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "groups",
-      help: "awx-axi inventory groups <id|name> [--search <s>] [--limit <n>]",
+      help: "awx-axi inventory groups <id|name> [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search groups", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id|name>"], required: 1 },
       schema: GROUPS_SCHEMA,
@@ -1396,10 +1372,10 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "hosts",
-      help: "awx-axi inventory hosts <id|name> [--search <s>] [--limit <n>] [--facts]",
+      help: "awx-axi inventory hosts <id|name> [--search <s>] [--limit <n>] [--facts]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search hosts", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "facts", description: "include ansible fact key counts", takesValue: false },
       ],
       positionals: { names: ["<id|name>"], required: 1 },
@@ -1409,10 +1385,10 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "sources",
-      help: "awx-axi inventory sources <id|name> [--search <s>] [--limit <n>]",
+      help: "awx-axi inventory sources <id|name> [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search sources", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id|name>"], required: 1 },
       schema: SOURCES_SCHEMA,
@@ -1438,10 +1414,10 @@ const baseInventoryDomain: Domain = defineDomain({
     },
     {
       name: "constructed-list",
-      help: "awx-axi inventory constructed-list [--search <s>] [--limit <n>]",
+      help: "awx-axi inventory constructed-list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search constructed inventories", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: [], required: 0 },
       schema: CONSTRUCTED_INVENTORY_LIST_SCHEMA,
