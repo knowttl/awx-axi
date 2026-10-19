@@ -319,6 +319,8 @@ The opt-in applies only to that profile.
 Constructing a transport for a plain HTTP controller prints a one-line stderr warning because credentials and traffic are unencrypted.
 
 `awx-axi config path` prints the config location.
+If a command returns `PROFILE_REQUIRED`, set `AWX_AXI_ORIGIN` and an existing `AWX_AXI_TOKEN` through a protected environment, or configure a profile at that location using an HTTPS origin and a token SecretRef.
+Then check the configured profiles and verify access with the commands below.
 `awx-axi profile list` lists names and origins without resolving secrets.
 `awx-axi auth status` reports profile, origin, credential source and identity using one live read.
 `awx-axi doctor` performs the same bounded identity and credential permission check.
