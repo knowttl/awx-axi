@@ -103,7 +103,8 @@ export class PrivateFiles {
     this.write(owner, JSON.stringify({ pid: process.pid, startTime: Date.now() - process.uptime() * 1000 }));
     try {
       for (let attempt = 0; ; attempt += 1) {
-        if (attempt >= 100) throw new AxiError(`timed out waiting for file lock: ${lock}`, "CONFIG_INVALID");
+        // Concurrent logins queue durable journal and credential writes behind this lock.
+        if (attempt >= 500) throw new AxiError(`timed out waiting for file lock: ${lock}`, "CONFIG_INVALID");
         try { linkSync(owner, lock); break; } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw this.#insecure(lock);
           try {

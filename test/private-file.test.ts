@@ -56,6 +56,20 @@ describe("private-file transaction locks", () => {
     expect(existsSync(path)).toBe(false);
   });
 
+  it("acquires a contended lock after two seconds of waiting", () => {
+    const path = join(directory(), "state");
+    const writer = new PrivateFiles();
+    writer.write(`${path}.lock`, JSON.stringify({ pid: process.pid, startTime: Date.now() }));
+    let elapsed = 0;
+    const files = new PrivateFiles({ wait: (ms) => {
+      elapsed += ms;
+      if (elapsed >= 2000) rmSync(`${path}.lock`);
+    } });
+    files.withLock(path, () => files.write(path, "committed"));
+    expect(files.read(path, true)).toBe("committed");
+    expect(readdirSync(join(path, ".."))).toEqual(["state"]);
+  });
+
   it("recovers a lock whose owning process has exited", () => {
     const path = join(directory(), "state");
     const owner = execFileSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" });
