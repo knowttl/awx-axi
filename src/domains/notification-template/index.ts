@@ -2,6 +2,7 @@
  * The `notification-template` domain: read notification-template resources.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { dryRun, isLive } from "../../core/mutations.js";
 import { readFileSync, statSync } from "node:fs";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
@@ -25,30 +26,6 @@ const LIST_SCHEMA = {
   defaultFields: ["id", "name", "organization", "notification_type", "created"],
   fieldAllowlist: ["messages", "description", "modified", "notification_configuration"],
 } as const;
-
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (raw === true) {
-    throw validationError(
-      `--limit needs a value for \`notification-template ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi notification-template ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`notification-template ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi notification-template ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
 
 function safeString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
@@ -104,7 +81,7 @@ function redactableText(raw: unknown): string | null {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -343,7 +320,7 @@ export const notificationTemplateDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi notification-template list [--search <s>] [--type <type>] [--organization <id>] [--limit <n>]",
+      help: "awx-axi notification-template list [--search <s>] [--type <type>] [--organization <id>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search notification templates", takesValue: true },
         {
@@ -356,7 +333,7 @@ export const notificationTemplateDomain: Domain = defineDomain({
           description: "filter by organization id",
           takesValue: true,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

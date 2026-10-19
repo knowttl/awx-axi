@@ -266,6 +266,8 @@ Internal reads for detail summaries read complete collections independently of l
 If an empty or repeated continuation prevents completion, the command reports `INCOMPLETE_COLLECTION` with the stop reason and continuation instead of computing a partial aggregate.
 `workflow template-node <id>` reads all credentials and edge targets and no longer accepts `--limit`.
 `job list`, `job events`, `job hosts`, `approval list`, `workflow list`, `workflow nodes`, `workflow template-nodes`, and `workflow object-roles` also support `--all [--max-rows <n>]`.
+All native collection commands under `activity-stream`, `credential`, `group`, `host`, `inventory`, `notification`, `notification-template`, `organization`, `role`, `team`, and `user` support the same controls, including related collections and `inventory constructed-list`.
+`inventory updates` retains its aggregate contract described below.
 `--all` walks pages up to a default and maximum of 10,000 rows; `--max-rows` selects a smaller positive budget and requires `--all`.
 Combining `--all` and `--limit` fails with exit 2 before a request.
 For example, use `awx-axi job list --all --max-rows 5000` or `awx-axi approval list --include-decided --all`.

@@ -2,6 +2,7 @@
  * The `activity-stream` domain: read AWX activity-stream events.
  */
 import { errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import {
   defineDomain,
@@ -34,27 +35,6 @@ const SCOPE_FLAGS = [
   { flag: "user", query: "user" },
   { flag: "credential", query: "credential" },
 ] as const;
-
-function positiveLimit(raw: string | true | undefined): number {
-  if (raw === true) {
-    throw validationError("--limit needs a value for `activity-stream list`", [
-      "Run `awx-axi activity-stream list --limit 100`",
-    ]);
-  }
-  if (raw === undefined) {
-    return DEFAULT_LIST_LIMIT;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for ` +
-        "`activity-stream list`, got " +
-        raw,
-      ["Run `awx-axi activity-stream list --limit 100`"],
-    );
-  }
-  return value;
-}
 
 function parsePositiveId(raw: string, command: string): number {
   const value = Number(raw);
@@ -105,7 +85,7 @@ function toActivityRow(raw: unknown): Row {
 }
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit);
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const scopes = SCOPE_FLAGS.filter(
     (entry) => typeof (input.flags as Record<string, unknown>)[entry.flag] === "string",
   );
@@ -201,7 +181,7 @@ export const activityStreamDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "list",
-      help: "awx-axi activity-stream list [--operation <associate|create|delete|disassociate|update>] [--search <s>] [--job <id>|--project <id>|--inventory <id>|--template <id>|--workflow <id>|--workflow-job <id>|--organization <id>|--team <id>|--user <id>|--credential <id>] [--limit <n>]",
+      help: "awx-axi activity-stream list [--operation <associate|create|delete|disassociate|update>] [--search <s>] [--job <id>|--project <id>|--inventory <id>|--template <id>|--workflow <id>|--workflow-job <id>|--organization <id>|--team <id>|--user <id>|--credential <id>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         {
           name: "operation",
@@ -247,7 +227,7 @@ export const activityStreamDomain: Domain = defineDomain({
           description: "scope by credential id",
           takesValue: true,
         },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },

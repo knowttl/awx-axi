@@ -6,6 +6,7 @@
 import { AxiError } from "axi-sdk-js";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
 import { redactValue } from "../../core/redact.js";
 import {
@@ -149,27 +150,6 @@ function parseInventory(raw: string): number {
   return value;
 }
 
-function positiveLimit(
-  raw: string | true | undefined,
-): number {
-  if (raw === true) {
-    throw validationError("--limit needs a value for `host list`", [
-      "Run `awx-axi host list --limit 100`",
-    ]);
-  }
-  if (raw === undefined) {
-    return DEFAULT_LIST_LIMIT;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`host list\`, got ${raw}`,
-      ["Run `awx-axi host list --limit 100`"],
-    );
-  }
-  return value;
-}
-
 function* matchHostName(
   value: string,
   lookup: "name" | "name__iexact",
@@ -242,7 +222,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     query.inventory = parseInventory(input.flags.inventory);
   }
 
-  const limit = positiveLimit(input.flags.limit);
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const paged = yield* readPaged("hosts/", query, limit);
   const rows = paged.rows.map(toHostRow);
 
@@ -324,12 +304,12 @@ export const hostDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "list",
-      help: "awx-axi host list [--search <s>] [--name <n>] [--inventory <i>] [--limit <n>]",
+      help: "awx-axi host list [--search <s>] [--name <n>] [--inventory <i>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search hosts and related facts", takesValue: true },
         { name: "name", description: "filter by exact host name", takesValue: true },
         { name: "inventory", description: "filter by inventory id", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: [], required: 0 },
       schema: LIST_SCHEMA,
