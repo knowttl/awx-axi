@@ -5,6 +5,8 @@
 import { errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseJsonObject } from "../../core/mutations.js";
 import { readFileSync } from "node:fs";
+import { AxiError } from "axi-sdk-js";
+import { MAX_LIMIT, MAX_ROWS, pageBudget } from "../../core/paginate.js";
 import {
   detailOutput,
   listOutput,
@@ -23,7 +25,7 @@ import {
   type SubcommandInput,
 } from "../../core/registry.js";
 import { resolveId } from "../../core/resolve.js";
-import { type PagedResult, type Query } from "../../core/transport.js";
+import { type PagedResult } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const UPDATES_LIMIT = 25;
@@ -226,51 +228,6 @@ function toUpdateRow(raw: unknown, sourceName: string, sourceId: number): Row {
   };
 }
 
-type ListPage = {
-  readonly rows: readonly unknown[];
-  readonly next: string | undefined;
-};
-
-function readListPage(body: unknown, subject: string): ListPage {
-  if (body === null || typeof body !== "object") {
-    throw new Error(`the controller returned a list page with no envelope for ${subject}`);
-  }
-
-  const record = body as Record<string, unknown>;
-  if (!Array.isArray(record.results)) {
-    throw new Error(`the controller returned a list page with no results for ${subject}`);
-  }
-
-  return {
-    rows: record.results,
-    next: typeof record.next === "string" ? record.next : undefined,
-  };
-}
-
-type NextPage = {
-  readonly route: string;
-  readonly query: Query;
-};
-
-function parseNextQuery(next: string): NextPage {
-  const divider = next.indexOf("?");
-  if (divider < 0) {
-    return { route: next.startsWith("/") ? next.replace(/^\//, "") : next, query: {} };
-  }
-
-  const dividerPath = next.indexOf("/api/v2/");
-  const route = dividerPath < 0 ? next.slice(0, divider) : next.slice(dividerPath + 7, divider);
-  const query: Query = {};
-  const params = new URLSearchParams(next.slice(divider + 1));
-  for (const [key, value] of params) {
-    query[key] = value;
-  }
-  return {
-    route: route.replace(/^\//, ""),
-    query,
-  };
-}
-
 function assertValidStatus(raw: string | undefined): void {
   if (raw === undefined) {
     return;
@@ -468,6 +425,7 @@ function* sourcesPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, UPDATES_LIMIT).maxRows;
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "inventories/",
     noun: "inventory",
@@ -475,7 +433,6 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "inventory updates",
   });
 
-  const limit = positiveLimit(input.flags.limit, UPDATES_LIMIT, "updates");
   const search = typeof input.flags.search === "string" ? input.flags.search : undefined;
   const status = typeof input.flags.status === "string" ? input.flags.status : undefined;
 
@@ -491,58 +448,38 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     updatesQuery.status = status;
   }
 
-  let sourceQuery: Query = {
-    page_size: DEFAULT_LIST_LIMIT,
-  };
-  let sourceRoute = `inventories/${id}/inventory_sources/`;
-  let sourceCount = 0;
+  const sources = yield* readPaged(`inventories/${id}/inventory_sources/`, {}, {
+    all: true,
+    maxRows: MAX_ROWS,
+  });
 
-  while (sourceRoute !== undefined && updates.length < limit) {
-    const sourceListRes = yield* read(sourceRoute, sourceQuery);
-    if (sourceListRes.status !== 200) {
-      throw errorForResponse(sourceListRes, {
-        subject: `inventory ${id} sources`,
-      });
-    }
-
-    const sourcePage = readListPage(sourceListRes.body, `inventory ${id} sources`);
-    sourceCount += sourcePage.rows.length;
-
-    for (const source of sourcePage.rows) {
-      if (updates.length >= limit) {
-        break;
-      }
-      const sourceRecord = (source ?? {}) as Record<string, unknown>;
-      const sourceId = toNumber(sourceRecord.id);
-      if (sourceId === 0) {
-        continue;
-      }
-      const sourceName =
-        typeof sourceRecord.name === "string" ? sourceRecord.name : String(sourceId);
-      const remaining = Math.max(1, limit - updates.length);
-
-      const sourceUpdates = yield* readPaged(
-        `inventory_sources/${sourceId}/inventory_updates/`,
-        updatesQuery,
-        remaining,
-      );
-
-      const filtered = sourceUpdates.rows
-        .map((row) => toUpdateRow(row, sourceName, sourceId))
-        .filter((row) => status === undefined || row.status === status);
-
-      updates.push(...filtered);
-    }
-
-    if (sourcePage.next === undefined) {
+  for (const source of sources.rows) {
+    if (updates.length >= limit) {
       break;
     }
+    const sourceRecord = (source ?? {}) as Record<string, unknown>;
+    const sourceId = toNumber(sourceRecord.id);
+    if (sourceId === 0) {
+      continue;
+    }
+    const sourceName =
+      typeof sourceRecord.name === "string" ? sourceRecord.name : String(sourceId);
+    const remaining = limit - updates.length;
 
-    sourceRoute = `inventories/${id}/inventory_sources/`;
-    sourceQuery = parseNextQuery(sourcePage.next).query;
+    const sourceUpdates = yield* readPaged(
+      `inventory_sources/${sourceId}/inventory_updates/`,
+      updatesQuery,
+      remaining,
+    );
+
+    const filtered = sourceUpdates.rows
+      .map((row) => toUpdateRow(row, sourceName, sourceId))
+      .filter((row) => status === undefined || row.status === status);
+
+    updates.push(...filtered);
   }
 
-  if (sourceCount === 0) {
+  if (sources.rows.length === 0 && !sources.pagination.truncated) {
     return listOutput({
       label: UPDATES_SCHEMA.label,
       rows: [],
@@ -554,41 +491,36 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     });
   }
 
-  return listOutput({
+  return { ...listOutput({
     label: UPDATES_SCHEMA.label,
     rows: updates,
     count: updates.length,
     empty:
-      status === undefined
+      sources.pagination.truncated
+        ? "0 updates returned; inventory source collection is incomplete"
+        : status === undefined
         ? "0 inventory updates found"
         : `0 inventory updates found with status ${status}`,
     help: [
       "Run `awx-axi job list --type inventory-update` to inspect update outputs",
-      `Run \`awx-axi inventory updates ${id} --limit ${limit * 2}\` for a longer history`,
+      ...(limit < MAX_LIMIT ? [`Run \`awx-axi inventory updates ${id} --limit ${Math.min(MAX_LIMIT, limit * 2)}\` for a longer history`] : []),
     ],
-  });
+  }), inventory_sources_pagination: sources.pagination };
 }
 
 function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(
-    input.flags.limit,
-    DEFAULT_LIST_LIMIT,
-    "constructed-list",
-  );
+  const budget = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
     query.search = input.flags.search;
   }
 
-  let rows: unknown[] = [];
-  let count: number | undefined = undefined;
-  let listRoute = "constructed_inventories/";
-  let listQuery: Query = { ...query, page_size: limit };
-
-  while (listRoute !== undefined && rows.length < limit) {
-    const listResponse = yield* read(listRoute, listQuery);
-    if (listResponse.status === 404) {
+  let paged: PagedResult;
+  try {
+    paged = yield* readPaged("constructed_inventories/", query, budget);
+  } catch (error) {
+    if (error instanceof AxiError && error.code === "NOT_FOUND") {
       return listOutput({
         label: CONSTRUCTED_INVENTORY_LIST_SCHEMA.label,
         rows: [],
@@ -600,26 +532,8 @@ function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
         ],
       });
     }
-    if (listResponse.status !== 200) {
-      throw errorForResponse(listResponse, { subject: "constructed inventories" });
-    }
-
-    const page = readListPage(listResponse.body, "constructed inventories");
-    const listBody = (listResponse.body ?? {}) as Record<string, unknown>;
-    count ??= typeof listBody.count === "number" ? listBody.count : undefined;
-    rows = rows.concat(page.rows);
-    if (page.next === undefined || page.rows.length === 0) {
-      break;
-    }
-    const parsed = parseNextQuery(page.next);
-    listRoute = parsed.route;
-    listQuery = parsed.query;
+    throw error;
   }
-
-  const paged: Pick<PagedResult, "rows" | "count"> = {
-    rows: rows.slice(0, limit),
-    count,
-  };
 
   const constructedRows = paged.rows.map(toConstructedInventoryRow);
 
@@ -627,6 +541,7 @@ function* constructedListPlan(input: SubcommandInput): Plan<DomainResult> {
     label: CONSTRUCTED_INVENTORY_LIST_SCHEMA.label,
     rows: constructedRows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 constructed inventories found",
     help: [
       "Run `awx-axi inventory constructed-show <id|name>` to inspect one constructed inventory",

@@ -245,7 +245,13 @@ export async function runPlan<T>(
 
   while (!step.done) {
     const request = step.value;
-    const result = await execute(request, runner);
+    let result: RequestResult;
+    try {
+      result = await execute(request, runner);
+    } catch (error) {
+      step = plan.throw(error);
+      continue;
+    }
     if (request.kind === "write") {
       const response = result as AwxResponse;
       if (response.body && typeof response.body === "object" &&

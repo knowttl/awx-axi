@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_LIMIT, MAX_PAGES } from "../src/core/paginate.js";
 
 import { runCli } from "./support/run.js";
 
@@ -188,8 +189,8 @@ describe("inventory domain (design.md §7.1)", () => {
     const run = await runCli(["inventory", "updates", "11"], {
       script: [
         firstPageSources,
-        ...Array.from({ length: 100 }, () => emptySourceUpdates),
         secondPageSource,
+        ...Array.from({ length: 100 }, () => emptySourceUpdates),
         lateUpdate,
       ],
     });
@@ -198,11 +199,11 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "inventories/11/inventory_sources/",
-      query: { page_size: 100 },
+      query: { page_size: 200 },
     });
-    expect(run.transport.requests[101]).toMatchObject({
+    expect(run.transport.requests[1]).toMatchObject({
       method: "GET",
-      route: "inventories/11/inventory_sources/",
+      route: "/api/v2/inventories/11/inventory_sources/",
       query: { page: "2", page_size: "100" },
     });
     expect(run.stdout).toContain("late sync");
@@ -227,6 +228,67 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("0 constructed inventories found");
     expect(run.stdout).toContain("This controller does not expose constructed inventories");
+  });
+
+  it.each([["constructed-list"], ["updates", "named inventory"]])(
+    "inventory %j rejects limits above the shared ceiling before reading",
+    async (...command) => {
+      const run = await runCli(["inventory", ...command, "--limit", String(MAX_LIMIT + 1)]);
+      expect(run.exitCode).toBe(2);
+      expect(run.transport.requests).toHaveLength(0);
+      expect(run.stdout).toContain("code: VALIDATION_ERROR");
+    },
+  );
+
+  it.each([
+    { command: ["constructed-list"], requestCount: MAX_PAGES },
+    { command: ["updates", "11"], requestCount: MAX_PAGES * 2 },
+  ])(
+    "inventory $command stops at the shared page cap",
+    async ({ command, requestCount }) => {
+      const pages = Array.from({ length: MAX_PAGES }, (_, index) => ({
+        status: 200,
+        body: {
+          count: MAX_PAGES + 1,
+          next: `/api/v2/items/?page=${index + 2}`,
+          results: [{ id: index + 1, name: `item ${index + 1}` }],
+        },
+      }));
+      const emptyUpdates = Array.from({ length: MAX_PAGES }, () => ({
+        status: 200,
+        body: { count: 0, next: null, results: [] },
+      }));
+      const run = await runCli(["inventory", ...command, "--limit", String(MAX_LIMIT)], {
+        script: [...pages, ...emptyUpdates],
+      });
+      expect(run.exitCode).toBe(0);
+      expect(run.transport.requests).toHaveLength(requestCount);
+      expect(run.stdout).toContain("stop: page-budget");
+      expect(run.stdout).toContain("truncated: true");
+      expect(run.stdout).toContain(`next: /api/v2/items/?page=${MAX_PAGES + 1}`);
+    },
+  );
+
+  it("constructed list preserves totals and follows continuation links", async () => {
+    const run = await runCli(["inventory", "constructed-list", "--limit", "2"], {
+      script: [
+        { status: 200, body: { count: 3, next: "/api/v2/constructed_inventories/?page=2", results: [{ id: 1, name: "first" }] } },
+        { status: 200, body: { count: 3, next: "/api/v2/constructed_inventories/?page=3", results: [{ id: 2, name: "second" }] } },
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(2);
+    expect(run.stdout).toContain("count: 2 of 3 total");
+    expect(run.stdout).toContain("stop: row-budget");
+    expect(run.stdout).toContain("second");
+  });
+
+  it("constructed list propagates errors other than missing endpoints", async () => {
+    const run = await runCli(["inventory", "constructed-list"], {
+      script: [{ status: 403, body: {} }],
+    });
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("code: FORBIDDEN");
   });
 
   it("inventory constructed-show resolves by name and renders key fields", async () => {
