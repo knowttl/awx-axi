@@ -187,7 +187,11 @@ export function selectProfile(envInput: Env, selection: Selection = {}, files = 
     if (env.AWX_AXI_TOKEN !== undefined || env.AWX_AXI_VERIFY_SSL !== undefined || env.AWX_AXI_ALLOW_HTTP !== undefined) invalid("env profile is incomplete: AWX_AXI_ORIGIN is required");
     const names = Object.keys(config.profiles);
     name = config.defaultProfile ?? (names.length === 1 ? names[0] : undefined);
-    if (name === undefined) throw new AxiError("select a configured profile with --profile or AWX_AXI_PROFILE", names.length ? "PROFILE_AMBIGUOUS" : "PROFILE_REQUIRED");
+    if (name === undefined) throw new AxiError("select a configured profile with --profile or AWX_AXI_PROFILE", names.length ? "PROFILE_AMBIGUOUS" : "PROFILE_REQUIRED", names.length ? [] : [
+      "Set AWX_AXI_ORIGIN to your controller HTTPS origin and AWX_AXI_TOKEN to an existing token using a protected environment",
+      "Run `awx-axi config path` to locate config.json; configure a profile with an HTTPS origin and a token SecretRef",
+      "Run `awx-axi profile list` to check configured profiles, then `awx-axi auth status` to verify access",
+    ]);
     profile = config.profiles[name]!;
   }
   const allowHttp = profile.allowHttp === true || (login && selection.allowHttp === true);

@@ -28,6 +28,26 @@ const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["s
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
+  it("explains how to configure a missing profile before any request", async () => {
+    const run = await runCli(["auth", "status"], { env: environment() });
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("PROFILE_REQUIRED");
+    expect(run.stdout).toContain("AWX_AXI_ORIGIN");
+    expect(run.stdout).toContain("AWX_AXI_TOKEN");
+    expect(run.stdout).toContain("awx-axi config path");
+    expect(run.stdout).toContain("awx-axi profile list");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it.each(["t", "token", "1234567"])("preserves prose when a short token is resolved: %s", async (token) => {
+    const env = { ...environment(), PRODUCTION_PAT: token };
+    configure(env, { production });
+    const run = await runCli(["auth", "status"], { env, script: [{ status: 200, body: { results: [{ username: "operator-token-1234567" }] } }] });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("user: operator-token-1234567");
+    expect(run.stdout).toContain("profile: production");
+  });
+
   it.each([
     ["https://awx.example.com", false],
     ["https://awx.example.com", true],

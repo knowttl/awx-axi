@@ -22,7 +22,8 @@ export const REDACTION = "***";
 const secrets = new Set<string>();
 
 export function registerSecret(secret: string): void {
-  if (!secret) return;
+  // Short values occur in ordinary prose; sensitive fields are masked separately.
+  if (secret.length < 8) return;
   secrets.add(secret);
   secrets.add(JSON.stringify(secret).slice(1, -1));
   secrets.add(encodeURIComponent(secret));

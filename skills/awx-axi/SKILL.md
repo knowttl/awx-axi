@@ -2,7 +2,7 @@
 name: awx-axi
 description: "Manage AWX 24.6.1 automation from the shell - inspect, create, edit, copy, delete, launch, cancel, associate, and configure controller resources with dry-run previews and gated writes. Use for AWX or Ansible Tower jobs, templates, workflows, hosts, inventories, projects, schedules and their launch-time prompt overrides, organizations, credentials, notifications, execution environments, teams, users, roles, and maintenance runs."
 user-invocable: false
-author: Kun Chen (kunchenguid)
+author: knowttl
 metadata:
   hermes:
     tags: [awx, ansible, automation, devops, jobs, workflows]

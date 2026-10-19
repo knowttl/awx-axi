@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "./support/run.js";
 
 describe("job domain (design.md §7.2)", () => {
+  it("job help shows valid watch placeholders", async () => {
+    const run = await runCli(["job", "--help"]);
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("watch    <id> [--timeout <seconds>] [--interval <seconds>]");
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
+  it.each([["job", "--help"], ["job", "list", "--help"]])("job list usage includes template and field selection in %j", async (...argv) => {
+    const run = await runCli(argv);
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toMatch(/list[^\n]*\[--template <id\|name>\][^\n]*\[--fields <fields>\]/);
+    expect(run.transport.requests).toHaveLength(0);
+  });
+
   it("job list lists unified jobs with status and envelope total", async () => {
     const run = await runCli(["job", "list"], {
       script: ["unified-jobs-page-1"],
