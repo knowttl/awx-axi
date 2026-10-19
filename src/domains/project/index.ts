@@ -3,6 +3,7 @@
  *
  * A sync's log is `job stdout <sync-id>`, and its progress is `job watch <sync-id>`.
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { AxiError } from "axi-sdk-js";
 
 import { errorForResponse, validationError } from "../../core/errors.js";
@@ -69,26 +70,8 @@ function toProjectRoleRow(raw: unknown): Row {
   };
 }
 
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`project ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi project ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
-
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -179,6 +162,7 @@ function* playbooksPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, UPDATES_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "projects/",
     noun: "project",
@@ -186,7 +170,6 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "project updates",
   });
 
-  const limit = positiveLimit(input.flags.limit, UPDATES_LIMIT, "updates");
   const paged = yield* readPaged(`projects/${id}/project_updates/`, {}, limit);
 
   const rows = paged.rows.map((r) => {
@@ -212,6 +195,7 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
 }
 
 function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_ROLES_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "projects/",
     noun: "project",
@@ -219,7 +203,7 @@ function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "project roles",
   });
 
-  const paged = yield* readPaged(`projects/${id}/object_roles/`, {}, DEFAULT_ROLES_LIMIT);
+  const paged = yield* readPaged(`projects/${id}/object_roles/`, {}, limit);
   const rows = paged.rows.map(toProjectRoleRow);
 
   return listOutput({
@@ -606,10 +590,10 @@ export const projectDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi project list [--search <s>] [--limit <n>]",
+      help: "awx-axi project list [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "search", description: "search projects", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
@@ -639,9 +623,9 @@ export const projectDomain: Domain = defineDomain({
     },
     {
       name: "updates",
-      help: "awx-axi project updates <id|name> [--limit <n>]",
+      help: "awx-axi project updates <id|name> [--limit <n>]" + PAGINATION_HELP,
       flags: [
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
       ],
       positionals: { names: ["<id|name>"], required: 1 },
       schema: { label: "updates", defaultFields: ["id", "name", "status", "finished"], fieldAllowlist: [] },
@@ -650,8 +634,8 @@ export const projectDomain: Domain = defineDomain({
     },
     {
       name: "roles",
-      help: "awx-axi project roles <id|name>",
-      flags: [],
+      help: "awx-axi project roles <id|name>" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: ROLES_SCHEMA,
       suggestions: [],

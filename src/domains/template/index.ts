@@ -1,6 +1,7 @@
 /**
  * The `template` domain: manage and launch job templates (design.md §7.4).
  */
+import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { statSync, readFileSync } from "node:fs";
 
 import { AxiError } from "axi-sdk-js";
@@ -61,26 +62,8 @@ function toTemplateRow(raw: unknown): Row {
   };
 }
 
-function positiveLimit(
-  raw: string | true | undefined,
-  fallback: number,
-  subcommand: string,
-): number {
-  if (typeof raw !== "string") {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1) {
-    throw validationError(
-      `--limit must be a positive integer for \`template ${subcommand}\`, got ${raw}`,
-      [`Run \`awx-axi template ${subcommand} --limit ${fallback}\``],
-    );
-  }
-  return value;
-}
-
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "list");
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
@@ -117,13 +100,13 @@ function toRoleRow(raw: unknown): Row {
 }
 
 function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
+  const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
   const id = yield* resolveId(input.args[0] ?? "", {
     listRoute: "job_templates/",
     noun: "job template",
     listCommand: "template list",
     command: "template object-roles",
   });
-  const limit = positiveLimit(input.flags.limit, DEFAULT_LIST_LIMIT, "object-roles");
   const paged = yield* readPaged(`job_templates/${id}/object_roles/`, {}, limit);
   return listOutput({
     label: "object_roles",
@@ -763,8 +746,8 @@ export const templateDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "object-roles",
-      help: "awx-axi template object-roles <id|name> [--limit <n>]",
-      flags: [{ name: "limit", description: "rows to return", takesValue: true }],
+      help: "awx-axi template object-roles <id|name> [--limit <n>]" + PAGINATION_HELP,
+      flags: PAGINATION_FLAGS,
       positionals: { names: ["<id|name>"], required: 1 },
       schema: { label: "object_roles", defaultFields: ["id", "name", "description", "type"], fieldAllowlist: [] },
       suggestions: [],
@@ -847,11 +830,11 @@ export const templateDomain: Domain = defineDomain({
     },
     {
       name: "list",
-      help: "awx-axi template list [--project <p>] [--search <s>] [--limit <n>]",
+      help: "awx-axi template list [--project <p>] [--search <s>] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "project", description: "filter by project", takesValue: true },
         { name: "search", description: "search templates", takesValue: true },
-        { name: "limit", description: "rows to return", takesValue: true },
+        ...PAGINATION_FLAGS,
         { name: "fields", description: "extra fields", takesValue: true },
       ],
       positionals: { names: [], required: 0 },
