@@ -102,6 +102,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 projects found",
     help: [
       "Run `awx-axi project show <id|name>` for project detail",
@@ -202,6 +203,7 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "updates",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 project syncs found",
     help: [
       `Run \`awx-axi job stdout <id>\` for a sync log`,
@@ -224,6 +226,7 @@ function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: ROLES_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 project roles found",
     help: [
       `Run \`awx-axi project show ${id}\` to inspect project metadata`,

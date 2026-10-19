@@ -181,6 +181,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 users found",
     help: ["Run `awx-axi user show <id|name>` to inspect one user"],
   });

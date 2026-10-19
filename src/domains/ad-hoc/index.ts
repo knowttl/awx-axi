@@ -111,6 +111,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 ad-hoc commands found",
     help: [
       `Run \`awx-axi ad-hoc show <id>\` to inspect command detail`,
@@ -345,6 +346,7 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "events",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 events found",
     help: [
       `Run \`awx-axi ad-hoc stdout ${id}\` for command output`,

@@ -109,6 +109,7 @@ function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "object_roles",
     rows: paged.rows.map(toRoleRow),
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 object roles found for credential",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });
@@ -132,6 +133,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 credentials found",
     help: [
       "Run `awx-axi credential show <id|name>` to inspect one credential",

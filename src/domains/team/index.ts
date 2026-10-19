@@ -161,6 +161,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 teams found",
     help: [
       "Run `awx-axi team show <id|name>` to inspect one team",
@@ -225,6 +226,7 @@ function* usersPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "users",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 users found for team",
     help: [`Run \`awx-axi user show <id|name>\` to inspect user detail`],
   });
@@ -246,6 +248,7 @@ function* projectsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "projects",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 projects found for team",
     help: [`Run \`awx-axi project show <id|name>\` to inspect project detail`],
   });
@@ -267,6 +270,7 @@ function* credentialsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "credentials",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 credentials found for team",
     help: [`Run \`awx-axi credential show <id|name>\` to inspect credential detail`],
   });
@@ -288,6 +292,7 @@ function* rolesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "roles",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 roles found for team",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });
@@ -309,6 +314,7 @@ function* objectRolesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "object_roles",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 object roles found for team",
     help: [`Run \`awx-axi role show <id|name>\` to inspect role detail`],
   });
@@ -330,6 +336,7 @@ function* accessListPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "access_list",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 access list members found for team",
     help: [`Run \`awx-axi user show <id|name>\` to inspect user detail`],
   });

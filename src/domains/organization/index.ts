@@ -85,6 +85,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 organizations found",
     help: ["Run `awx-axi organization show <id|name>` to inspect one organization"],
   });

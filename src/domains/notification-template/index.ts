@@ -126,6 +126,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 notification templates found",
     help: [
       "Run `awx-axi notification-template show <id|name>` to inspect one template",

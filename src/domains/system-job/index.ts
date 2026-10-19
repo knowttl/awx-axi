@@ -143,6 +143,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 system jobs found",
     help: [
       `Run \`awx-axi system-job show <id>\` for job details`,
@@ -240,6 +241,7 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "events",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 system job events found",
     help: [`Run \`awx-axi system-job show ${id}\` for run-level status`],
   });
@@ -271,6 +273,7 @@ function* notificationsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: "notifications",
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 system job notifications found",
     help: [`Run \`awx-axi system-job show ${id}\` for run-level status`],
   });
