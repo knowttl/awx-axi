@@ -4,6 +4,24 @@ import { decode } from "@toon-format/toon";
 import { runCli } from "./support/run.js";
 
 describe("workflow template-node inspection", () => {
+  it("reads complete credential and edge collections beyond list defaults", async () => {
+    const run = await runCli(["workflow", "template-node", "71"], {
+      script: [
+        "workflow-template-node-detail",
+        ...Array.from({ length: 4 }, () => ({
+          status: 200,
+          body: { count: 201, next: null, results: Array.from({ length: 201 }, (_, id) => ({ id, name: `relation ${id}` })) },
+        })),
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    const output = decode(run.stdout);
+    expect(output).toHaveProperty("workflow_template_node.credentials.length", 201);
+    expect(output).toHaveProperty("workflow_template_node.success_nodes.length", 201);
+    expect(output).toHaveProperty("workflow_template_node.failure_nodes.length", 201);
+    expect(output).toHaveProperty("workflow_template_node.always_nodes.length", 201);
+  });
+
   it("omits empty survey passwords from the populated prompt fields", async () => {
     const run = await runCli(["workflow", "template-nodes", "10"], { script: [{
       status: 200, body: { count: 1, next: null, results: [{ id: 71, survey_passwords: {}, extra_data: { release: "next" } }] },
@@ -162,7 +180,7 @@ describe("workflow template-node inspection", () => {
 
   it("identifies an approval node and a unified-template node without reading run nodes", async () => {
     const run = await runCli(
-      ["workflow", "template-node", "72", "--limit", "20"],
+      ["workflow", "template-node", "72"],
       {
         script: [
           {
@@ -469,15 +487,15 @@ describe("workflow template-node inspection", () => {
     expect(run.transport.requests).toHaveLength(1);
   });
 
-  it("uses the shared page-size limit for each node relation", async () => {
-    const empty = { status: 200, body: { count: 0, next: null, results: [] } };
+  it("rejects list budgets on node details before contacting the controller", async () => {
     const run = await runCli(
       ["workflow", "template-node", "71", "--limit", "7"],
-      { script: ["workflow-template-node-detail", empty, empty, empty, empty] },
+      { script: [] },
     );
 
-    expect(run.exitCode).toBe(0);
-    expect(run.transport.requests.slice(1).every((request) => request.query.page_size === 7)).toBe(true);
+    expect(run.exitCode).toBe(2);
+    expect(run.transport.requests).toHaveLength(0);
+    expect(run.stdout).toContain("unknown flag --limit");
   });
 
   it("is available in read-only mode and reads safe credential context with GET requests", async () => {
@@ -521,7 +539,7 @@ describe("workflow template-node inspection", () => {
 
     const showHelp = await runCli(["workflow", "template-node", "--help"], { script: [] });
     expect(showHelp.exitCode).toBe(0);
-    expect(showHelp.stdout).toContain("workflow template-node <id> [--limit <n>]");
+    expect(showHelp.stdout).toContain("workflow template-node <id>");
     expect(showHelp.stdout).toContain("workflow nodes <run-id>");
 
     const nounHelp = await runCli(["workflow", "--help"], { script: [] });

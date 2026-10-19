@@ -1,8 +1,39 @@
 import { describe, expect, it } from "vitest";
+import { decode } from "@toon-format/toon";
 
 import { runCli } from "./support/run.js";
 
 describe("job domain (design.md §7.2)", () => {
+  it("job details summarize every host and failed task beyond list defaults", async () => {
+    const run = await runCli(["job", "show", "1839", "--type", "job"], {
+      script: [
+        "job-detail-terminal",
+        { status: 200, body: { count: 201, next: null, results: Array.from({ length: 201 }, (_, id) => ({ id, ok: 1 })) } },
+        { status: 200, body: { count: 51, next: null, results: Array.from({ length: 51 }, (_, id) => ({ id, task: `task ${id}` })) } },
+        "stdout-ranged",
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    const output = decode(run.stdout);
+    expect(output).toMatchObject({ job: { hosts: "201 total, 201 ok, 0 failed, 0 unreachable" } });
+    expect(output).toHaveProperty("job.failed_tasks.length", 51);
+  });
+
+  it("workflow job details include approvals beyond the list row budget", async () => {
+    const run = await runCli(["job", "show", "1840", "--type", "workflow"], {
+      script: [
+        { status: 200, body: { id: 1840, status: "running" } },
+        { status: 200, body: { count: 201, next: "/api/v2/workflow_jobs/1840/workflow_nodes/?page=2", results: Array.from({ length: 200 }, (_, id) => ({ id })) } },
+        { status: 200, body: { count: 201, next: null, results: [{ id: 201, summary_fields: { job: { id: 57, type: "workflow_approval", status: "pending" } } }] } },
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(decode(run.stdout)).toMatchObject({ job: {
+      nodes: "201 total, 0 successful, 0 running, 1 pending approval, 200 not run",
+      blocked_on: [{ node: 201, approval: 57 }],
+    } });
+  });
+
   it("job help shows valid watch placeholders", async () => {
     const run = await runCli(["job", "--help"]);
     expect(run.exitCode).toBe(0);

@@ -5,6 +5,27 @@ import { MAX_LIMIT, MAX_PAGES } from "../src/core/paginate.js";
 import { runCli } from "./support/run.js";
 
 describe("inventory domain (design.md §7.1)", () => {
+  it.each([
+    { command: ["list"], label: "inventories", extraReads: [] },
+    { command: ["groups", "11"], label: "groups", extraReads: [] },
+    { command: ["hosts", "11"], label: "hosts", extraReads: [] },
+    { command: ["hosts", "11", "--facts"], label: "hosts", extraReads: [{ status: 200, body: {} }] },
+    { command: ["sources", "11"], label: "inventory_sources", extraReads: [] },
+  ])("inventory $command discloses partial rows", async ({ command, label, extraReads }) => {
+    const run = await runCli(["inventory", ...command, "--limit", "1"], {
+      script: [
+        { status: 200, body: { count: 3, next: "/api/v2/items/?page=2", results: [{ id: 1 }, { id: 2 }] } },
+        ...extraReads,
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    const output = decode(run.stdout);
+    expect(output).toMatchObject({ count: "1 of 3 total", pagination: {
+      stop: "row-budget", truncated: true, partial_page: true, next: "/api/v2/items/?page=2",
+    } });
+    expect(output).toHaveProperty(`${label}.length`, 1);
+  });
+
   it("inventory list returns paged rows and preserves totals for search", async () => {
     const run = await runCli(["inventory", "list", "--search", "site", "--limit", "1"], {
       script: ["inventory-list-page-1", "inventory-list-page-2"],

@@ -59,6 +59,26 @@ describe("collection budgets through the CLI", () => {
 });
 
 describe("shared transport pagination seam", () => {
+  it("reads internal collections past list row and page ceilings", async () => {
+    const transport = new RecordedTransport([
+      ...Array.from({ length: MAX_PAGES }, (_, i) => page(Array.from({ length: 101 }, (_, j) => i * 101 + j), `items/?page=${i + 2}`, MAX_PAGES * 101 + 1)),
+      page([MAX_PAGES * 101], null, MAX_PAGES * 101 + 1),
+    ]);
+    const result = await transport.getPaged("items/", {}, null);
+    expect(result.rows).toHaveLength(MAX_PAGES * 101 + 1);
+    expect(result.count).toBe(MAX_PAGES * 101 + 1);
+    expect(result.pagination).toMatchObject({ stop: "complete", truncated: false, pages: MAX_PAGES + 1 });
+  });
+
+  it("refuses to summarize a repeated internal continuation", async () => {
+    const transport = new RecordedTransport([page([1], "items/?page=2"), page([2], "items/?page=2")]);
+    await expect(transport.getPaged("items/", {}, null)).rejects.toMatchObject({
+      code: "INCOMPLETE_COLLECTION",
+      details: { count: 3, pagination: { stop: "repeated-page", truncated: true, next: "items/?page=2" } },
+    });
+    expect(transport.requests).toHaveLength(2);
+  });
+
   it("accepts the limit ceiling and preserves the total on an empty collection", async () => {
     const transport = new RecordedTransport([page([], null, 0)]);
     const result = await transport.getPaged("items/", {}, MAX_LIMIT);

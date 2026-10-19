@@ -5,7 +5,7 @@
  * page reads as AWX requires and hands back one assembled result plus the
  * server's own `count`, so no domain and no command ever sees a page boundary.
  */
-import { errorForResponse, validationError } from "./errors.js";
+import { AwxAxiError, errorForResponse, validationError } from "./errors.js";
 import type { ParsedFlags } from "./flags.js";
 import type { FlagSpec } from "./registry.js";
 import type { AwxResponse, PagedResult, Query } from "./transport.js";
@@ -79,17 +79,19 @@ export async function walkPages(
   read: PageReader,
   route: string,
   query: Query,
-  limit: number | PageBudget,
+  limit: number | PageBudget | null,
 ): Promise<PagedResult> {
   assertNoCountDisabled(query);
   const budget = typeof limit === "number" ? { all: false, maxRows: limit } : limit;
-  positiveRows(String(budget.maxRows), 20, budget.all ? MAX_ROWS : MAX_LIMIT, budget.all ? "--max-rows" : "--limit");
-  const rowLimit = budget.maxRows;
+  if (budget !== null) {
+    positiveRows(String(budget.maxRows), 20, budget.all ? MAX_ROWS : MAX_LIMIT, budget.all ? "--max-rows" : "--limit");
+  }
+  const rowLimit = budget?.maxRows ?? Infinity;
 
   const rows: unknown[] = [];
   let count: number | undefined;
   let nextRoute: string | undefined = route;
-  let nextQuery: Query = { ...query, page_size: budget.all ? Math.min(200, rowLimit) : rowLimit };
+  let nextQuery: Query = { ...query, page_size: budget === null ? query.page_size ?? 200 : budget.all ? Math.min(200, rowLimit) : rowLimit };
   const visited = new Set<string>();
   let pages = 0;
   let stop: PagedResult["pagination"]["stop"] = "complete";
@@ -99,7 +101,7 @@ export async function walkPages(
   while (nextRoute !== undefined) {
     const key = JSON.stringify([nextRoute, Object.entries(nextQuery).sort(([a], [b]) => a.localeCompare(b))]);
     if (visited.has(key)) { stop = "repeated-page"; break; }
-    if (pages === MAX_PAGES) { stop = "page-budget"; break; }
+    if (budget !== null && pages === MAX_PAGES) { stop = "page-budget"; break; }
     visited.add(key);
     const response: AwxResponse = await read(nextRoute, nextQuery);
     pages += 1;
@@ -122,11 +124,15 @@ export async function walkPages(
     nextQuery = parsed.query;
   }
 
-  return { rows, count, pagination: {
-    max_rows: rowLimit, max_pages: MAX_PAGES, pages, stop,
+  const pagination: PagedResult["pagination"] = {
+    max_rows: budget?.maxRows ?? null, max_pages: budget === null ? null : MAX_PAGES, pages, stop,
     truncated: stop !== "complete", next: continuation,
     partial_page: partialPage,
-  } };
+  };
+  if (budget === null && pagination.truncated) {
+    throw new AwxAxiError(`Cannot summarize ${describeRoute(route)}: collection is incomplete`, "INCOMPLETE_COLLECTION", [], { count, pagination });
+  }
+  return { rows, count, pagination };
 }
 
 interface Envelope {

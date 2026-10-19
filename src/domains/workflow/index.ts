@@ -813,7 +813,6 @@ function* templateNodesPlan(input: SubcommandInput): Plan<DomainResult> {
 
 function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
   const id = workflowNodeId(input.args[0] ?? "", "workflow template node id");
-  const limit = pageBudget(input.flags, NODES_LIMIT).maxRows;
   const detail = yield* read(`workflow_job_template_nodes/${id}/`);
   if (detail.status !== 200) {
     throw errorForResponse(detail, { subject: `workflow template node ${id}` });
@@ -822,22 +821,22 @@ function* templateNodePlan(input: SubcommandInput): Plan<DomainResult> {
   const credentials = yield* readPaged(
     `workflow_job_template_nodes/${id}/credentials/`,
     {},
-    limit,
+    null,
   );
   const success = yield* readPaged(
     `workflow_job_template_nodes/${id}/success_nodes/`,
     {},
-    limit,
+    null,
   );
   const failure = yield* readPaged(
     `workflow_job_template_nodes/${id}/failure_nodes/`,
     {},
-    limit,
+    null,
   );
   const always = yield* readPaged(
     `workflow_job_template_nodes/${id}/always_nodes/`,
     {},
-    limit,
+    null,
   );
 
   const node = record(detail.body);
@@ -1097,7 +1096,7 @@ export const workflowDomain: Domain = defineDomain({
     "  launch   <id|name> [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  nodes    <run-id>",
     "  template-nodes <id|name> [--limit <n>]   editable template graph",
-    "  template-node <id> [--limit <n>]         node detail and edges",
+    "  template-node <id>                      node detail and edges",
     "  node-create|node-edit|node-delete|node-link|node-add-approval",
     "  notification-add|notification-remove <id|name> --event <event> --notification-template <id|name>",
   ].join("\n"),
@@ -1303,7 +1302,7 @@ export const workflowDomain: Domain = defineDomain({
     {
       name: "template-node",
       help: [
-        "awx-axi workflow template-node <id> [--limit <n>]",
+        "awx-axi workflow template-node <id>",
         "",
         "Shows one editable workflow-template node, its launch prompts,",
         "credentials and runtime context, convergence setting, and edge targets.",
@@ -1311,11 +1310,8 @@ export const workflowDomain: Domain = defineDomain({
         "",
         "Examples:",
         "  awx-axi workflow template-node 71",
-        "  awx-axi workflow template-node 71 --limit 20",
       ].join("\n"),
-      flags: [
-        { name: "limit", description: "credentials or edge targets to return per relation", takesValue: true },
-      ],
+      flags: [],
       positionals: { names: ["<id>"], required: 1 },
       schema: { label: "workflow_template_node", defaultFields: [], fieldAllowlist: [] },
       suggestions: [],

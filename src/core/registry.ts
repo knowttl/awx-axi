@@ -110,7 +110,7 @@ export type AwxRequest =
       readonly kind: "readPaged";
       readonly route: RouteDescription;
       /** Rows the caller wants, not a page size (§10.3). */
-      readonly limit: number | PageBudget;
+      readonly limit: number | PageBudget | null;
     }
   | { readonly kind: "readText"; readonly route: RouteDescription }
   | {
@@ -177,7 +177,7 @@ export function* read(path: string, query?: Query): Plan<AwxResponse> {
 export function* readPaged(
   path: string,
   query: Query,
-  limit: number | PageBudget,
+  limit: number | PageBudget | null,
 ): Plan<PagedResult> {
   assertBaseRelative(path);
   const result = yield { kind: "readPaged", route: { path, query }, limit };

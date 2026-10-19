@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { decode } from "@toon-format/toon";
 
 import { runCli } from "./support/run.js";
 
@@ -99,6 +100,40 @@ describe("approval list (design.md §7.7)", () => {
 });
 
 describe("approval show (design.md §7.7)", () => {
+  it("finds blocked steps beyond list row and page budgets", async () => {
+    const run = await runCli(["approval", "show", "57"], {
+      script: [
+        "approval-detail",
+        ...Array.from({ length: 248 }, (_, index) => ({
+          status: 200,
+          body: { count: 250, next: `/api/v2/workflow_jobs/1840/workflow_nodes/?page=${index + 2}`, results: [{ id: index + 1 }] },
+        })),
+        { status: 200, body: { count: 250, next: "/api/v2/workflow_jobs/1840/workflow_nodes/?page=250", results: [{ id: 249, job: 57, success_nodes: [250] }] } },
+        { status: 200, body: { count: 250, next: null, results: [{ id: 250, summary_fields: { unified_job_template: { name: "late step" } } }] } },
+      ],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toHaveLength(251);
+    expect(decode(run.stdout)).toMatchObject({ approval: { blocks: [{ node: 250, template: "late step" }] } });
+    expect(run.stdout).toContain("release the 1 downstream step");
+  });
+
+  it("discloses an incomplete internal collection without computing blocks", async () => {
+    const run = await runCli(["approval", "show", "57"], {
+      script: ["approval-detail", {
+        status: 200,
+        body: { count: 150, next: "/api/v2/workflow_jobs/1840/workflow_nodes/?page=2", results: [] },
+      }],
+    });
+    expect(run.exitCode).toBe(1);
+    const output = decode(run.stdout);
+    expect(output).toMatchObject({ code: "INCOMPLETE_COLLECTION", count: 150, pagination: {
+      stop: "empty-page", truncated: true, next: "/api/v2/workflow_jobs/1840/workflow_nodes/?page=2",
+    } });
+    expect(output).not.toHaveProperty("approval");
+    expect(run.stdout).not.toContain("release the 0 downstream");
+  });
+
   it("prints the approval, the workflow, and the downstream steps it gates", async () => {
     const run = await runCli(["approval", "show", "57"], {
       script: ["approval-detail", "workflow-nodes"],

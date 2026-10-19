@@ -30,8 +30,8 @@ export interface PagedResult {
   /** AWX's `count`. Never inferred from the rows returned (§4.3 case 2). */
   readonly count: number | undefined;
   readonly pagination: {
-    readonly max_rows: number;
-    readonly max_pages: number;
+    readonly max_rows: number | null;
+    readonly max_pages: number | null;
     readonly pages: number;
     readonly stop: "complete" | "row-budget" | "page-budget" | "empty-page" | "repeated-page";
     readonly truncated: boolean;
@@ -66,7 +66,7 @@ export interface AwxTransport {
   patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
   /** Takes the caller's row limit, not a page size; walks `next` itself. */
-  getPaged(route: string, query: Query, limit: number | PageBudget): Promise<PagedResult>;
+  getPaged(route: string, query: Query, limit: number | PageBudget | null): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 
@@ -302,7 +302,7 @@ export class HttpTransport implements AwxTransport {
   async getPaged(
     route: string,
     query: Query,
-    limit: number | PageBudget,
+    limit: number | PageBudget | null,
   ): Promise<PagedResult> {
     return walkPages((page, pageQuery) => this.get(page, pageQuery), route, query, limit);
   }
@@ -458,7 +458,7 @@ export class RecordedTransport implements AwxTransport {
   async getPaged(
     route: string,
     query: Query,
-    limit: number | PageBudget,
+    limit: number | PageBudget | null,
   ): Promise<PagedResult> {
     return walkPages((page, pageQuery) => this.get(page, pageQuery), route, query, limit);
   }

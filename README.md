@@ -261,7 +261,9 @@ Use `--include-decided` to include decided approvals; `--all` now controls pagin
 Renamed flags normally retain a deprecated alias for one minor release.
 The former meaning of `approval list --all` is replaced by `--include-decided`.
 
-Collection reads share a hard ceiling of 1,000 rows for a positive integer `--limit` and a maximum of 100 pages per collection.
+List commands share a hard ceiling of 1,000 rows for a positive integer `--limit` and a maximum of 100 pages per collection.
+Internal reads for detail summaries read complete collections independently of list budgets.
+If an empty or repeated continuation prevents completion, the command reports `INCOMPLETE_COLLECTION` with the stop reason and continuation instead of computing a partial aggregate.
 `job list`, `job events`, `job hosts`, `approval list`, `workflow list`, `workflow nodes`, `workflow template-nodes`, and `workflow object-roles` also support `--all [--max-rows <n>]`.
 `--all` walks pages up to a default and maximum of 10,000 rows; `--max-rows` selects a smaller positive budget and requires `--all`.
 Combining `--all` and `--limit` fails with exit 2 before a request.

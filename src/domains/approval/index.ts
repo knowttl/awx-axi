@@ -25,7 +25,6 @@ import {
 import { resolveId } from "../../core/resolve.js";
 
 const DEFAULT_LIST_LIMIT = 20;
-const NODE_LIMIT = 200;
 
 const LIST_SCHEMA = {
   label: "approvals",
@@ -162,7 +161,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
           (yield* readPaged(
             `workflow_jobs/${workflowId}/workflow_nodes/`,
             {},
-            NODE_LIMIT,
+            null,
           )).rows,
           id,
         );

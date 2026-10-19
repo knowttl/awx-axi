@@ -254,6 +254,7 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
     label: INVENTORY_LIST_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 inventories found",
     help: [
       "Run `awx-axi inventory show <id|name>` for inventory detail",
@@ -330,6 +331,7 @@ function* groupsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: GROUPS_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 groups found",
     help: [
       `Run \`awx-axi inventory hosts ${id}\` to inspect host members`,
@@ -365,6 +367,7 @@ function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
       label: HOSTS_SCHEMA.label,
       rows,
       count: paged.count,
+      pagination: paged.pagination,
       empty: "0 hosts found",
       help: [
         `Run \`awx-axi inventory updates ${id}\` to inspect recent update runs`,
@@ -388,6 +391,7 @@ function* hostsPlan(input: SubcommandInput): Plan<DomainResult> {
     label: HOSTS_SCHEMA.label,
     rows: enriched,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 hosts found",
     help: [
       `Run \`awx-axi inventory updates ${id}\` to inspect recent update runs`,
@@ -417,6 +421,7 @@ function* sourcesPlan(input: SubcommandInput): Plan<DomainResult> {
     label: SOURCES_SCHEMA.label,
     rows,
     count: paged.count,
+    pagination: paged.pagination,
     empty: "0 inventory sources found",
     help: [
       `Run \`awx-axi inventory updates ${id}\` for this inventory's source sync runs`,

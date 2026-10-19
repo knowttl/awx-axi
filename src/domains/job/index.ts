@@ -264,7 +264,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   };
 
   if (jobType === "job") {
-    const hostSummaries = yield* readPaged(`jobs/${id}/job_host_summaries/`, {}, 200);
+    const hostSummaries = yield* readPaged(`jobs/${id}/job_host_summaries/`, {}, null);
     const hostRows = hostSummaries.rows.map((r) => (r ?? {}) as Record<string, unknown>);
     let ok = 0;
     let failed = 0;
@@ -279,7 +279,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
     fields.hosts = `${hostRows.length} total, ${ok} ok, ${failed} failed, ${unreachable} unreachable`;
 
     if (body.status === "failed" || body.status === "error") {
-      const failedEvents = yield* readPaged(`jobs/${id}/job_events/`, { failed: true }, 50);
+      const failedEvents = yield* readPaged(`jobs/${id}/job_events/`, { failed: true, page_size: 50 }, null);
       const failedTasks = failedEvents.rows.map((e) => {
         const rec = (e ?? {}) as Record<string, unknown>;
         return {
@@ -295,7 +295,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
       fields.stdout = `${stdoutRes.absoluteEnd} lines`;
     }
   } else if (jobType === "workflow_job") {
-    const nodesRes = yield* readPaged(`workflow_jobs/${id}/workflow_nodes/`, {}, 200);
+    const nodesRes = yield* readPaged(`workflow_jobs/${id}/workflow_nodes/`, {}, null);
     const nodeRows = nodesRes.rows.map((n) => (n ?? {}) as Record<string, unknown>);
     let successful = 0;
     let running = 0;
