@@ -104,7 +104,8 @@ Use the actual resource nouns above instead of inventing CRUD commands for gener
 Output is machine-readable TOON on stdout.
 Errors include a stable code and actionable help.
 Mutation previews show the HTTP method, route, and redacted payload.
-Secrets are never printed, including token values returned while creating a token.
+Structured sensitive fields are redacted regardless of value length, including token values returned while creating a token.
+Registered secrets of at least eight characters are also replaced in free text; shorter values may appear in free text.
 Use per-command `--help` for positional arguments, flags, defaults, and examples.
 
 Run `npx -y awx-axi --help` for top-level usage, or `npx -y awx-axi <command> --help` for a focused reference.
