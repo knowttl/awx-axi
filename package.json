@@ -1,6 +1,6 @@
 {
   "name": "awx-axi",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Inspect and run AWX automation from the shell",
   "type": "module",
   "license": "MIT",
