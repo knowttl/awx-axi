@@ -41,6 +41,7 @@ describe("project domain (design.md §7.8)", () => {
     });
 
     expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({ route: "projects/4/project_updates/", query: { order_by: "-id", page_size: 20 } });
     expect(run.stdout).toContain("updates");
     expect(run.stdout).toContain("infra-playbooks update");
   });

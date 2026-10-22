@@ -97,7 +97,7 @@ function parseTemplateId(raw: string | undefined, command: string): number {
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
-  const query: Record<string, string | number | boolean> = {};
+  const query: Record<string, string | number | boolean> = { order_by: "-id" };
 
   if (typeof input.flags.search === "string") {
     query.search = input.flags.search;

@@ -421,7 +421,7 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
 
   const updates: Row[] = [];
 
-  const updatesQuery: Record<string, string | number | boolean> = {};
+  const updatesQuery: Record<string, string | number | boolean> = { order_by: "-id" };
   if (search !== undefined) {
     updatesQuery.search = search;
   }

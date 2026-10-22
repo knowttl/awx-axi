@@ -12,7 +12,7 @@ describe("ad-hoc domain (design.md §7.2)", () => {
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "ad_hoc_commands/",
-      query: { page_size: 100 },
+      query: { order_by: "-id", page_size: 100 },
     });
     expect(run.stdout).toContain("count: 1 total");
     expect(run.stdout).toContain("ad_hoc_commands");
