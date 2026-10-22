@@ -45,6 +45,8 @@ describe("job domain (design.md §7.2)", () => {
     const run = await runCli(argv);
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toMatch(/list[^\n]*\[--template <id\|name>\][^\n]*\[--fields <fields>\]/);
+    expect(run.stdout).toContain("newest first");
+    expect(run.stdout).toContain("--limit 20");
     expect(run.transport.requests).toHaveLength(0);
   });
 
@@ -58,7 +60,7 @@ describe("job domain (design.md §7.2)", () => {
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "unified_jobs/",
-      query: { type: "job", page_size: 20 },
+      query: { type: "job", order_by: "-id", page_size: 20 },
     });
     expect(run.stdout).toContain("count: 20 of 512 total");
     expect(run.stdout).toContain("jobs[20]{id,name,type,status,finished,created,started,elapsed,failed,launched_by,template}:");
@@ -71,7 +73,16 @@ describe("job domain (design.md §7.2)", () => {
     });
 
     expect(run.exitCode).toBe(0);
-    expect(run.transport.requests[0]?.query).toEqual({ status: "failed", page_size: 20 });
+    expect(run.transport.requests[0]?.query).toEqual({ order_by: "-id", status: "failed", page_size: 20 });
+  });
+
+  it("job list requests the newest failed jobs before limiting results", async () => {
+    const run = await runCli(["job", "list", "--failed", "--limit", "2"], {
+      script: [{ status: 200, body: { count: 3, next: null, results: [{ id: 3, failed: true }, { id: 2, failed: true }] } }],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests[0]).toMatchObject({ route: "unified_jobs/", query: { type: "job", failed: true, order_by: "-id", page_size: 2 } });
+    expect(decode(run.stdout)).toMatchObject({ jobs: [{ id: 3 }, { id: 2 }] });
   });
 
   it("job list rejects unknown status with VALIDATION_ERROR", async () => {

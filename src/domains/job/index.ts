@@ -168,7 +168,7 @@ function toJobRow(raw: unknown): Row {
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
-  const query: Record<string, string | number | boolean> = {};
+  const query: Record<string, string | number | boolean> = { order_by: "-id" };
 
   const typeFlag = typeof input.flags.type === "string" ? input.flags.type : undefined;
   if (typeFlag !== undefined && typeFlag !== "all") {
@@ -752,7 +752,7 @@ export const jobDomain: Domain = defineDomain({
     "job: inspect and manage AWX unified jobs (playbooks, workflows, syncs)",
     "",
     "Subcommands:",
-    "  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]",
+    "  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>] (newest first; default --limit 20)",
     "  show     <id> [--type <t>]",
     "  stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]",
     "  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
@@ -775,7 +775,7 @@ export const jobDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "list",
-      help: "awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]" + PAGINATION_HELP,
+      help: "awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>] (newest first; default --limit 20)" + PAGINATION_HELP,
       flags: [
         { name: "status", description: "filter by status", takesValue: true },
         { name: "type", description: "job type (job, workflow, project-update, all)", takesValue: true },

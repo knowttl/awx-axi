@@ -74,7 +74,7 @@ examples[2]: awx-axi.js update,awx-axi.js update --check
 job: inspect and manage AWX unified jobs (playbooks, workflows, syncs)
 
 Subcommands:
-  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]
+  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>] (newest first; default --limit 20)
   show     <id> [--type <t>]
   stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]
   events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]
@@ -88,7 +88,7 @@ Subcommands:
 ### job list
 
 ```text
-awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>]
+awx-axi job list [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>] (newest first; default --limit 20)
 Pagination: --limit accepts 1-1000 rows; --all [--max-rows <n>] defaults to 10000 rows (maximum 10000), at most 100 pages. --all conflicts with --limit; --max-rows requires --all.
 ```
 
