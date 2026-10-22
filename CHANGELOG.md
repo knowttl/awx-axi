@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.8](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.7...awx-axi-v0.1.8) (2026-10-22)
+
+
+### Features
+
+* **core:** add bounded pagination and explicit collection completeness ([#50](https://github.com/knowttl/awx-axi/issues/50)) ([c048e52](https://github.com/knowttl/awx-axi/commit/c048e5221e88c082ee72497e6c733dce80cc0d24))
+* extend bounded pagination to directory collections ([#52](https://github.com/knowttl/awx-axi/issues/52)) ([5327051](https://github.com/knowttl/awx-axi/commit/532705192e6596dd4ee9dfa1ec0db583834ef8fc))
+* extend pagination controls to automation collections ([#51](https://github.com/knowttl/awx-axi/issues/51)) ([6c19452](https://github.com/knowttl/awx-axi/commit/6c19452032935c113dfb1c2562d12e931e29b027))
+
+
+### Bug Fixes
+
+* improve AWX guidance and secret redaction ([#48](https://github.com/knowttl/awx-axi/issues/48)) ([c8afa07](https://github.com/knowttl/awx-axi/commit/c8afa070d785cb6532186a9c81db915921b9ad5f))
+* improve credential lock waiting and refresh AWX documentation ([#53](https://github.com/knowttl/awx-axi/issues/53)) ([ba8c78e](https://github.com/knowttl/awx-axi/commit/ba8c78e981abf54a0c2d2e465bf3becbbf07a444))
+* list newest AWX jobs first ([#54](https://github.com/knowttl/awx-axi/issues/54)) ([557837e](https://github.com/knowttl/awx-axi/commit/557837ed9d27c53d1b3f71e9857e23748bd9b44d))
+
 ## [0.1.7](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.6...awx-axi-v0.1.7) (2026-10-18)
 
 
