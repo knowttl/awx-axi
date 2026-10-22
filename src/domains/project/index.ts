@@ -170,7 +170,7 @@ function* updatesPlan(input: SubcommandInput): Plan<DomainResult> {
     command: "project updates",
   });
 
-  const paged = yield* readPaged(`projects/${id}/project_updates/`, { order_by: "-id" }, limit);
+  const paged = yield* readPaged(`projects/${id}/project_updates/`, {}, limit);
 
   const rows = paged.rows.map((r) => {
     const rec = (r ?? {}) as Record<string, unknown>;

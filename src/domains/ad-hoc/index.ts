@@ -76,7 +76,7 @@ function toEventRow(raw: unknown): Row {
 
 function* listPlan(input: SubcommandInput): Plan<DomainResult> {
   const limit = pageBudget(input.flags, DEFAULT_LIST_LIMIT);
-  const query: Record<string, string | number | boolean> = { order_by: "-id" };
+  const query: Record<string, string | number | boolean> = {};
 
   if (typeof input.flags.search === "string") {
     query.search = input.flags.search;

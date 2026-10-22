@@ -22,7 +22,6 @@ describe("system-job list, show, events, and notifications", () => {
       method: "GET",
       route: "system_jobs/",
       query: {
-        order_by: "-id",
         unified_job_template: 301,
         status: "failed",
         page_size: 2,

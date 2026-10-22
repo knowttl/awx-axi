@@ -141,7 +141,7 @@ describe("inventory domain (design.md §7.1)", () => {
     expect(run.transport.requests[1]).toMatchObject({
       method: "GET",
       route: "inventory_sources/21/inventory_updates/",
-      query: { order_by: "-id", search: "nightly", status: "successful", page_size: 25 },
+      query: { search: "nightly", status: "successful", page_size: 25 },
     });
     expect(run.stdout).toContain("inventory_updates");
     expect(run.stdout).toContain("initial sync");
