@@ -1,5 +1,7 @@
 # awx-axi v1 design
 
+[Purpose and scope](#1-purpose-and-scope) · [Scope boundaries](#2-scope-boundaries-for-v1) · [Backend](#3-backend-choice-the-awx-rest-api-v2) · [Compatibility](#4-target-version-and-version-sensitive-surface) · [Credentials](#5-auth-model-and-credential-handling) · [Writes](#6-write-surface-and-risk-posture) · [Commands](#7-command-surface) · [Output](#8-output-format) · [Errors](#9-errors-and-exit-codes) · [Modules](#10-module-boundaries-and-the-stable-core) · [Testing](#11-offline-testability-and-the-live-smoke-seam) · [Stack](#12-implementation-stack) · [Integration](#13-session-integration-and-skill) · [Comparison](#14-external-comparison) · [Judgment calls](#15-deliberate-judgment-calls) · [Sources](#16-sources-consulted)
+
 Status: accepted v1 technical design, with commands implemented under `src/domains/`.
 The registry in `src/cli.ts` and README describe the current shipped surface.
 Unimplemented targets remain proposals.
