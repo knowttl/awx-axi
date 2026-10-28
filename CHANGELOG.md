@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.8...awx-axi-v0.1.9) (2026-10-28)
+
+
+### Bug Fixes
+
+* **docs:** clarify README setup and safety guidance ([#55](https://github.com/knowttl/awx-axi/issues/55)) ([e4cafda](https://github.com/knowttl/awx-axi/commit/e4cafda33eeec00a223f81a1de0884ffcce9f763))
+* guide agents through read-only AWX investigations ([#59](https://github.com/knowttl/awx-axi/issues/59)) ([6e2b8f1](https://github.com/knowttl/awx-axi/commit/6e2b8f1b2166f4007a8e88f775f845c238f4e964))
+
 ## [0.1.8](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.7...awx-axi-v0.1.8) (2026-10-22)
 
 
