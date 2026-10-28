@@ -55,6 +55,7 @@ npx skills add knowttl/awx-axi --skill awx-axi
 
 Hooks inject the live dashboard into Claude Code, Codex and OpenCode sessions; the skill supplies static command guidance.
 Neither grants controller permissions; either can be used independently.
+Start investigations with the compact [agent guide](docs/agent-guide.md), including read commands, output bounds and failure recovery.
 Restart the agent after hook setup and see [SKILL.md](skills/awx-axi/SKILL.md) for command guidance and [the full reference](docs/commands.md) for every command's flags.
 To remove hooks, delete only awx-axi-managed entries from `~/.claude/settings.json` and `~/.codex/hooks.json`, and remove `~/.config/opencode/plugins/axi-awx-axi.js`.
 See [agent integration](docs/agent-integration.md) for dashboard behavior and the shared Codex setting.
