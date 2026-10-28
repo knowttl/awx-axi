@@ -25,7 +25,7 @@ The command prefixes in this table form a controller-read allowlist.
 | `job watch <id> [--type <type>] [--timeout <seconds>] [--interval <seconds>]` | Bounded read-only wait for an existing run |
 | `workflow nodes <run-id> [--limit <n>]` | Workflow run nodes, distinct from editable template nodes |
 | `activity-stream list [--operation <operation>] [--search <text>] [--job <id>] [--limit <n>]` | Audit events; use at most one resource scope |
-| `activity-stream show <id>` | Audit event changes and actor context |
+| `activity-stream show <id>` | Audit event changes |
 
 ```sh
 awx-axi host list --search web --inventory 11 --limit 5
@@ -52,7 +52,7 @@ There is no general batch `show` for full host details.
 `job show --type job` includes host and failure summaries; specifying a known type avoids a type-discovery request.
 `job list --type all` includes workflows, syncs, ad-hoc and system runs; `--since` filters on finish time, so it excludes unfinished runs.
 Use `job watch` instead of writing a poll loop: defaults are 600 seconds and a 5-second initial interval, backing off to 30 seconds.
-Authorized launch and sync commands offer `--wait --timeout <seconds>` (default 3,600 seconds), but they change state and are outside the read allowlist.
+Authorized launch and sync commands offer `--wait --timeout <seconds>`; set an explicit timeout because defaults vary by command, and these commands change state and are outside the read allowlist.
 
 Collection `--limit` accepts 1-1,000 rows.
 Alternatively use `--all --max-rows <n>` (default and maximum 10,000 rows, at most 100 pages); do not combine `--all` with `--limit`.
@@ -87,7 +87,7 @@ Exit 0 means success, 2 means usage/ambiguity/input error, and 1 means runtime f
 | `AMBIGUOUS_NAME` | Use a returned numeric ID; do not choose a duplicate arbitrarily |
 | `VALIDATION_ERROR` | Correct arguments using the error hint or focused help |
 | `READ_ONLY_VIOLATION` | Stop the mutation and use reads |
-| `OUTPUT_TOO_LARGE` | Use failed events or a smaller log slice |
+| `OUTPUT_TOO_LARGE` | Use failed events |
 | `INCOMPLETE_COLLECTION` | Treat aggregate evidence as incomplete; check controller pagination |
 | `WATCH_TIMEOUT` | The existing run continues; resume watching its ID if needed, never relaunch to retry a read |
 | `CONTROLLER_UNREACHABLE`, `TLS_UNTRUSTED` | Check connectivity, selected origin and certificate trust |
