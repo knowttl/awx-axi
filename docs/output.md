@@ -16,6 +16,7 @@ Detail aggregates read complete collections independently and fail with `INCOMPL
 ## Logs
 
 Job and ad-hoc stdout support `--tail` and `--lines`; job stdout also supports `--download`.
+`job stdout` accepts `--full`, but it does not change the request or bypass truncation.
 Empty results are explicit.
 See [the command reference](commands.md) for supported fields and flags on each command.
 

@@ -18,7 +18,7 @@ All gates default to false and accept `1`, `true`, `0` or `false`, case-insensit
 | Create/edit execution environments or inventory sources with a `credential` field in the payload | `--confirm` and `AWX_AXI_ALLOW_SECURITY_WRITES=1`; without that field, the config gate applies |
 | Create/edit notification templates with secret input | `--confirm` and `AWX_AXI_ALLOW_SECURITY_WRITES=1`; without secret input, the config gate applies |
 | Inventory source credential add/remove | `--confirm` and `AWX_AXI_ALLOW_SECURITY_WRITES=1` |
-| Template launch or job relaunch supplying credential passwords | `--confirm`, `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1` and `--credential-passwords-file <path>` |
+| Template launch or job launch supplying credential passwords | `--confirm`, `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1` and `--credential-passwords-file <path>` |
 | `auth login` | Immediate token creation; username/password environment credentials; no preview or confirmation switch |
 | `auth logout` | Immediate upstream token revocation and local removal; both `AWX_AXI_ALLOW_DELETES=1` and `AWX_AXI_ALLOW_SECURITY_WRITES=1`; no preview or confirmation switch |
 

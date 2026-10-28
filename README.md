@@ -1,6 +1,6 @@
 # awx-axi
 
-Inspect and run AWX automation from the shell.
+Inspect and run AWX automation from the shell, for agents and the humans running them.
 
 [![npm](https://img.shields.io/npm/v/awx-axi)](https://www.npmjs.com/package/awx-axi) [![License](https://img.shields.io/github/license/knowttl/awx-axi)](LICENSE) [![Node.js](https://img.shields.io/node/v/awx-axi)](https://nodejs.org/en/download) [![npm provenance](https://img.shields.io/badge/npm-provenance-blue)](https://www.npmjs.com/package/awx-axi#provenance) [![AXI](https://img.shields.io/badge/AXI-TOON-blue)](https://github.com/knowttl/artium-axi)
 
@@ -127,6 +127,7 @@ Environment-profile TLS and token settings do not override named profiles.
 TOON data, structured errors and recovery hints go to stdout; diagnostics go to stderr.
 Collection commands use `--limit` or bounded `--all`, and report completeness and truncation.
 Use `--fields` where command help advertises it; stdout commands offer `--tail` and `--lines` for line slicing.
+`job stdout` accepts `--full`, but it does not change the request or bypass truncation.
 See [output behavior](docs/output.md) for budgets, continuation caveats and log controls.
 
 | Exit | Meaning |
