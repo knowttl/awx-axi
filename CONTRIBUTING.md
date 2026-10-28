@@ -20,6 +20,7 @@ Run tests with temporary HOME, XDG_CONFIG_HOME, XDG_STATE_HOME, XDG_CACHE_HOME, 
 Do not contact real controllers, read local credentials, or exercise live mutations as part of ordinary validation.
 Reuse the existing fixtures and test helpers when changing behavior.
 `test/skill.test.ts`, included in `npm test`, verifies both generated skill copies against `src/skill.ts`.
-After command changes, run `npm run build` and `npm run docs:commands` to regenerate the README command table and `docs/commands.md` from the built CLI registry and help.
+After command changes, run `npm run build` and `npm run docs:commands` to regenerate the full command table and help in `docs/commands.md` from the built CLI registry.
+The README carries a hand-maintained group overview; update it when command groups or their scope change.
 
 Keep pull requests focused and describe the problem, resulting behavior, scope, and local validation.
