@@ -83,7 +83,7 @@ the boundary matters more than the heading's symmetry.
 **awx-axi speaks the AWX REST API v2 directly from Node, using HTTPS by default.
 It does not shell out to the `awx` CLI (awxkit).**
 
-Plain HTTP is supported only with explicit per-profile opt-in, as configured in [README configuration](../README.md#configuration).
+Plain HTTP is supported only with explicit per-profile opt-in, as configured in [configuration](configuration.md#selection-and-tls).
 
 Both backend approaches were considered.
 This section is the justification, and §3.4 is the honest statement of what that choice costs.
@@ -267,7 +267,7 @@ Each is a named offline test in §11.2.
 ### 5.1 Resolution order
 
 The credential migration supersedes the original environment-then-token-file resolution order.
-See [README configuration](../README.md#configuration) for profile selection, SecretRefs and origin-bound storage.
+See [configuration](configuration.md#selection-and-tls) for profile selection and SecretRefs, and [credentials](credentials.md#usernamepassword-login) for origin-bound storage.
 
 Basic auth is **never** used for ordinary requests, even when login credentials are set.
 It is used by `auth login` alone, to mint a token.
@@ -280,7 +280,7 @@ The live suite therefore never calls `auth login`; §6.5's transport enforcement
 
 ### 5.2 `auth login` is non-interactive
 
-See [README configuration](../README.md#configuration) for login credentials, profile setup and state storage.
+See [credentials](credentials.md#usernamepassword-login) for login credentials and [configuration](configuration.md) for profile setup and state storage.
 It **never prompts**, per AXI §6.
 With the variables unset it exits 2 and says which ones are missing.
 
@@ -300,7 +300,7 @@ module load, so a future contributor cannot add `--token` without the CLI failin
 Secrets reach awx-axi through the environment or through a `0600` file, never through `argv`, because `argv` is
 visible in `ps` output, shell history, and agent transcripts.
 
-See [README configuration](../README.md#configuration) for the current `auth status` contract.
+See [configuration](configuration.md#named-profiles-and-secretrefs) for the current `auth status` contract.
 
 ## 6. Write surface and risk posture
 
@@ -619,7 +619,7 @@ awx-axi approval deny <id>           [--confirm] [--dry-run]
 Approvals are promoted to a top-level noun rather than living under `workflow` because they are the one thing in
 AWX that is *waiting on a human decision*, which makes them an inbox.
 `approval list` defaults to pending only; `--include-decided` includes decided ones.
-See [README migration guidance](../README.md#configuration) for the former `--all` spelling.
+See [migration guidance](configuration.md#migration) for the former `--all` spelling.
 The home view surfaces the pending count for the same reason.
 
 `approval show` prints what the step gates before anyone decides:
@@ -837,9 +837,9 @@ inventory of launchable things in one call), 50 for `job events`.
 `--fields` extends the schema from a per-subcommand allowlist; an unknown field name is a `VALIDATION_ERROR`
 listing the valid names.
 
-User-facing lists use the shared row/page-budget policy described in [README.md](../README.md#bounded-output): a hard positive `--limit` ceiling, and `--all` with an optional `--max-rows` budget on supported commands.
+User-facing lists use the shared row/page-budget policy described in [output behavior](output.md#collections): a hard positive `--limit` ceiling, and `--all` with an optional `--max-rows` budget on supported commands.
 Budgeted results disclose the budgets, pages read, stop reason, truncation, next page link, and whether the final page was only partially returned.
-The next page link is not a lossless cursor when `partial_page` is true; see the README for continuation guidance and assembled inventory-update output.
+The next page link is not a lossless cursor when `partial_page` is true; see [output behavior](output.md#collections) for continuation guidance and assembled inventory-update output.
 
 Complete empty results state the zero with the filter that produced it (count and pagination metadata omitted here):
 
@@ -1173,7 +1173,7 @@ A transport that threw on every non-2xx would put the 405 disambiguation out of 
 
 `getPaged` takes a row limit or `PageBudget`, not a page size; `null` requires a complete collection.
 Both transports use the shared policy in `src/core/paginate.ts`, which validates positive row budgets against the hard ceilings and follows the envelope's `next` links within row and page budgets.
-User-facing flag rules and ceilings are documented in the README linked in §8.2.
+User-facing flag rules and ceilings are documented in the output guide linked in §8.2.
 The assembled `PagedResult` preserves the server's `count` when provided and carries pagination metadata for complete, row-budget, page-budget, empty-page, and repeated-page stops.
 Domains expose this metadata for budgeted lists rather than silently treating partial rows as complete.
 Internal detail and aggregate reads pass `null` and are exempt from list row and page budgets.
@@ -1266,7 +1266,7 @@ Node.js with TypeScript, ESM, matching the other installed AXI tools.
   Pinned, not caret-ranged, for the §8 reason: the encoder's emitted syntax is part of awx-axi's observable
   output, and the published spec has already moved ahead of this version.
 - **Node's `https` and `http` modules** with scoped agents.
-  HTTPS uses the selected transport's TLS verification setting; the HTTP adapter serves only controllers permitted by the consent policy in [README configuration](../README.md#configuration).
+  HTTPS uses the selected transport's TLS verification setting; the HTTP adapter serves only controllers permitted by the consent policy in [configuration](configuration.md#selection-and-tls).
   Redirects are not followed, and requests outside the configured origin are refused before credentials are sent.
   No axios or undici dependency.
   AWX's API is plain JSON and a client library would add weight plus a second error vocabulary
@@ -1303,7 +1303,7 @@ Run `npm test` to include that check in the offline suite.
 
 ### 14.1 Current command coverage
 
-The registered domains in `src/cli.ts` and the README command table own the shipped inventory.
+The registered domains in `src/cli.ts` own the shipped inventory; [the command reference](commands.md) is generated from the registry and help.
 Historical tool counts and staged read-coverage plans are preserved on `archive/internal-docs`.
 
 ### 14.2 Retired coverage tracking proposal
@@ -1386,7 +1386,7 @@ Mutation safety is verified offline; no comparative performance or live mutation
 
 25. **Plain-HTTP controller support was accepted by maintainer decision on 2026-10-12.**
     This is an approved awx-axi exception to the [AXI credential standard](https://github.com/knowttl/artium-axi/blob/main/docs/credential-standard.md), because some controllers use unencrypted HTTP.
-    The consent contract is owned by [README configuration](../README.md#configuration); the transport implementation is described in §12.
+    The consent contract is owned by [configuration](configuration.md#selection-and-tls); the transport implementation is described in §12.
 
 ## 16. Sources consulted
 
