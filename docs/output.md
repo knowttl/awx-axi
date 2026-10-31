@@ -15,7 +15,9 @@ Inventory scopes name resolution and verifies numeric-ID membership.
 Each selected host reports `complete`, `failed` or `skipped`, retaining successful components and disclosing errors and skipped components.
 An ambiguous selector reports inventory-bearing candidates before any detail reads for that selector; see the [README exit table](../README.md#output-and-exit-codes) for batch exit precedence.
 Groups use the [scoped design exception](design.md#103-the-transport-seam) and report pagination truncation.
-`REQUEST_BUDGET` and `TIME_BUDGET` stop further reads; `OUTPUT_BUDGET` marks labeled previews with their original rendered size and a `host show` recovery hint.
+`REQUEST_BUDGET` and `TIME_BUDGET` stop further reads.
+`OUTPUT_BUDGET` marks output truncation: oversized fields or components can become objects containing `truncated`, `total_chars` and `preview`, with a per-host `host show` recovery hint.
+Oversized ambiguity results retain up to three compact candidates with IDs, names and inventory context, plus `candidates_truncated` and `candidates_total` for the returned candidate list.
 `inventory updates` reports source pagination and per-source truncation without inventing a combined server total.
 `workflow template-node` reads complete credentials and edge collections and accepts no row limit.
 
