@@ -141,8 +141,9 @@ describe("host inspect CLI", () => {
 
   it.each([1, 10])("caps rendered output for %s hosts with labeled redacted previews and recovery hints", async (count) => {
     const selectors = Array.from({ length: count }, () => "501").join(",");
+    // The output budget is shared across hosts, so scale oversized inputs with it.
     const run = await runCli(["host", "inspect", selectors], { script: Array.from({ length: count }, () => [
-      "host-detail", "host-groups", { status: 200, body: { password: "do-not-print", notes: '"\n'.repeat(5_000) } }, { status: 200, body: { facts: "x".repeat(20_000) } },
+      "host-detail", "host-groups", { status: 200, body: { password: "do-not-print", notes: '"\n'.repeat(5_000 / count) } }, { status: 200, body: { facts: "x".repeat(20_000 / count) } },
     ]).flat() });
     expect(run.exitCode).toBe(1);
     expect(run.stdout.length).toBeLessThanOrEqual(20_000);
