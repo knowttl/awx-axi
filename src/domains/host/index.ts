@@ -307,6 +307,7 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
   const budget: ReadBudget = { remaining: 100, deadline: Date.now() + 60_000 };
   const hosts: RecordValue[] = [];
   let stopped: string | undefined;
+  let ambiguous = false;
   const rowLimit = Math.floor(17_000 / selectors.length);
 
   for (const selector of selectors) {
@@ -363,6 +364,7 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
         }
       } catch (error) {
         if (!(error instanceof AxiError)) throw error;
+        if (error.code === "AMBIGUOUS_NAME") ambiguous = true;
         row.status = "failed";
         row.complete = false;
         row.error = { code: error.code, error: error.message, ...(error instanceof AwxAxiError ? error.details : {}) };
@@ -398,7 +400,7 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
     complete,
     budgets: { max_hosts: 10, max_requests: 100, requests: 100 - budget.remaining, max_seconds: 60, max_chars: 20_000 },
     hosts,
-  }, complete ? 0 : 1);
+  }, ambiguous ? 2 : complete ? 0 : 1);
 }
 
 export const hostDomain: Domain = defineDomain({
@@ -415,7 +417,7 @@ export const hostDomain: Domain = defineDomain({
   subcommands: [
     {
       name: "inspect",
-      help: "awx-axi host inspect <selectors> [--inventory <id>]\nSelectors: 1-10 comma-separated IDs or names. Inventory scopes names and checks IDs.\nRead-only limits: 100 GET attempts including retries/pages, 60 seconds, 20000 rendered characters; groups up to 1000 rows/100 pages.\nEach host reports complete/failed/skipped; any incomplete detail exits 1. Oversized details become labeled previews; use host show for full detail.\nExamples: awx-axi host inspect 501,601; awx-axi host inspect web-01,web-02 --inventory 11",
+      help: "awx-axi host inspect <selectors> [--inventory <id>]\nSelectors: 1-10 comma-separated IDs or names. Inventory scopes names and checks IDs.\nRead-only limits: 100 GET attempts including retries/pages, 60 seconds, 20000 rendered characters; groups up to 1000 rows/100 pages.\nEach host reports complete/failed/skipped; any ambiguous selector exits 2, other incomplete details exit 1. Oversized details become labeled previews; use host show for full detail.\nExamples: awx-axi host inspect 501,601; awx-axi host inspect web-01,web-02 --inventory 11",
       flags: [{ name: "inventory", description: "scope names and verify host inventory id", takesValue: true }],
       positionals: { names: ["<selectors>"], required: 1 },
       schema: { label: "hosts", defaultFields: [], fieldAllowlist: [] },

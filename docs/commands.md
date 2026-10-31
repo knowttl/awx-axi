@@ -1251,7 +1251,7 @@ Subcommands:
 awx-axi host inspect <selectors> [--inventory <id>]
 Selectors: 1-10 comma-separated IDs or names. Inventory scopes names and checks IDs.
 Read-only limits: 100 GET attempts including retries/pages, 60 seconds, 20000 rendered characters; groups up to 1000 rows/100 pages.
-Each host reports complete/failed/skipped; any incomplete detail exits 1. Oversized details become labeled previews; use host show for full detail.
+Each host reports complete/failed/skipped; any ambiguous selector exits 2, other incomplete details exit 1. Oversized details become labeled previews; use host show for full detail.
 Examples: awx-axi host inspect 501,601; awx-axi host inspect web-01,web-02 --inventory 11
 ```
 

@@ -29,7 +29,7 @@ describe("host inspect CLI", () => {
 
   it("reports ambiguous candidates with inventory context and continues other selections", async () => {
     const run = await runCli(["host", "inspect", "web-01.example.com,501"], { script: ["host-name-ambiguous", ...detail] });
-    expect(run.exitCode).toBe(1);
+    expect(run.exitCode).toBe(2);
     expect(decode(run.stdout)).toMatchObject({ complete: false, hosts: [
       { status: "failed", error: { code: "AMBIGUOUS_NAME", candidates: [
         { id: 501, inventory: "11 (Production inventory)" }, { id: 601, inventory: "21 (Staging inventory)" },
