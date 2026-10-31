@@ -259,13 +259,17 @@ export class HttpTransport implements AwxTransport {
   }
 
   async get(route: string, query: Query = {}): Promise<AwxResponse> {
+    return this.#get(route, query, false);
+  }
+
+  async #get(route: string, query: Query, allowText: boolean): Promise<AwxResponse> {
     const attempts = this.#options.attempts ?? 3;
-    let response = await this.#send("GET", route, query, undefined);
+    let response = await this.#send("GET", route, query, undefined, allowText);
 
     for (let attempt = 1; attempt < attempts && isBusy(response.status); ) {
       await (this.#options.sleep ?? sleep)(200 * attempt);
       attempt += 1;
-      response = await this.#send("GET", route, query, undefined);
+      response = await this.#send("GET", route, query, undefined, allowText);
     }
 
     return response;
@@ -308,7 +312,7 @@ export class HttpTransport implements AwxTransport {
   }
 
   async getText(route: string, query: Query = {}): Promise<TextResponse> {
-    return interpretText(await this.get(route, query));
+    return interpretText(await this.#get(route, query, true));
   }
 
   async #send(
@@ -316,6 +320,7 @@ export class HttpTransport implements AwxTransport {
     route: string,
     query: Query,
     body: unknown,
+    allowText = false,
   ): Promise<AwxResponse> {
     this.#options.signal?.throwIfAborted();
     const url = new URL(route, this.#apiRoot);
@@ -362,10 +367,14 @@ export class HttpTransport implements AwxTransport {
         process.stderr.write(redact(`Write journal failed after ${method} returned ${response.status}: ${String(error)}\n`));
       }
     }
+    const responseBody = await readBody(response);
+    if (response.ok && typeof responseBody === "string" && !allowText) {
+      throw new AxiError("the controller returned a non-JSON response", "INVALID_RESPONSE");
+    }
     return {
       status: response.status,
       headers: response.headers,
-      body: await readBody(response),
+      body: responseBody,
     };
   }
 }

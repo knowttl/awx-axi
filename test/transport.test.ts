@@ -11,9 +11,39 @@ import {
   interpretText,
 } from "../src/core/transport.js";
 import { assertNoCountDisabled } from "../src/core/paginate.js";
+import { formatError } from "../src/core/errors.js";
 import { exchange, fixtureFetch, loadFixture } from "./support/fixtures.js";
 
 const BASE = "https://awx.example.com";
+
+describe("invalid successful responses", () => {
+  it.each(["get", "post", "put", "patch", "delete"] as const)("rejects a non-JSON 2xx from %s without exposing its body", async (method) => {
+    const { transport: http } = transport(["login-page"]);
+    const error = await http[method]("jobs/1/").catch((error: unknown) => error);
+    expect(formatError(error)).toEqual({
+      exitCode: 1,
+      output: "error: the controller returned a non-JSON response\ncode: INVALID_RESPONSE\n",
+    });
+  });
+
+  it.each([null, {}, { results: "synthetic-private-response" }])("rejects an invalid list envelope %j", async (body) => {
+    const http = new RecordedTransport([{ status: 200, body }]);
+    await expect(http.getPaged("jobs/", {}, 20)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("preserves a valid empty collection", async () => {
+    const { transport: http } = transport(["home-empty"]);
+    await expect(http.getPaged("jobs/", {}, 20)).resolves.toMatchObject({ rows: [], count: 0 });
+  });
+
+  it("preserves explicitly requested plain text", async () => {
+    const { transport: http } = transport(["login-page"]);
+    await expect(http.getText("jobs/1/stdout/", { format: "txt" })).resolves.toMatchObject({
+      content: loadFixture("login-page").body,
+      tooLarge: false,
+    });
+  });
+});
 
 const journals: string[] = [];
 afterEach(() => journals.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })));

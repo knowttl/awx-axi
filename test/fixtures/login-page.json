@@ -1,0 +1,8 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/pagination.py",
+  "$note": "Synthetic proxy login page replacing the JSON envelope expected by AWX collection reads; contains a marker that must never appear in errors.",
+  "status": 200,
+  "bodyEncoding": "text",
+  "body": "<html><body>synthetic-private-response</body></html>"
+}

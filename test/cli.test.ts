@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DESCRIPTION, DOMAINS, main } from "../src/cli.js";
 import type { Domain } from "../src/core/registry.js";
-import { RecordedTransport } from "../src/core/transport.js";
-import { exchange } from "./support/fixtures.js";
+import { HttpTransport, RecordedTransport } from "../src/core/transport.js";
+import { exchange, fixtureFetch } from "./support/fixtures.js";
 
 vi.mock("node:fs", { spy: true });
 
@@ -22,6 +22,24 @@ function capture(): { write: (chunk: string) => void; text: () => string } {
 }
 
 describe("the CLI shell", () => {
+  it("reports an HTML login page as INVALID_RESPONSE on stdout with exit 1", async () => {
+    const stdout = capture();
+    const previousExitCode = process.exitCode;
+    const { fetch } = fixtureFetch(["login-page"]);
+    try {
+      await main({
+        argv: ["template", "list"], stdout, env: {},
+        createTransport: () => new HttpTransport({
+          baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: true, fetch,
+        }),
+      });
+      expect(process.exitCode).toBe(1);
+      expect(stdout.text()).toBe("error: the controller returned a non-JSON response\ncode: INVALID_RESPONSE\n");
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
+
   it.each([
     { name: "Codex missing", env: { CODEX_THREAD_ID: "thread" }, installed: undefined, hint: true },
     { name: "Codex global", env: { CODEX_THREAD_ID: "thread" }, installed: "home/.agents/skills", hint: false },

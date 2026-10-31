@@ -16,6 +16,7 @@ export interface Fixture {
   readonly $note: string;
   readonly status: number;
   readonly body: unknown;
+  readonly bodyEncoding?: "text";
 }
 
 const DIRECTORY = fileURLToPath(new URL("../fixtures/", import.meta.url));
@@ -70,10 +71,10 @@ export function fixtureFetch(names: readonly string[]): {
 
     return Promise.resolve(
       new Response(
-        fixture.status === 204 ? null : JSON.stringify(fixture.body),
+        fixture.status === 204 ? null : fixture.bodyEncoding === "text" ? String(fixture.body) : JSON.stringify(fixture.body),
         {
           status: fixture.status,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": fixture.bodyEncoding === "text" ? "text/plain" : "application/json" },
         },
       ),
     );
