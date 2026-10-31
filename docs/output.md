@@ -12,8 +12,9 @@ When `partial_page: true`, following `next` skips undisplayed rows from that pag
 Single-resource detail aggregates read complete collections independently and fail with `INCOMPLETE_COLLECTION` if continuation stalls.
 `host inspect <selectors> [--inventory <id>]` is a bounded batch exception: 1-10 comma-separated host IDs or names, 100 GET attempts including retries/pages, 60 seconds total and 20,000 rendered characters.
 Inventory scopes name resolution and verifies numeric-ID membership.
-Each selected host reports `complete`, `failed` or `skipped`, retaining successful components and disclosing errors and skipped components; any incomplete detail exits 1.
-Groups have a 1,000-row/100-page bound and report pagination truncation.
+Each selected host reports `complete`, `failed` or `skipped`, retaining successful components and disclosing errors and skipped components.
+An ambiguous selector reports inventory-bearing candidates before any detail reads for that selector; see the [README exit table](../README.md#output-and-exit-codes) for batch exit precedence.
+Groups use the [scoped design exception](design.md#103-the-transport-seam) and report pagination truncation.
 `REQUEST_BUDGET` and `TIME_BUDGET` stop further reads; `OUTPUT_BUDGET` marks labeled previews with their original rendered size and a `host show` recovery hint.
 `inventory updates` reports source pagination and per-source truncation without inventing a combined server total.
 `workflow template-node` reads complete credentials and edge collections and accepts no row limit.

@@ -1017,6 +1017,10 @@ See [errors and exits](output.md#errors-and-exits) for stdout, stderr and struct
 | `SECURITY_WRITES_DISABLED` | A security write was attempted while security writes were disabled | 1 |
 | `UNKNOWN` | Anything unmapped | 1 |
 
+For `host inspect`, any ambiguous selector makes the batch exit 2, even if other selectors have incomplete details.
+The selector's `AMBIGUOUS_NAME` result includes inventory-bearing candidates before any detail reads for that selector.
+Other incomplete batch details exit 1; a complete batch exits 0.
+
 Two outcomes are deliberately **not** in this table, because they are exit-0 no-ops per AXI §6:
 cancelling a job that already finished, and approving an approval that is already approved.
 
@@ -1152,17 +1156,18 @@ interface AwxResponse {
 }
 
 interface AwxTransport {
-  get(route: string, query?: Query): Promise<AwxResponse>;
+  get(route: string, query?: Query, budget?: ReadBudget): Promise<AwxResponse>;
   post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
-  getPaged(route: string, query: Query, limit: number | PageBudget | null): Promise<PagedResult>;
+  getPaged(route: string, query: Query, limit: number | PageBudget | null, budget?: ReadBudget): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 ```
 
 Mutating methods (post, put, patch, delete) are supported on the seam, guarded by risk-based safety checks.
+The optional shared `ReadBudget` in `src/core/transport.ts` bounds GET attempts, including retries and pages, and enforces a deadline.
 `HttpTransport` checks read-only and safety gates before issuing anything.
 Putting the checks here rather than in each domain is what makes it a guarantee.
 
@@ -1175,7 +1180,10 @@ Both transports use the shared policy in `src/core/paginate.ts`, which validates
 User-facing flag rules and ceilings are documented in the output guide linked in §8.2.
 The assembled `PagedResult` preserves the server's `count` when provided and carries pagination metadata for complete, row-budget, page-budget, empty-page, and repeated-page stops.
 Domains expose this metadata for budgeted lists rather than silently treating partial rows as complete.
-Internal detail and aggregate reads pass `null` and are exempt from list row and page budgets.
+Internal detail and aggregate reads pass `null` and are exempt from list row and page budgets, except for `host inspect`.
+The approved `host inspect` exception bounds each host's group collection to 1,000 rows and 100 pages, within the batch's shared [request, time and output budgets](output.md#collections).
+A truncated group collection is explicitly incomplete rather than a definitive aggregate.
+This exception applies only to `host inspect`; `host show` retains its existing unbounded collection behavior.
 If an empty or repeated continuation prevents a complete read, the paginator throws `INCOMPLETE_COLLECTION` with count and pagination metadata rather than returning partial rows for a definitive aggregate.
 It never sends `count_disabled` (§4.3 case 2).
 

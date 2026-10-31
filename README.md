@@ -134,8 +134,8 @@ See [output behavior](docs/output.md) for budgets, continuation caveats and log 
 | Exit | Meaning |
 | --- | --- |
 | 0 | Success or no-op; dashboard errors also exit 0 to preserve session startup |
-| 1 | Runtime, authentication, permission or safety failure; watched job failed/error/canceled; incomplete host inspection batch |
-| 2 | Usage, validation, ambiguous name outside a host inspection batch, or launch-input error |
+| 1 | Runtime, authentication, permission or safety failure; watched job failed/error/canceled; incomplete host inspection batch without ambiguous selectors |
+| 2 | Usage, validation, ambiguous name (including any ambiguous host inspection selector), or launch-input error |
 
 ## Troubleshooting
 
