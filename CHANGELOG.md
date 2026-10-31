@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.10...awx-axi-v0.1.11) (2026-10-31)
+
+
+### Bug Fixes
+
+* scale host inspect test payloads to the shared output budget ([#70](https://github.com/knowttl/awx-axi/issues/70)) ([ae50db6](https://github.com/knowttl/awx-axi/commit/ae50db690f48aea8fb43356ee87923ff5cf7eae3))
+
 ## [0.1.10](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.9...awx-axi-v0.1.10) (2026-10-31)
 
 
