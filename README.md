@@ -150,7 +150,7 @@ See [output behavior](docs/output.md) for budgets, continuation caveats and log 
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development, offline checks and releases, [AGENTS.md](AGENTS.md) for project constraints, and [the design](docs/design.md) for architecture.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development, checks and releases, [AGENTS.md](AGENTS.md) for project constraints, and [the design](docs/design.md) for architecture.
 
 ## Security
 

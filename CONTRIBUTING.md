@@ -16,6 +16,8 @@ The repository validation configuration runs build, typecheck, tests and lint; a
 Release automation remains separate and retains tags in the `awx-axi-vX.Y.Z` format.
 
 The default test suite uses offline transports and synthetic fixtures and excludes `test/live/`.
+The installed-package tests in `test/package.test.ts` install a packed tarball with `npm install --prefer-offline`, reusing cached dependencies but permitting registry access when needed.
+An empty npm cache therefore requires registry access for `npm test`.
 Run tests with temporary HOME, XDG_CONFIG_HOME, XDG_STATE_HOME, XDG_CACHE_HOME, APPDATA, and LOCALAPPDATA directories so existing local profiles and legacy files cannot affect fixture tests.
 Do not contact real controllers, read local credentials, or exercise live mutations as part of ordinary validation.
 Reuse the existing fixtures and test helpers when changing behavior.
