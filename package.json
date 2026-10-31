@@ -22,10 +22,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "docs:commands": "node scripts/command-reference.mjs",
+    "docs:commands": "node scripts/command-reference.ts",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.test.json",
-    "lint": "eslint .",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
     "test": "vitest run test --exclude test/live/**",
     "test:live": "vitest run --dir test/live"
   },
