@@ -6,6 +6,11 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // This helper is distributed byte-for-byte from its canonical source.
+    files: ["src/response-diagnostics.ts"],
+    rules: { "no-useless-escape": "off" },
+  },
+  {
     rules: {
       // Compile-time type assertions are declared and never referenced.
       "@typescript-eslint/no-unused-vars": [

@@ -1,0 +1,10 @@
+{
+  "$tag": "24.6.1",
+  "$source": "awx/api/pagination.py",
+  "$note": "Synthetic invalid collection envelope for diagnostics regression: results is a string and the extra tenant-shaped key and all values must stay out of errors.",
+  "status": 200,
+  "body": {
+    "results": "synthetic-private-response",
+    "tenant.example.test": "synthetic-private-value"
+  }
+}

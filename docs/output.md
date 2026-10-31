@@ -22,8 +22,17 @@ See [the command reference](commands.md) for supported fields and flags on each 
 
 ## Errors and exits
 
-TOON data, errors and recovery suggestions go to stdout; diagnostics go to stderr.
+TOON data, errors and recovery suggestions go to stdout; progress and other runtime diagnostics go to stderr.
 Errors expose `error`, `code` and recovery `help` where available.
+For explicit commands reporting `INVALID_RESPONSE` after a successful HTTP response, the structured error also includes `status`, `contentType`, `shape` and `shapeTruncated` on stdout.
+These describe the most recent successful response; failures reading cached controller metadata have no HTTP response diagnostics.
+The content type omits parameters and is `null` when absent or invalid.
+The bounded shape reports paths and types, plus array counts, sampling only the first array element.
+It never prints response values or validator messages.
+Paths retain only short identifier-like keys after secret redaction; other keys become `<key>`.
+`shapeTruncated` indicates when traversal limits omit structure.
+The canonical bounds and key rules live in `src/response-diagnostics.ts`; `test/response-diagnostics-contract.test.ts` checks its byte-for-byte copy and shared vectors from beyondtrust-axi.
+Unexpected successful responses, such as proxy login pages or malformed collection envelopes, require checking controller compatibility and proxy configuration.
 See [the README exit table](../README.md#output-and-exit-codes) for process exit meanings.
 For `PROFILE_REQUIRED`, configure an origin and SecretRef or inject the complete environment profile.
 For `AUTH_REQUIRED`, check the selected credential; for `FORBIDDEN`, check the account's AWX roles.

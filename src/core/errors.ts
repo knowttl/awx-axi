@@ -8,6 +8,7 @@
 import { encode } from "@toon-format/toon";
 import { AxiError } from "axi-sdk-js";
 import { isSensitiveKey, redact, REDACTION } from "./redact.js";
+import type { ResponseDiagnostics } from "../response-diagnostics.js";
 
 /**
  * The four codes that exit 2 (§9). `exitCodeForError` from the SDK maps only
@@ -42,7 +43,7 @@ export class AwxAxiError extends AxiError {
 }
 
 /** The `formatError` awx-axi hands to `runAxiCli` (§9). */
-export function formatError(error: unknown): {
+export function formatError(error: unknown, diagnostics?: ResponseDiagnostics): {
   output: string;
   exitCode: number;
 } {
@@ -53,6 +54,7 @@ export function formatError(error: unknown): {
       error: error.message,
       code: error.code,
       ...details,
+      ...diagnostics?.forError(error),
     };
     if (error.suggestions.length > 0) {
       output.help = error.suggestions;

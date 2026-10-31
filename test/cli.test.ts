@@ -34,7 +34,26 @@ describe("the CLI shell", () => {
         }),
       });
       expect(process.exitCode).toBe(1);
-      expect(stdout.text()).toBe("error: the controller returned a non-JSON response\ncode: INVALID_RESPONSE\n");
+      expect(stdout.text()).toBe("error: the controller returned a non-JSON response\ncode: INVALID_RESPONSE\nstatus: 200\ncontentType: text/plain\nshape[1]{path,type}:\n  $,string\nshapeTruncated: false\n");
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
+
+  it("retains safe diagnostics when collection validation fails after the HTTP read", async () => {
+    const stdout = capture();
+    const previousExitCode = process.exitCode;
+    const { fetch } = fixtureFetch(["invalid-list-envelope"]);
+    try {
+      await main({
+        argv: ["template", "list"], stdout, env: {},
+        createTransport: (_env, _signal, diagnostics) => new HttpTransport({
+          baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: true, fetch,
+          ...(diagnostics === undefined ? {} : { diagnostics }),
+        }),
+      });
+      expect(process.exitCode).toBe(1);
+      expect(stdout.text()).toBe('error: the controller returned a list page with no results\ncode: INVALID_RESPONSE\nstatus: 200\ncontentType: application/json\nshape[3]{path,type}:\n  $,object\n  "$[\\"results\\"]",string\n  "$[\\"<key>\\"]",string\nshapeTruncated: false\n');
     } finally {
       process.exitCode = previousExitCode;
     }

@@ -22,7 +22,7 @@ describe("invalid successful responses", () => {
     const error = await http[method]("jobs/1/").catch((error: unknown) => error);
     expect(formatError(error)).toEqual({
       exitCode: 1,
-      output: "error: the controller returned a non-JSON response\ncode: INVALID_RESPONSE\n",
+      output: "error: the controller returned a non-JSON response\ncode: INVALID_RESPONSE\nstatus: 200\ncontentType: text/plain\nshape[1]{path,type}:\n  $,string\nshapeTruncated: false\n",
     });
   });
 
