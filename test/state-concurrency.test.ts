@@ -39,7 +39,7 @@ function environment(): Env {
 
 async function concurrent(env: Env, commands: readonly string[]): Promise<void> {
   const workers = commands.map((command) => {
-    const child = fork(fileURLToPath(new URL("support/state-worker.mjs", import.meta.url)), [compiled], {
+    const child = fork(fileURLToPath(new URL("support/state-worker.ts", import.meta.url)), [compiled], {
       execArgv: [], env: { ...process.env, ...env }, silent: true,
     });
     let stderr = "";

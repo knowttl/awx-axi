@@ -4,18 +4,19 @@ import { closeSync, openSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
+import type { Env } from "../../src/core/profiles.js";
 
-const compiled = process.argv[2];
-const { HttpTransport, RecordedTransport } = await import(pathToFileURL(join(compiled, "core/transport.js")));
-const { authCommand } = await import(pathToFileURL(join(compiled, "commands/auth.js")));
-const { PrivateFiles } = await import(pathToFileURL(join(compiled, "core/private-file.js")));
-process.send("ready");
-const [input] = await once(process, "message");
+const compiled = process.argv[2]!;
+const { HttpTransport, RecordedTransport } = await import(pathToFileURL(join(compiled, "core/transport.js")).href) as typeof import("../../src/core/transport.js");
+const { authCommand } = await import(pathToFileURL(join(compiled, "commands/auth.js")).href) as typeof import("../../src/commands/auth.js");
+const { PrivateFiles } = await import(pathToFileURL(join(compiled, "core/private-file.js")).href) as typeof import("../../src/core/private-file.js");
+process.send!("ready");
+const [input] = await once(process, "message") as [{ command: string; env: Env }];
 if (input.command === "reclaim") {
-  const path = join(input.env.XDG_STATE_HOME, "reclamation");
+  const path = join(input.env.XDG_STATE_HOME!, "reclamation");
   const files = new PrivateFiles();
   for (let index = 0; index < 20; index += 1) files.withLock(path, () => {
-    const owner = JSON.parse(files.read(`${path}.lock`, true));
+    const owner = JSON.parse(files.read(`${path}.lock`, true)!) as { pid: number; startTime: number };
     assert.equal(owner.pid, process.pid);
     assert.ok(Number.isFinite(owner.startTime));
     const marker = `${path}.active`;
@@ -51,4 +52,4 @@ if (input.command === "reclaim") {
     });
   }
 }
-process.disconnect();
+process.disconnect!();
