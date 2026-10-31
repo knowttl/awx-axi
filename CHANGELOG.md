@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.10](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.9...awx-axi-v0.1.10) (2026-10-31)
+
+
+### Features
+
+* add bounded batch host inspection ([#67](https://github.com/knowttl/awx-axi/issues/67)) ([5b53084](https://github.com/knowttl/awx-axi/commit/5b530845189fd1f8269e9399eba08b9e84797923))
+
+
+### Bug Fixes
+
+* allow packaged installs with an empty npm cache ([#69](https://github.com/knowttl/awx-axi/issues/69)) ([a64e0fb](https://github.com/knowttl/awx-axi/commit/a64e0fb107d66d88aab442ba7f9484c9c728c1af))
+* **core:** report invalid controller responses consistently ([#63](https://github.com/knowttl/awx-axi/issues/63)) ([015e057](https://github.com/knowttl/awx-axi/commit/015e057f2449e372ad481c4e156c1db872d5cc0e))
+* correct startup diagnostics and hook installation reporting ([#66](https://github.com/knowttl/awx-axi/issues/66)) ([30a351c](https://github.com/knowttl/awx-axi/commit/30a351cc57e2b3434135500abfe1765e42f30e6f))
+* install dependencies before pipeline validation ([#61](https://github.com/knowttl/awx-axi/issues/61)) ([a0cbec6](https://github.com/knowttl/awx-axi/commit/a0cbec624501b59c98dd130f8a6e0325b9a4f5fe))
+* preserve safe diagnostics for invalid AWX responses ([#64](https://github.com/knowttl/awx-axi/issues/64)) ([5749fa3](https://github.com/knowttl/awx-axi/commit/5749fa31f07cdde27371cde6864ab1e123948c7b))
+
 ## [0.1.9](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.8...awx-axi-v0.1.9) (2026-10-28)
 
 
