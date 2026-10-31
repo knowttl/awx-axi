@@ -150,6 +150,48 @@ describe("host inspect CLI", () => {
     expect(run.stdout).not.toContain("do-not-print");
   });
 
+  it("preserves independent outcomes when a ten-host batch truncates a long description", async () => {
+    const run = await runCli(["host", "inspect", Array.from({ length: 10 }, () => "501").join(",")], { script: [
+      { status: 200, body: { ...loadFixture("host-detail").body as object, description: "x".repeat(5_000) } },
+      "host-groups", "host-variable-data", { status: 403, body: { detail: "Permission denied." } },
+      ...Array.from({ length: 9 }, () => detail).flat(),
+    ] });
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout.length).toBeLessThanOrEqual(20_000);
+    expect(decode(run.stdout)).toMatchObject({ complete: false, hosts: [
+      {
+        selector: "501", status: "failed", complete: false, code: "OUTPUT_BUDGET",
+        host: { id: 501, description: { truncated: true } },
+        groups: [{ name: "web" }, { name: "production" }],
+        variables: { ansible_host: "10.0.0.11" },
+        errors: [{ component: "facts", code: "FORBIDDEN", error: "host 501 facts: Permission denied." }],
+        help: "Run `awx-axi host show 501` for full details",
+      },
+      ...Array.from({ length: 9 }, () => ({ status: "complete", complete: true })),
+    ] });
+  });
+
+  it("retains inventory-bearing candidates when ambiguity details exceed the batch budget", async () => {
+    const candidates = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1, name: "web", inventory: index + 11,
+      summary_fields: { inventory: { id: index + 11, name: "Production" } },
+    }));
+    const run = await runCli(["host", "inspect", ["web", ...Array.from({ length: 9 }, () => "501")].join(",")], { script: [
+      { status: 200, body: { count: 100, next: null, previous: null, results: candidates } },
+      ...Array.from({ length: 9 }, () => detail).flat(),
+    ] });
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout.length).toBeLessThanOrEqual(20_000);
+    expect(decode(run.stdout)).toMatchObject({ hosts: [
+      { status: "failed", error: { code: "AMBIGUOUS_NAME", candidates_truncated: true, candidates: [
+        { id: 1, name: "web", inventory: "11 (Production)" },
+        { id: 2, name: "web", inventory: "12 (Production)" },
+        { id: 3, name: "web", inventory: "13 (Production)" },
+      ] } },
+      ...Array.from({ length: 9 }, () => ({ status: "complete" })),
+    ] });
+  });
+
   it.each(["", "501,", "0", Array.from({ length: 11 }, (_, i) => String(i + 1)).join(",")])("rejects invalid selection %s before reads", async (selection) => {
     const run = await runCli(["host", "inspect", selection]);
     expect(run.exitCode).toBe(2);

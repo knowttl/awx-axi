@@ -374,23 +374,38 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
     const help = `Run \`awx-axi host show ${id ?? "<id>"}\` for full details`;
     row.help = help;
     row = redactValue(row) as RecordValue;
-    for (const component of ["variables", "facts", "groups"] as const) {
-      if (row[component] === undefined || encode({ hosts: [row] }).length <= rowLimit) continue;
-      const text = encode({ [component]: row[component] });
-      if (text.length <= rowLimit / 4) continue;
-      row[component] = { truncated: true, total_chars: text.length, preview: text.slice(0, Math.floor(rowLimit / 8)) };
-      row.status = "failed";
-      row.complete = false;
+    const selectorError = record(row.error);
+    if (Array.isArray(selectorError.candidates) && encode({ hosts: [row] }).length > rowLimit) {
+      const candidates = selectorError.candidates;
+      selectorError.candidates = candidates.slice(0, 3).map((candidate) => {
+        const match = record(candidate);
+        const compact = (value: unknown) => typeof value === "string" && value.length > 80 ? `${value.slice(0, 80)}... [truncated]` : value;
+        return { id: match.id, name: compact(match.name), inventory: compact(match.inventory) };
+      });
+      selectorError.candidates_truncated = true;
+      selectorError.candidates_total = candidates.length;
       row.code = "OUTPUT_BUDGET";
     }
-    const rendered = encode(row);
-    if (encode({ hosts: [row] }).length > rowLimit) {
-      // Bound the encoded preview too: escaping quotes and newlines costs characters.
-      let preview = rendered.slice(0, Math.floor(rowLimit / 2));
-      row = { selector: selector.slice(0, 100), status: "failed", complete: false, code: "OUTPUT_BUDGET", truncated: true, total_chars: rendered.length, preview, help };
-      while (encode({ hosts: [row] }).length > rowLimit) {
-        preview = preview.slice(0, Math.floor(preview.length / 2));
-        row.preview = preview;
+    const host = record(row.host);
+    const fields: [RecordValue, string][] = [
+      ...Object.keys(host).map((key): [RecordValue, string] => [host, key]),
+      ...["variables", "facts", "groups", "selector"].map((key): [RecordValue, string] => [row, key]),
+      [selectorError, "error"],
+      ...(Array.isArray(row.errors) ? row.errors.map((error): [RecordValue, string] => [record(error), "error"]) : []),
+    ];
+    const values = fields.filter(([owner, key]) => owner[key] !== undefined)
+      .map(([owner, key]) => ({ owner, key, text: encode({ [key]: owner[key] }) }))
+      .sort((left, right) => right.text.length - left.text.length);
+    for (const { owner, key, text } of values) {
+      if (encode({ hosts: [row] }).length <= rowLimit) break;
+      if (text.length <= 100) continue;
+      const preview = { truncated: true, total_chars: text.length, preview: text.slice(0, Math.floor(rowLimit / 8)) };
+      owner[key] = preview;
+      if (row.status === "complete") row.status = "failed";
+      row.complete = false;
+      row.code = "OUTPUT_BUDGET";
+      while (preview.preview.length > 0 && encode({ hosts: [row] }).length > rowLimit) {
+        preview.preview = preview.preview.slice(0, Math.floor(preview.preview.length / 2));
       }
     }
     hosts.push(row);
