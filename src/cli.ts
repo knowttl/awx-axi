@@ -125,6 +125,15 @@ export async function main(options: MainOptions = {}): Promise<void> {
     process.exitCode = error.exitCode;
     return;
   }
+  if (argv[0]?.startsWith("-") && !["--help", "--version", "-v", "-V"].includes(argv[0])) {
+    const error = formatError(validationError(`unknown flag ${argv[0]} for \`awx-axi\``, [
+      "Remove the unsupported flag; run `awx-axi --help` to see commands and their flags",
+      "global flags: --config <path>, --profile <name>, --origin <origin>, --verify-ssl <true|false>, --help, --version",
+    ]));
+    (options.stdout ?? process.stdout).write(redact(error.output));
+    process.exitCode = error.exitCode;
+    return;
+  }
   const homeCancellation = argv.length === 0 ? new AbortController() : undefined;
   const context: DomainContext & AuthContext = {
     env,
@@ -138,7 +147,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
   };
   const commands = buildCommands(context);
-  let home: Record<string, unknown> | undefined;
+  let home: Record<string, unknown> | string | undefined;
   if (argv.length === 0) {
     const deadline = setTimeout(() => homeCancellation!.abort(), 8_000);
     try {
@@ -148,9 +157,8 @@ export async function main(options: MainOptions = {}): Promise<void> {
         : options.createTransport(env, homeCancellation!.signal, diagnostics));
       home = await homeCommand(context, bareHome ? env : {}, metadata.release);
     } catch (error) {
-      (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));
+      home = homeDiagnostic(error, selection).trimEnd();
       process.exitCode = 0;
-      return;
     } finally {
       clearTimeout(deadline);
       homeCancellation!.abort();
@@ -200,7 +208,7 @@ function buildCommands(
   const commands: Record<string, AxiCliCommand<undefined>> = {
     auth: (args) => authCommand(args, context),
     doctor: (args) => authCommand(["status", ...args], context),
-    setup: (args) => setupCommand(args),
+    setup: (args) => setupCommand(args, { homeDir: context.env.HOME }),
     config: (args) => {
       if (args.length !== 1 || args[0] !== "path") throw validationError("usage: awx-axi config path [--config <path>]");
       return { config: configPath(context.env, context.selection) };

@@ -1,106 +1,49 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { AxiError } from "axi-sdk-js";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { main } from "../src/cli.js";
 import { SETUP_HELP, setupCommand } from "../src/commands/setup.js";
 
-function capture(): { write: (chunk: string) => void; text: () => string } {
-  const chunks: string[] = [];
-  return {
-    write: (chunk) => {
-      chunks.push(chunk);
-    },
-    text: () => chunks.join(""),
-  };
-}
-
 describe("setup command (design.md §13)", () => {
-  it("executes setup hooks via setupCommand", async () => {
-    const installHooks = vi.fn();
-    const result = await setupCommand(["hooks"], { installHooks });
-
-    expect(result).toEqual({
-      setup: {
-        hooks:
-          "installed session-start hooks for Claude Code, Codex, and OpenCode",
-      },
-    });
-    expect(installHooks).toHaveBeenCalledOnce();
-  });
-
-  it("throws a validation error when no subcommand is provided", async () => {
-    await expect(setupCommand([])).rejects.toThrow(AxiError);
-    await expect(setupCommand([])).rejects.toMatchObject({
-      code: "VALIDATION_ERROR",
-      message: "`awx-axi setup` needs a subcommand",
-    });
-  });
-
-  it("throws a validation error when an unknown subcommand is provided", async () => {
-    await expect(setupCommand(["invalid"])).rejects.toThrow(AxiError);
-    await expect(setupCommand(["invalid"])).rejects.toMatchObject({
-      code: "VALIDATION_ERROR",
-      message: "unknown subcommand `setup invalid`",
-    });
+  it.each([
+    { args: [], message: "`awx-axi setup` needs a subcommand" },
+    { args: ["invalid"], message: "unknown subcommand `setup invalid`" },
+  ])("rejects invalid subcommands: $args", async ({ args, message }) => {
+    await expect(setupCommand(args)).rejects.toMatchObject({ code: "VALIDATION_ERROR", message });
   });
 
   it("installs the bare dashboard command for session start in a temporary home", async () => {
-    const tempHome = mkdtempSync(join(tmpdir(), "awx-axi-setup-test-"));
-    const originalHome = process.env.HOME;
-    const originalExecutable = process.argv[1];
-    process.argv[1] = resolve("dist/bin/awx-axi.js");
-    process.env.HOME = tempHome;
-
+    const homeDir = mkdtempSync(join(tmpdir(), "awx-axi-setup-test-"));
+    const execPath = resolve(import.meta.dirname, "../dist/bin/awx-axi.js");
     try {
-      const result = await setupCommand(["hooks"]);
-      expect(result).toEqual({
-        setup: {
-          hooks:
-            "installed session-start hooks for Claude Code, Codex, and OpenCode",
-        },
+      expect(await setupCommand(["hooks"], { homeDir, execPath })).toEqual({
+        setup: { hooks: "installed session-start hooks for Claude Code, Codex, and OpenCode" },
       });
-      const settings = JSON.parse(readFileSync(join(tempHome, ".claude/settings.json"), "utf8")) as {
+      const settings = JSON.parse(readFileSync(join(homeDir, ".claude/settings.json"), "utf8")) as {
+        hooks: { SessionStart: { hooks: { command: string }[] }[] };
+      };
+      expect(settings.hooks.SessionStart[0]?.hooks[0]?.command).toBe(execPath);
+    } finally { rmSync(homeDir, { recursive: true, force: true }); }
+  });
+
+  it("renders setup hooks output via CLI main using the supplied home", async () => {
+    const home = mkdtempSync(join(tmpdir(), "awx-axi-setup-cli-test-"));
+    let text = "";
+    try {
+      await main({ argv: ["setup", "hooks"], stdout: { write: (chunk) => { text += chunk; } }, env: { HOME: home } });
+      expect(text).toContain("installed session-start hooks for Claude Code, Codex, and OpenCode");
+      const settings = JSON.parse(readFileSync(join(home, ".codex/hooks.json"), "utf8")) as {
         hooks: { SessionStart: { hooks: { command: string }[] }[] };
       };
       expect(settings.hooks.SessionStart[0]?.hooks[0]?.command).toBe(process.argv[1]);
-    } finally {
-      process.argv[1] = originalExecutable!;
-      process.env.HOME = originalHome;
-      rmSync(tempHome, { recursive: true, force: true });
-    }
-  });
-
-  it("renders setup hooks output via CLI main", async () => {
-    const stdout = capture();
-    const tempHome = mkdtempSync(join(tmpdir(), "awx-axi-setup-cli-test-"));
-
-    try {
-      await main({
-        argv: ["setup", "hooks"],
-        stdout,
-        env: { HOME: tempHome },
-      });
-
-      expect(stdout.text()).toContain(
-        "installed session-start hooks for Claude Code, Codex, and OpenCode",
-      );
-    } finally {
-      rmSync(tempHome, { recursive: true, force: true });
-    }
+    } finally { rmSync(home, { recursive: true, force: true }); }
   });
 
   it("renders help text for setup command", async () => {
-    const stdout = capture();
-
-    await main({
-      argv: ["setup", "--help"],
-      stdout,
-      env: {},
-    });
-
-    expect(stdout.text()).toContain(SETUP_HELP);
+    let text = "";
+    await main({ argv: ["setup", "--help"], stdout: { write: (chunk) => { text += chunk; } }, env: {} });
+    expect(text).toContain(SETUP_HELP);
   });
 });
