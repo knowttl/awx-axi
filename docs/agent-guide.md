@@ -15,6 +15,7 @@ The command prefixes in this table form a controller-read allowlist.
 | --- | --- |
 | `host list [--search <text>] [--name <exact-name>] [--inventory <id>] [--limit <n>]` | Hosts across visible inventories, with inventory context |
 | `host show <id\|name>` | Host, groups, variables and facts in one invocation |
+| `host inspect <selectors> [--inventory <id>]` | Bounded batch detail for 1-10 comma-separated host IDs or names; per-host completeness |
 | `group show <id\|name>` | Direct hosts, child groups and parsed variables |
 | `inventory hosts <id\|name> [--search <text>] [--facts] [--limit <n>]` | Inventory hosts; optional fact key counts per returned host |
 | `job list [--type <type>] [--status <status>] [--failed] [--since <time>] [--limit <n>] [--fields <fields>]` | Newest runs; defaults to playbook jobs and 20 rows |
@@ -30,6 +31,7 @@ The command prefixes in this table form a controller-read allowlist.
 ```sh
 awx-axi host list --search web --inventory 11 --limit 5
 awx-axi host show web-01.example.com
+awx-axi host inspect 501,601
 awx-axi group show 31
 awx-axi inventory hosts 11 --facts --limit 5
 awx-axi job list --type all --failed --since 2h --limit 5 --fields type,launched_by,template
@@ -48,7 +50,11 @@ awx-axi activity-stream show 9001
 Use `host show` directly with a known name: it resolves the ID and gathers groups, variables and facts.
 Duplicate names across inventories require an ID from the ambiguity response or filtered list.
 Use `inventory hosts --facts` instead of listing then showing each host when fact key counts suffice; it still makes per-host controller reads and does not return fact values.
-There is no general batch `show` for full host details.
+Use `host inspect 501,601` for selected hosts, or `host inspect web-01,web-02 --inventory 11` to scope names and verify ID membership.
+The batch shares fixed limits of 10 selected hosts, 100 GET attempts including retries and pagination, 60 seconds total and 20,000 rendered characters.
+Each host reports `complete`, `failed` or `skipped`; any incomplete result exits 1 while retaining successful components.
+Group reads stop at 1,000 rows or 100 pages and disclose pagination truncation.
+Large variables/facts become labeled previews; output budget stops include a `host show` recovery hint.
 `job show --type job` includes host and failure summaries; specifying a known type avoids a type-discovery request.
 `job list --type all` includes workflows, syncs, ad-hoc and system runs; `--since` filters on finish time, so it excludes unfinished runs.
 Use `job watch` instead of writing a poll loop: defaults are 600 seconds and a 5-second initial interval, backing off to 30 seconds.
@@ -58,7 +64,7 @@ Collection `--limit` accepts 1-1,000 rows.
 Alternatively use `--all --max-rows <n>` (default and maximum 10,000 rows, at most 100 pages); do not combine `--all` with `--limit`.
 Check completeness, truncation and stop reason before claiming exhaustive results.
 With `partial_page: true`, following `next` skips undisplayed rows; rerun with a larger budget or narrower filters.
-Detail aggregates gather complete related collections and have no row-limit flag.
+Single-resource detail aggregates gather complete related collections and have no row-limit flag; `host inspect` uses the batch limits above.
 `--fields` adds fields only where advertised; for job lists, `type`, `launched_by` and `template` usually avoid detail calls, while `created`, `started` and `elapsed` help with timing.
 It does not remove default fields; host reads have no `--fields` flag.
 Prefer stdout `--tail 50` or `--lines 1-50`; `--full` does not bypass controller truncation.

@@ -4,6 +4,7 @@
  * Host creation and mutation remain under `inventory`; this noun is read-only.
  */
 import { AxiError } from "axi-sdk-js";
+import { encode } from "@toon-format/toon";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
@@ -13,12 +14,13 @@ import {
   defineDomain,
   read,
   readPaged,
+  withExitCode,
   type Domain,
   type DomainResult,
   type Plan,
   type SubcommandInput,
 } from "../../core/registry.js";
-import type { Query } from "../../core/transport.js";
+import type { Query, ReadBudget } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 
@@ -143,7 +145,7 @@ function toGroup(raw: unknown): RecordValue {
 function parseInventory(raw: string): number {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) {
-    throw validationError(`--inventory must be a positive integer for \`host list\`, got ${raw}`, [
+    throw validationError(`--inventory must be a positive integer, got ${raw}`, [
       "Run `awx-axi host list --inventory <id>`",
     ]);
   }
@@ -153,8 +155,10 @@ function parseInventory(raw: string): number {
 function* matchHostName(
   value: string,
   lookup: "name" | "name__iexact",
+  inventory?: number,
+  budget?: ReadBudget,
 ): Plan<NameMatches> {
-  const response = yield* read("hosts/", { [lookup]: value });
+  const response = yield* read("hosts/", { [lookup]: value, ...(inventory === undefined ? {} : { inventory }) }, budget);
   if (response.status !== 200) {
     throw errorForResponse(response, { subject: `host "${value}"` });
   }
@@ -167,14 +171,14 @@ function* matchHostName(
   };
 }
 
-function* resolveHost(value: string): Plan<number> {
+function* resolveHost(value: string, inventory?: number, budget?: ReadBudget): Plan<number> {
   if (/^\d+$/.test(value)) {
     return Number(value);
   }
 
-  let page = yield* matchHostName(value, "name");
+  let page = yield* matchHostName(value, "name", inventory, budget);
   if (page.matches.length === 0) {
-    page = yield* matchHostName(value, "name__iexact");
+    page = yield* matchHostName(value, "name__iexact", inventory, budget);
   }
 
   if (page.matches.length === 0) {
@@ -291,6 +295,112 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   });
 }
 
+function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
+  const selectors = (input.args[0] ?? "").split(",").map((value) => value.trim());
+  if (selectors.length > 10 || selectors.some((value) => value.length === 0)) {
+    throw validationError("host inspect requires 1-10 nonempty comma-separated selectors", ["Run `awx-axi host inspect 501,601`"]);
+  }
+  if (selectors.some((value) => /^\d+$/.test(value) && (!Number.isSafeInteger(Number(value)) || Number(value) < 1))) {
+    throw validationError("host IDs must be positive safe integers");
+  }
+  const inventory = typeof input.flags.inventory === "string" ? parseInventory(input.flags.inventory) : undefined;
+  const budget: ReadBudget = { remaining: 100, deadline: Date.now() + 60_000 };
+  const hosts: RecordValue[] = [];
+  let stopped: string | undefined;
+  const rowLimit = Math.floor(17_000 / selectors.length);
+
+  for (const selector of selectors) {
+    let row: RecordValue = { selector, status: "complete", complete: true };
+    let id: number | undefined;
+    if (stopped !== undefined) {
+      row.status = "skipped";
+      row.complete = false;
+      row.error = { code: stopped };
+    } else {
+      try {
+        id = yield* resolveHost(selector, inventory, budget);
+        const detail = yield* read(`hosts/${id}/`, {}, budget);
+        if (detail.status !== 200) throw errorForResponse(detail, { subject: `host ${id}` });
+        const body = record(detail.body);
+        if (inventory !== undefined && body.inventory !== inventory) {
+          throw new AxiError(`host ${id} does not belong to inventory ${inventory}`, "INVENTORY_MISMATCH");
+        }
+        const lastJob = record(record(body.summary_fields).last_job);
+        row.host = {
+          ...toHostRow(body), description: body.description ?? null,
+          last_job: formatReference(numberOrNull(lastJob.id) ?? numberOrNull(body.last_job), stringOrNull(lastJob.name)),
+          last_job_host_summary: body.last_job_host_summary ?? null,
+          ansible_facts_modified: body.ansible_facts_modified ?? null,
+        };
+        const errors: RecordValue[] = [];
+        for (const component of ["groups", "variables", "facts"] as const) {
+          try {
+            if (component === "groups") {
+              const groups = yield* readPaged(`hosts/${id}/groups/`, {}, { all: true, maxRows: 1000 }, budget);
+              row.groups = groups.rows.map(toGroup);
+              row.groups_pagination = groups.pagination;
+              if (groups.pagination.truncated) errors.push({ component, code: "INCOMPLETE_COLLECTION" });
+            } else {
+              const route = component === "variables" ? "variable_data" : "ansible_facts";
+              const response = yield* read(`hosts/${id}/${route}/`, {}, budget);
+              if (response.status !== 200) throw errorForResponse(response, { subject: `host ${id} ${component}` });
+              row[component] = response.body;
+            }
+          } catch (error) {
+            if (!(error instanceof AxiError)) throw error;
+            errors.push({ component, code: error.code, error: error.message });
+            if (error.code === "REQUEST_BUDGET" || error.code === "TIME_BUDGET") {
+              stopped = error.code;
+              row.skipped_components = component === "groups" ? ["variables", "facts"] : component === "variables" ? ["facts"] : [];
+              break;
+            }
+          }
+        }
+        if (errors.length > 0) {
+          row.errors = errors;
+          row.status = "failed";
+          row.complete = false;
+        }
+      } catch (error) {
+        if (!(error instanceof AxiError)) throw error;
+        row.status = "failed";
+        row.complete = false;
+        row.error = { code: error.code, error: error.message, ...(error instanceof AwxAxiError ? error.details : {}) };
+        if (error.code === "REQUEST_BUDGET" || error.code === "TIME_BUDGET") stopped = error.code;
+      }
+    }
+    const help = `Run \`awx-axi host show ${id ?? "<id>"}\` for full details`;
+    row.help = help;
+    row = redactValue(row) as RecordValue;
+    for (const component of ["variables", "facts", "groups"] as const) {
+      if (row[component] === undefined || encode({ hosts: [row] }).length <= rowLimit) continue;
+      const text = encode({ [component]: row[component] });
+      if (text.length <= rowLimit / 4) continue;
+      row[component] = { truncated: true, total_chars: text.length, preview: text.slice(0, Math.floor(rowLimit / 8)) };
+      row.status = "failed";
+      row.complete = false;
+      row.code = "OUTPUT_BUDGET";
+    }
+    const rendered = encode(row);
+    if (encode({ hosts: [row] }).length > rowLimit) {
+      // Bound the encoded preview too: escaping quotes and newlines costs characters.
+      let preview = rendered.slice(0, Math.floor(rowLimit / 2));
+      row = { selector: selector.slice(0, 100), status: "failed", complete: false, code: "OUTPUT_BUDGET", truncated: true, total_chars: rendered.length, preview, help };
+      while (encode({ hosts: [row] }).length > rowLimit) {
+        preview = preview.slice(0, Math.floor(preview.length / 2));
+        row.preview = preview;
+      }
+    }
+    hosts.push(row);
+  }
+  const complete = hosts.every((host) => host.complete === true);
+  return withExitCode({
+    complete,
+    budgets: { max_hosts: 10, max_requests: 100, requests: 100 - budget.remaining, max_seconds: 60, max_chars: 20_000 },
+    hosts,
+  }, complete ? 0 : 1);
+}
+
 export const hostDomain: Domain = defineDomain({
   name: "host",
   help: [
@@ -299,9 +409,19 @@ export const hostDomain: Domain = defineDomain({
     "Subcommands:",
     "  list  [--search <s>] [--name <n>] [--inventory <i>] [--limit <n>]",
     "  show  <id|name>",
+    "  inspect <selectors> [--inventory <id>]",
   ].join("\n"),
   mcpEquivalents: ["list_inventory_hosts"],
   subcommands: [
+    {
+      name: "inspect",
+      help: "awx-axi host inspect <selectors> [--inventory <id>]\nSelectors: 1-10 comma-separated IDs or names. Inventory scopes names and checks IDs.\nRead-only limits: 100 GET attempts including retries/pages, 60 seconds, 20000 rendered characters; groups up to 1000 rows/100 pages.\nEach host reports complete/failed/skipped; any incomplete detail exits 1. Oversized details become labeled previews; use host show for full detail.\nExamples: awx-axi host inspect 501,601; awx-axi host inspect web-01,web-02 --inventory 11",
+      flags: [{ name: "inventory", description: "scope names and verify host inventory id", takesValue: true }],
+      positionals: { names: ["<selectors>"], required: 1 },
+      schema: { label: "hosts", defaultFields: [], fieldAllowlist: [] },
+      suggestions: [],
+      plan: inspectPlan,
+    },
     {
       name: "list",
       help: "awx-axi host list [--search <s>] [--name <n>] [--inventory <i>] [--limit <n>]" + PAGINATION_HELP,

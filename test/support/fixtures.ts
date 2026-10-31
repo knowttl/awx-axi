@@ -49,7 +49,7 @@ export interface FetchCall {
  * query parameters it sends, which links it follows - can be asserted offline.
  * `RecordedTransport` sits above that seam and cannot see it.
  */
-export function fixtureFetch(names: readonly string[]): {
+export function fixtureFetch(names: readonly (string | RecordedExchange)[]): {
   fetch: FetchLike;
   calls: FetchCall[];
 } {
@@ -67,14 +67,15 @@ export function fixtureFetch(names: readonly string[]): {
     if (name === undefined) {
       throw new Error(`no fixture left to serve for ${init.method} ${url}`);
     }
-    const fixture = loadFixture(name);
+    const fixture = typeof name === "string" ? loadFixture(name) : name;
+    const bodyEncoding = "bodyEncoding" in fixture ? fixture.bodyEncoding : undefined;
 
     return Promise.resolve(
       new Response(
-        fixture.status === 204 ? null : fixture.bodyEncoding === "text" ? String(fixture.body) : JSON.stringify(fixture.body),
+        fixture.status === 204 ? null : bodyEncoding === "text" ? String(fixture.body) : JSON.stringify(fixture.body),
         {
           status: fixture.status,
-          headers: { "Content-Type": fixture.bodyEncoding === "text" ? "text/plain" : "application/json" },
+          headers: { "Content-Type": bodyEncoding === "text" ? "text/plain" : "application/json" },
         },
       ),
     );

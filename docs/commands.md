@@ -51,7 +51,7 @@ Regenerate with `npm run docs:commands` after building.
 | `ad-hoc` | launch, list, show, events, stdout |
 | `project` | copy, notification-add, notification-remove, create, edit, delete, list, show, playbooks, updates, roles, sync |
 | `inventory` | host-bulk-create, host-bulk-delete, group-create, group-edit, group-delete, group-add-host, group-remove-host, group-add-child, group-remove-child, source-create, source-edit, source-delete, source-credential-add, source-credential-remove, source-notification-add, source-notification-remove, create, edit, delete, sync, host-create, host-edit, host-delete, list, show, groups, hosts, sources, updates, constructed-list, constructed-show |
-| `host` | list, show |
+| `host` | inspect, list, show |
 | `group` | list, show |
 | `inventory-source` | list, show |
 | `schedule` | credential-add, credential-remove, label-add, label-remove, instance-group-add, instance-group-remove, create, edit, delete, list, show |
@@ -1242,6 +1242,17 @@ host: inspect managed hosts across all visible inventories
 Subcommands:
   list  [--search <s>] [--name <n>] [--inventory <i>] [--limit <n>]
   show  <id|name>
+  inspect <selectors> [--inventory <id>]
+```
+
+### host inspect
+
+```text
+awx-axi host inspect <selectors> [--inventory <id>]
+Selectors: 1-10 comma-separated IDs or names. Inventory scopes names and checks IDs.
+Read-only limits: 100 GET attempts including retries/pages, 60 seconds, 20000 rendered characters; groups up to 1000 rows/100 pages.
+Each host reports complete/failed/skipped; any incomplete detail exits 1. Oversized details become labeled previews; use host show for full detail.
+Examples: awx-axi host inspect 501,601; awx-axi host inspect web-01,web-02 --inventory 11
 ```
 
 ### host list
