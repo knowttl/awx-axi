@@ -52,7 +52,7 @@ function hookCommand(path: string): string {
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), "awx-axi-package-"));
   [packed] = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", directory], { cwd: projectRoot, encoding: "utf8" })) as [PackResult];
-  execFileSync("npm", ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", join(directory, packed.filename)], { cwd: directory, encoding: "utf8" });
+  execFileSync("npm", ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", join(directory, packed.filename)], { cwd: directory, encoding: "utf8" });
   bin = join(directory, "node_modules/.bin/awx-axi");
 }, 60_000);
 
