@@ -24,6 +24,7 @@ See [the command reference](commands.md) for supported fields and flags on each 
 
 TOON data, errors and recovery suggestions go to stdout; progress and other runtime diagnostics go to stderr.
 Errors expose `error`, `code` and recovery `help` where available.
+Unsupported flags at the root or command level exit 2 before authentication or controller requests; remove the unsupported flag and consult `awx-axi --help` or the command's `--help` for valid flags.
 For explicit commands reporting `INVALID_RESPONSE` after a successful HTTP response, the structured error also includes `status`, `contentType`, `shape` and `shapeTruncated` on stdout.
 These describe the most recent successful response; failures reading cached controller metadata have no HTTP response diagnostics.
 The content type omits parameters and is `null` when absent or invalid.

@@ -5,6 +5,10 @@
 Install globally before running `awx-axi setup hooks`.
 Setup installs or repairs session-start integrations for Claude Code, Codex and OpenCode; restart the agent session afterward.
 Ordinary CLI commands do not install hooks.
+Setup verifies installed entries, including the full Codex TOML document and its effective `features.hooks = true` setting, before reporting success.
+If any integration fails, setup exits 1 with `HOOK_INSTALL_FAILED` and reports `setup.hooks` as `partial failure` when another integration succeeded, or `failed` when none succeeded.
+The error lists each integration's status and affected paths with safe repair guidance, without settings content or parser details.
+Repair the reported configuration syntax or write permissions, or move an unmanaged OpenCode plugin aside, then rerun `awx-axi setup hooks`.
 Hooks inject the live home dashboard; `npx skills add knowttl/awx-axi --skill awx-axi` installs static guidance on demand.
 Add `-g` to the skill-install command for a global skill installation.
 The shipped skill uses `npx -y awx-axi` commands so a global binary is optional for skill users.
@@ -14,7 +18,8 @@ Neither integration grants AWX permissions or bypasses local write gates.
 
 The dashboard injects up to five active jobs, five pending approvals and three failures from the last 24 hours.
 It makes three bounded list reads after [controller discovery](compatibility.md#discovery-and-cache).
-Dashboard errors produce a safe one-line diagnostic and exit 0 to preserve session startup.
+Every home response starts with the executable path (`bin`) and `description`, including missing configuration, authentication, permission, network and TLS failures.
+Dashboard errors follow that header with a safe one-line diagnostic and exit 0 to preserve session startup.
 Explicit commands retain normal error exits; use `awx-axi doctor` to diagnose access.
 
 ## Hook removal
