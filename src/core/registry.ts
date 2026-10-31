@@ -22,6 +22,7 @@ import type {
   PagedResult,
   Query,
   RiskTier,
+  ReadBudget,
   TextResponse,
 } from "./transport.js";
 
@@ -105,12 +106,13 @@ export type HttpMutationMethod = "POST" | "PUT" | "PATCH" | "DELETE";
  * `write` requests support `method` ("POST" | "PUT" | "PATCH" | "DELETE") and risk tier tags.
  */
 export type AwxRequest =
-  | { readonly kind: "read"; readonly route: RouteDescription }
+  | { readonly kind: "read"; readonly route: RouteDescription; readonly budget?: ReadBudget }
   | {
       readonly kind: "readPaged";
       readonly route: RouteDescription;
       /** Row budget, not a page size; null requires a complete collection. */
       readonly limit: number | PageBudget | null;
+      readonly budget?: ReadBudget;
     }
   | { readonly kind: "readText"; readonly route: RouteDescription }
   | {
@@ -164,10 +166,11 @@ function assertBaseRelative(path: string): void {
 }
 
 /** Declare a single read. */
-export function* read(path: string, query?: Query): Plan<AwxResponse> {
+export function* read(path: string, query?: Query, budget?: ReadBudget): Plan<AwxResponse> {
   assertBaseRelative(path);
   const result = yield {
     kind: "read",
+    ...(budget === undefined ? {} : { budget }),
     route: query === undefined ? { path } : { path, query },
   };
   return result as AwxResponse;
@@ -178,9 +181,10 @@ export function* readPaged(
   path: string,
   query: Query,
   limit: number | PageBudget | null,
+  budget?: ReadBudget,
 ): Plan<PagedResult> {
   assertBaseRelative(path);
-  const result = yield { kind: "readPaged", route: { path, query }, limit };
+  const result = yield { kind: "readPaged", route: { path, query }, limit, ...(budget === undefined ? {} : { budget }) };
   return result as PagedResult;
 }
 
@@ -269,12 +273,13 @@ async function execute(
 ): Promise<RequestResult> {
   switch (request.kind) {
     case "read":
-      return runner.transport.get(request.route.path, request.route.query);
+      return runner.transport.get(request.route.path, request.route.query, request.budget);
     case "readPaged":
       return runner.transport.getPaged(
         request.route.path,
         request.route.query ?? {},
         request.limit,
+        request.budget,
       );
     case "readText":
       return runner.transport.getText(request.route.path, request.route.query);

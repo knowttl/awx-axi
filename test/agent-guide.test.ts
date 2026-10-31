@@ -8,6 +8,7 @@ const guide = readFileSync(new URL("../docs/agent-guide.md", import.meta.url), "
 const examples: { command: string; script: (string | RecordedExchange)[]; output: string }[] = [
   { command: "host list --search web --inventory 11 --limit 5", script: ["host-list"], output: "hosts[" },
   { command: "host show web-01.example.com", script: ["host-name-one", "host-detail", "host-groups", "host-variable-data", "host-ansible-facts"], output: "ansible_distribution: Debian" },
+  { command: "host inspect 501,601", script: ["host-detail", "host-groups", "host-variable-data", "host-ansible-facts", "host-detail", "host-groups", "host-variable-data", "host-ansible-facts"], output: "complete: true" },
   { command: "group show 31", script: ["group-detail", "group-hosts", "group-children", "group-variable-data"], output: "total_children: 1" },
   { command: "inventory hosts 11 --facts --limit 5", script: ["inventory-hosts", "inventory-host-facts"], output: "2 keys" },
   { command: "job list --type all --failed --since 2h --limit 5 --fields type,launched_by,template", script: ["unified-jobs-page-1"], output: "launched_by,template" },

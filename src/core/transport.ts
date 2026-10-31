@@ -17,6 +17,19 @@ import { createTlsFetch } from "./tls-fetch.js";
 /** Query parameters for a read. Values are serialized by the implementation. */
 export type Query = Record<string, string | number | boolean>;
 
+/** Shared across all reads in one bounded investigation, including retries. */
+export interface ReadBudget {
+  remaining: number;
+  readonly deadline: number;
+}
+
+function consumeRead(budget?: ReadBudget): void {
+  if (budget === undefined) return;
+  if (Date.now() >= budget.deadline) throw new AxiError("inspection time budget exhausted", "TIME_BUDGET");
+  if (budget.remaining === 0) throw new AxiError("inspection request budget exhausted", "REQUEST_BUDGET");
+  budget.remaining -= 1;
+}
+
 export interface AwxResponse {
   /** Load-bearing: 202, 204, 400, and 405 all carry meaning (§3.2, §9.2). */
   readonly status: number;
@@ -60,14 +73,14 @@ export interface TextResponse {
 export type RiskTier = "operational" | "config" | "delete" | "security";
 
 export interface AwxTransport {
-  get(route: string, query?: Query): Promise<AwxResponse>;
+  get(route: string, query?: Query, budget?: ReadBudget): Promise<AwxResponse>;
   /** Refused with `READ_ONLY_VIOLATION` or safety gate when flags/env forbid it. */
   post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   patch(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   delete(route: string, tag?: RiskTier): Promise<AwxResponse>;
   /** Walks `next` within a row/page budget; null requires a complete read. */
-  getPaged(route: string, query: Query, limit: number | PageBudget | null): Promise<PagedResult>;
+  getPaged(route: string, query: Query, limit: number | PageBudget | null, budget?: ReadBudget): Promise<PagedResult>;
   getText(route: string, query?: Query): Promise<TextResponse>;
 }
 
@@ -262,18 +275,20 @@ export class HttpTransport implements AwxTransport {
     this.#apiRoot = new URL(options.apiBasePath, options.baseUrl);
   }
 
-  async get(route: string, query: Query = {}): Promise<AwxResponse> {
-    return this.#get(route, query, false);
+  async get(route: string, query: Query = {}, budget?: ReadBudget): Promise<AwxResponse> {
+    return this.#get(route, query, false, budget);
   }
 
-  async #get(route: string, query: Query, allowText: boolean): Promise<AwxResponse> {
+  async #get(route: string, query: Query, allowText: boolean, budget?: ReadBudget): Promise<AwxResponse> {
     const attempts = this.#options.attempts ?? 3;
-    let response = await this.#send("GET", route, query, undefined, allowText);
+    consumeRead(budget);
+    let response = await this.#send("GET", route, query, undefined, allowText, budget);
 
     for (let attempt = 1; attempt < attempts && isBusy(response.status); ) {
-      await (this.#options.sleep ?? sleep)(200 * attempt);
+      await (this.#options.sleep ?? sleep)(Math.max(0, Math.min(200 * attempt, budget === undefined ? Infinity : budget.deadline - Date.now())));
       attempt += 1;
-      response = await this.#send("GET", route, query, undefined, allowText);
+      consumeRead(budget);
+      response = await this.#send("GET", route, query, undefined, allowText, budget);
     }
 
     return response;
@@ -311,8 +326,9 @@ export class HttpTransport implements AwxTransport {
     route: string,
     query: Query,
     limit: number | PageBudget | null,
+    budget?: ReadBudget,
   ): Promise<PagedResult> {
-    return walkPages((page, pageQuery) => this.get(page, pageQuery), route, query, limit);
+    return walkPages((page, pageQuery) => this.get(page, pageQuery, budget), route, query, limit);
   }
 
   async getText(route: string, query: Query = {}): Promise<TextResponse> {
@@ -325,6 +341,31 @@ export class HttpTransport implements AwxTransport {
     query: Query,
     body: unknown,
     allowText = false,
+    budget?: ReadBudget,
+  ): Promise<AwxResponse> {
+    if (budget === undefined) return this.#sendResponse(method, route, query, body, allowText, this.#options.signal);
+    const cancellation = new AbortController();
+    const timer = setTimeout(() => cancellation.abort(), Math.max(0, budget.deadline - Date.now()));
+    const signal = this.#options.signal === undefined ? cancellation.signal : AbortSignal.any([this.#options.signal, cancellation.signal]);
+    try {
+      const response = await this.#sendResponse(method, route, query, body, allowText, signal);
+      if (Date.now() >= budget.deadline) throw new AxiError("inspection time budget exhausted", "TIME_BUDGET");
+      return response;
+    } catch (cause) {
+      if (cancellation.signal.aborted || Date.now() >= budget.deadline) throw new AxiError("inspection time budget exhausted", "TIME_BUDGET");
+      throw cause;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async #sendResponse(
+    method: string,
+    route: string,
+    query: Query,
+    body: unknown,
+    allowText: boolean,
+    signal?: AbortSignal,
   ): Promise<AwxResponse> {
     this.#options.signal?.throwIfAborted();
     const url = new URL(route, this.#apiRoot);
@@ -355,7 +396,7 @@ export class HttpTransport implements AwxTransport {
         method,
         headers,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        ...(this.#options.signal === undefined ? {} : { signal: this.#options.signal }),
+        ...(signal === undefined ? {} : { signal }),
       });
     } catch (cause) {
       throw networkError(cause, url.host);
@@ -446,7 +487,8 @@ export class RecordedTransport implements AwxTransport {
     return this.#env ?? this.#readOnly;
   }
 
-  async get(route: string, query: Query = {}): Promise<AwxResponse> {
+  async get(route: string, query: Query = {}, budget?: ReadBudget): Promise<AwxResponse> {
+    consumeRead(budget);
     return this.#next("GET", route, query, undefined);
   }
 
@@ -474,8 +516,9 @@ export class RecordedTransport implements AwxTransport {
     route: string,
     query: Query,
     limit: number | PageBudget | null,
+    budget?: ReadBudget,
   ): Promise<PagedResult> {
-    return walkPages((page, pageQuery) => this.get(page, pageQuery), route, query, limit);
+    return walkPages((page, pageQuery) => this.get(page, pageQuery, budget), route, query, limit);
   }
 
   async getText(route: string, query: Query = {}): Promise<TextResponse> {
