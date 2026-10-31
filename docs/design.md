@@ -1290,9 +1290,7 @@ The live dashboard described in §8.1 is implemented.
 `installSessionStartHooks` from `axi-sdk-js` handles all three targets, including the path-repair and
 idempotency rules AXI §7 requires.
 
-The hook has a failure mode worth designing for: an unreachable controller or an expired token must **not**
-break session start.
-On any error the hook prints a single line naming the problem and the fix, and exits 0.
+See [agent integration](agent-integration.md) for verified setup outcomes and dashboard failure behavior that preserves session startup.
 
 The installable skill is generated from `src/skill.ts`.
 `test/skill.test.ts`, included in `npm test`, compares both committed skill copies against that generator.

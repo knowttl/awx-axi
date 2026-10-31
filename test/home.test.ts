@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest, type ClientRequest } from "node:http";
 import type { request as httpsRequest } from "node:https";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -83,8 +83,8 @@ describe("session dashboard", () => {
       expect(text).toBe("");
       await vi.advanceTimersByTimeAsync(1);
       await run;
-      expect(text.trim().split("\n")).toHaveLength(1);
-      expect(text).toMatch(/^awx: .*; Run `awx-axi auth status`/);
+      expect(text.trim().split("\n")).toHaveLength(3);
+      expect(text).toMatch(/\nawx: .*; Run `awx-axi auth status`/);
       expect(text).not.toContain("unfinished");
       expect(closedAtOutput).toBe(true);
       expect(process.exitCode).toBe(0);
@@ -221,7 +221,7 @@ describe("session dashboard", () => {
     { status: 200, body: { version: "sensitive\nresponse" } },
   ])("keeps discovery failure $status safe and does not cache it", async (ping) => {
     const failed = await runCli([], { env, script: ["controller-api-root", ping] });
-    expect(failed.stdout.trim().split("\n")).toHaveLength(1);
+    expect(failed.stdout.trim().split("\n")).toHaveLength(3);
     expect(failed.stdout).not.toContain("sensitive");
     expect(failed.exitCode).toBe(0);
     const retry = await runCli([], { env, script: [...discovery, "home-empty", "home-empty", "home-empty"] });
@@ -283,7 +283,7 @@ describe("session dashboard", () => {
       const config = join(env.HOME, "missing\n'$(printf unsafe)`printf unsafe`\\.json");
       const selectors = ["--config", config, "--profile", "prod", "--origin", "https://override.example.com", "--verify-ssl", "false"];
       const result = await runCli(selectors, { env, script: [] });
-      expect(result.stdout.trim().split("\n")).toHaveLength(1);
+      expect(result.stdout.trim().split("\n")).toHaveLength(3);
       const recovery = result.stdout.slice(result.stdout.indexOf("Run `") + 5, result.stdout.lastIndexOf("`"));
       const args = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${recovery}`])
         .toString().split("\0").slice(0, -1);
@@ -295,7 +295,7 @@ describe("session dashboard", () => {
         ...discovery,
         exchange("home-empty"), { status, body: { detail: "unsafe\nresponse" } }, exchange("home-empty"),
       ] });
-      expect(failed.stdout.trim().split("\n")).toHaveLength(1);
+      expect(failed.stdout.trim().split("\n")).toHaveLength(3);
       const command = failed.stdout.slice(failed.stdout.indexOf("Run `") + 5, failed.stdout.lastIndexOf("`"));
       const failedArgs = execFileSync("bash", ["-c", `awx-axi() { printf '%s\\0' "$@"; }; ${command}`])
         .toString().split("\0").slice(0, -1);
@@ -342,7 +342,7 @@ describe("session dashboard", () => {
       ...discovery,
       exchange("home-empty"), { status, body: { detail: "sensitive response\nsecond line" } }, exchange("home-empty"),
     ] });
-    expect(result.stdout.trim().split("\n")).toHaveLength(1);
+    expect(result.stdout.trim().split("\n")).toHaveLength(3);
     expect(result.stdout).toContain("awx:");
     expect(result.stdout).toContain("Run `awx-axi auth");
     expect(result.stdout).not.toMatch(/sensitive|second line|0 jobs/);
@@ -354,7 +354,7 @@ describe("session dashboard", () => {
     let text = "";
     const createTransport = vi.fn();
     await main({ argv: [], env: { HOME: env.HOME, AWX_AXI_HOME: env.AWX_AXI_HOME, XDG_CONFIG_HOME: env.XDG_CONFIG_HOME }, createTransport, stdout: { write: (chunk) => { text += chunk; } } });
-    expect(text).toBe("awx: controller configuration required; Run `awx-axi auth status` to check configuration and access\n");
+    expect(text).toContain("awx: controller configuration required; Run `awx-axi auth status` to check configuration and access\n");
     expect(createTransport).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(0);
   });
@@ -362,7 +362,7 @@ describe("session dashboard", () => {
   it("does not expose arbitrary exception messages in hook output", async () => {
     let text = "";
     await main({ argv: [], env, createTransport: () => { throw new Error("token=secret\nstack trace"); }, stdout: { write: (chunk) => { text += chunk; } } });
-    expect(text).toBe("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
+    expect(text).toContain("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
     expect(process.exitCode).toBe(0);
   });
 
@@ -371,14 +371,21 @@ describe("session dashboard", () => {
       ...discovery,
       "home-empty", { status: 200, body: { count: 4, results: [] } }, "home-empty",
     ] });
-    expect(result.stdout).toBe("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
+    expect(result.stdout).toContain("awx: dashboard unavailable; Run `awx-axi auth status` to check configuration and access\n");
     expect(result.exitCode).toBe(0);
   });
 
-  it("keeps unreachable controller failures safe and exits zero", async () => {
+  it.each([
+    { code: "CONTROLLER_UNREACHABLE", problem: "controller unreachable" },
+    { code: "TLS_UNTRUSTED", problem: "controller certificate could not be verified" },
+  ])("keeps $code failures safe, identifies the tool and exits zero", async ({ code, problem }) => {
     let text = "";
-    await main({ argv: [], env, createTransport: () => { throw new AxiError("unsafe network details", "CONTROLLER_UNREACHABLE"); }, stdout: { write: (chunk) => { text += chunk; } } });
-    expect(text).toBe("awx: controller unreachable; Run `awx-axi auth status` to check configuration and access\n");
+    await main({ argv: [], env, createTransport: () => { throw new AxiError("unsafe network details", code); }, stdout: { write: (chunk) => { text += chunk; } } });
+    expect(text.split("\n").slice(0, 2)).toEqual([
+      `bin: ${process.argv[1]!.replace(homedir(), "~")}`, "description: Inspect and run AWX automation from the shell",
+    ]);
+    expect(text).toContain(`awx: ${problem}; Run \`awx-axi auth status\` to check configuration and access\n`);
+    expect(text).not.toContain("unsafe network details");
     expect(process.exitCode).toBe(0);
   });
 
