@@ -965,8 +965,6 @@ the job's state to find out *why* before it can say anything true.
 Errors are TOON on **stdout**.
 A command constructs an `AxiError` from `axi-sdk-js` carrying the message, the stable code, and the help lines,
 and throws it; `runAxiCli` catches it, renders the block below, and sets the exit code.
-awx-axi never formats an error itself, for the §8 reason: the rendering helpers are internal to the SDK at
-0.1.8.
 
 ```
 error: <what went wrong>
@@ -983,7 +981,7 @@ returns the rendered output and the exit code together - and maps those four cod
 The alternative, collapsing the three into `VALIDATION_ERROR`, is rejected: the stable code is the part an
 agent branches on, and §9.1 exists to keep it stable.
 
-stderr carries nothing an agent needs: progress and diagnostics only, per AXI §6.
+See [errors and exits](output.md#errors-and-exits) for stdout, stderr and structured response diagnostics.
 
 ### 9.1 Error code table
 
@@ -1001,7 +999,7 @@ stderr carries nothing an agent needs: progress and diagnostics only, per AXI §
 | `PROFILE_AMBIGUOUS` | Multiple profiles exist without a selection or default | 1 |
 | `PROFILE_NOT_FOUND` | An explicitly selected profile is not configured | 1 |
 | `FORBIDDEN` | 403: authenticated but not permitted, including a user who cannot approve | 1 |
-| `INVALID_RESPONSE` | Invalid controller discovery response, string body from a successful JSON request, or malformed collection envelope, including name and unified-job lookups; diagnostics include bounded HTTP status, content type and value-free response shape | 1 |
+| `INVALID_RESPONSE` | Invalid controller discovery response, string body from a successful JSON request, or malformed collection envelope, including name and unified-job lookups; see [response diagnostics](output.md#errors-and-exits) | 1 |
 | `NOT_FOUND` | 404 on a numeric id | 1 |
 | `NAME_NOT_FOUND` | A name matched zero objects; help notes that an invisible object is indistinguishable from a missing one | 1 |
 | `LAUNCH_REJECTED` | 400 from a launch endpoint, with AWX's field errors translated | 1 |

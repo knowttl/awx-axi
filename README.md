@@ -125,7 +125,7 @@ Environment-profile TLS and token settings do not override named profiles.
 <a id="errors-and-exit-codes"></a>
 ## Output and exit codes
 
-TOON data, structured errors and recovery hints go to stdout; diagnostics go to stderr.
+See [errors and exits](docs/output.md#errors-and-exits) for stdout, stderr and structured response diagnostics.
 Collection commands use `--limit` or bounded `--all`, and report completeness and truncation.
 Use `--fields` where command help advertises it; stdout commands offer `--tail` and `--lines` for line slicing.
 `job stdout` accepts `--full`, but it does not change the request or bypass truncation.
@@ -144,7 +144,7 @@ See [output behavior](docs/output.md) for budgets, continuation caveats and log 
 | `PROFILE_REQUIRED` | Configure a profile or inject both `AWX_AXI_ORIGIN` and `AWX_AXI_TOKEN` |
 | `AUTH_REQUIRED` | Check the selected credential with `awx-axi auth status` |
 | `FORBIDDEN` | Check the account's AWX roles; local gates grant no permissions |
-| `INVALID_RESPONSE` | The controller returned an unexpected response, such as a proxy login page or malformed list envelope; inspect the bounded HTTP status, content type and response shape, then check controller compatibility and proxy configuration |
+| `INVALID_RESPONSE` | Inspect the [response diagnostics and recovery guidance](docs/output.md#errors-and-exits) |
 | `READ_ONLY_VIOLATION` | Keep reads, or unset read-only mode only when writes are intended |
 | Dashboard unavailable | Run `awx-axi doctor` for an explicit diagnostic and normal error exit |
 

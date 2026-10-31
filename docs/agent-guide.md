@@ -76,7 +76,7 @@ Use help to recover after a command fails or for an unfamiliar operation.
 Top-level `--help` returns usage, global selectors, domain names and built-ins; `<noun> --help` lists that domain's subcommands; `<noun> <verb> --help` gives focused syntax and documented flags, sometimes defaults/examples.
 The no-argument command instead reads a live dashboard and can exit 0 even when its dashboard reports an error.
 
-TOON data and structured `error`, `code`, `help` go to stdout; diagnostics go to stderr.
+See [errors and exits](output.md#errors-and-exits) for stdout, stderr and structured response diagnostics.
 Exit 0 means success, 2 means usage/ambiguity/input error, and 1 means runtime failure or a watched run that failed, errored or was canceled.
 
 | Code | Adjust before retrying |
