@@ -150,9 +150,9 @@ function defaultSummary(code: string, status: number): string {
  * forbids.
  *
  * A bare string is **not** one of the three shapes and is never described: the
- * transport hands back raw text whenever the body would not parse as JSON, so
- * describing it would put a Django `DEBUG=False` error page on stdout - the same
- * leak the 400 gate above exists to close.
+ * transport preserves unparseable text on non-success responses for status-based
+ * error translation, so describing it would put a Django `DEBUG=False` error
+ * page on stdout - the same leak the 400 gate above exists to close.
  */
 export function describeAwxBody(
   body: unknown,
