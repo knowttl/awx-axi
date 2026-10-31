@@ -32,7 +32,7 @@ The old token file is never read or automatically imported because it has no con
 After successful revocation or an upstream 404, the locked deletion removes the local entry only if its id, origin and token still match the revoked credential.
 A concurrent replacement is retained and reported in the success output.
 See [safety](safety.md#write-gates) for the required write gates.
-See [contributing](../CONTRIBUTING.md) for the offline validation boundary and checks.
+See [contributing](../CONTRIBUTING.md) for the validation boundary and checks.
 
 ## Permission verification
 
