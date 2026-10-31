@@ -1001,6 +1001,7 @@ stderr carries nothing an agent needs: progress and diagnostics only, per AXI §
 | `PROFILE_AMBIGUOUS` | Multiple profiles exist without a selection or default | 1 |
 | `PROFILE_NOT_FOUND` | An explicitly selected profile is not configured | 1 |
 | `FORBIDDEN` | 403: authenticated but not permitted, including a user who cannot approve | 1 |
+| `INVALID_RESPONSE` | Invalid controller discovery response, string body from a successful JSON request, or malformed collection envelope, including name and unified-job lookups | 1 |
 | `NOT_FOUND` | 404 on a numeric id | 1 |
 | `NAME_NOT_FOUND` | A name matched zero objects; help notes that an invisible object is indistinguishable from a missing one | 1 |
 | `LAUNCH_REJECTED` | 400 from a launch endpoint, with AWX's field errors translated | 1 |

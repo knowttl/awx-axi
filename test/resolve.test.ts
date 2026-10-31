@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { runPlan } from "../src/core/registry.js";
-import { resolveId } from "../src/core/resolve.js";
+import { resolveId, resolveUnifiedJob } from "../src/core/resolve.js";
 import { RecordedTransport } from "../src/core/transport.js";
 import { exchange, loadFixture } from "./support/fixtures.js";
 
@@ -28,6 +28,21 @@ function resolve(
  * outcomes. Named URLs are avoided entirely, which is what §4.3 case 5 forces.
  */
 describe("resolving an <id|name> argument", () => {
+  it.each(["<html>synthetic-private-response</html>", null, {}, { results: {} }])("rejects malformed name lookup envelopes %j", async (body) => {
+    const transport = new RecordedTransport([{ status: 200, body }]);
+    await expect(runPlan(resolveId("Example", OPTIONS), { transport })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it.each(["<html>synthetic-private-response</html>", null, {}, { results: {} }])("rejects malformed unified job envelopes %j", async (body) => {
+    const transport = new RecordedTransport([{ status: 200, body }]);
+    await expect(runPlan(resolveUnifiedJob(1), { transport })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("reports a valid empty unified job lookup as NOT_FOUND", async () => {
+    const transport = new RecordedTransport([exchange("home-empty")]);
+    await expect(runPlan(resolveUnifiedJob(1), { transport })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
   it("costs no request at all for a numeric id", async () => {
     const { result, transport } = resolve("1839", []);
 

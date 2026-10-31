@@ -11,6 +11,7 @@
 import { AxiError } from "axi-sdk-js";
 
 import { AwxAxiError, errorForResponse } from "./errors.js";
+import { readEnvelope } from "./paginate.js";
 import { read, type Plan } from "./registry.js";
 
 export interface ResolveOptions {
@@ -117,15 +118,10 @@ function* matchName(
     });
   }
 
-  const envelope = (response.body ?? {}) as {
-    results?: unknown;
-    count?: unknown;
-  };
+  const envelope = readEnvelope(response.body);
   return {
-    matches: Array.isArray(envelope.results)
-      ? envelope.results.map(toNamedObject)
-      : [],
-    count: typeof envelope.count === "number" ? envelope.count : undefined,
+    matches: envelope.results.map(toNamedObject),
+    count: envelope.count,
   };
 }
 
@@ -183,8 +179,8 @@ export function* resolveUnifiedJob(id: number): Plan<UnifiedJob> {
     throw errorForResponse(response, { subject: `job ${id}` });
   }
 
-  const results = (response.body as { results?: unknown } | null)?.results;
-  const row = Array.isArray(results) ? results[0] : undefined;
+  const { results } = readEnvelope(response.body);
+  const row = results[0];
 
   if (row === undefined) {
     throw new AxiError(`no job with id ${id} on this controller`, "NOT_FOUND", [

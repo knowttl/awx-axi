@@ -5,6 +5,8 @@
  * budgeted rows. Internal summaries request complete reads so a safety stop
  * cannot silently produce a partial aggregate.
  */
+import { AxiError } from "axi-sdk-js";
+
 import { AwxAxiError, errorForResponse, validationError } from "./errors.js";
 import type { ParsedFlags } from "./flags.js";
 import type { FlagSpec } from "./registry.js";
@@ -141,13 +143,13 @@ interface Envelope {
   readonly results: readonly unknown[];
 }
 
-function readEnvelope(body: unknown): Envelope {
+export function readEnvelope(body: unknown): Envelope {
   if (body === null || typeof body !== "object") {
-    throw new Error("the controller returned a list page with no envelope");
+    throw new AxiError("the controller returned a list page with no envelope", "INVALID_RESPONSE");
   }
   const record = body as Record<string, unknown>;
   if (!Array.isArray(record.results)) {
-    throw new Error("the controller returned a list page with no results");
+    throw new AxiError("the controller returned a list page with no results", "INVALID_RESPONSE");
   }
 
   return {
