@@ -6,7 +6,8 @@
  */
 import { AxiError } from "axi-sdk-js";
 
-import { networkError } from "./errors.js";
+import { AwxAxiError, networkError } from "./errors.js";
+import { ResponseDiagnostics } from "../response-diagnostics.js";
 import { walkPages, type PageBudget } from "./paginate.js";
 import { booleanEnv, writeLogPath } from "./profiles.js";
 import { PrivateFiles } from "./private-file.js";
@@ -237,12 +238,14 @@ export interface HttpTransportOptions {
   /** Attempts for a retryable GET, including the first. */
   readonly attempts?: number;
   readonly signal?: AbortSignal;
+  readonly diagnostics?: ResponseDiagnostics;
 }
 
 /** The production transport uses a scoped Node HTTP or HTTPS agent. */
 export class HttpTransport implements AwxTransport {
   readonly #options: HttpTransportOptions;
   readonly #fetch: FetchLike;
+  readonly #diagnostics: ResponseDiagnostics;
   /**
    * `baseUrl` and `apiBasePath` joined once, here, so every route resolves
    * against the configured API root and no call site repeats it. A
@@ -254,6 +257,7 @@ export class HttpTransport implements AwxTransport {
 
   constructor(options: HttpTransportOptions) {
     this.#options = options;
+    this.#diagnostics = options.diagnostics ?? new ResponseDiagnostics({ text: redact }, ["INVALID_RESPONSE"]);
     this.#fetch = options.fetch ?? createTlsFetch(options.verifySsl ?? true);
     this.#apiRoot = new URL(options.apiBasePath, options.baseUrl);
   }
@@ -368,8 +372,10 @@ export class HttpTransport implements AwxTransport {
       }
     }
     const responseBody = await readBody(response);
+    if (response.ok) this.#diagnostics.record(response.status, response.headers, responseBody);
     if (response.ok && typeof responseBody === "string" && !allowText) {
-      throw new AxiError("the controller returned a non-JSON response", "INVALID_RESPONSE");
+      throw new AwxAxiError("the controller returned a non-JSON response", "INVALID_RESPONSE", [],
+        this.#diagnostics.forError({ code: "INVALID_RESPONSE" }));
     }
     return {
       status: response.status,

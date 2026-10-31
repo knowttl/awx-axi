@@ -24,6 +24,7 @@ import {
   type DomainContext,
 } from "./core/registry.js";
 import { HttpTransport, type AwxTransport } from "./core/transport.js";
+import { ResponseDiagnostics } from "./response-diagnostics.js";
 import { organizationDomain } from "./domains/organization/index.js";
 import { approvalDomain } from "./domains/approval/index.js";
 import { adHocDomain } from "./domains/ad-hoc/index.js";
@@ -86,14 +87,15 @@ export interface MainOptions {
   readonly stdout?: { write: (chunk: string) => unknown };
   readonly env?: Env;
   /** Injected offline by the test suite; `HttpTransport` in production. */
-  readonly createTransport?: (env: Env, signal?: AbortSignal) => AwxTransport;
-  readonly createBasicAuthTransport?: (env: Env) => AwxTransport;
+  readonly createTransport?: (env: Env, signal?: AbortSignal, diagnostics?: ResponseDiagnostics) => AwxTransport;
+  readonly createBasicAuthTransport?: (env: Env, diagnostics?: ResponseDiagnostics) => AwxTransport;
   /** Injected offline so `HttpTransport` in production. */
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
 export async function main(options: MainOptions = {}): Promise<void> {
   clearSecrets();
+  const diagnostics = new ResponseDiagnostics({ text: redact }, ["INVALID_RESPONSE"]);
   let argv = options.argv ?? process.argv.slice(2);
   const bareHome = argv.length === 0;
   const env = normalizeEnv(options.env ?? process.env);
@@ -128,11 +130,11 @@ export async function main(options: MainOptions = {}): Promise<void> {
     env,
     selection,
     createTransport: (credential?: Credential) => options.createTransport === undefined
-      ? createTransport(env, selection, credential, homeCancellation?.signal)
-      : options.createTransport(env, homeCancellation?.signal),
+      ? createTransport(env, selection, credential, homeCancellation?.signal, diagnostics)
+      : options.createTransport(env, homeCancellation?.signal, diagnostics),
     createBasicAuthTransport: () => options.createBasicAuthTransport === undefined
-      ? createBasicAuthTransport(env, selection)
-      : options.createBasicAuthTransport(env),
+      ? createBasicAuthTransport(env, selection, diagnostics)
+      : options.createBasicAuthTransport(env, diagnostics),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
   };
   const commands = buildCommands(context);
@@ -142,8 +144,8 @@ export async function main(options: MainOptions = {}): Promise<void> {
     try {
       const controller = resolveController(env, selection);
       const metadata = await discoverController(controller, env, () => options.createTransport === undefined
-        ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1, signal: homeCancellation!.signal })
-        : options.createTransport(env, homeCancellation!.signal));
+        ? new HttpTransport({ baseUrl: controller.baseUrl, apiBasePath: "/", verifySsl: controller.verifySsl, readOnly: true, attempts: 1, signal: homeCancellation!.signal, diagnostics })
+        : options.createTransport(env, homeCancellation!.signal, diagnostics));
       home = await homeCommand(context, bareHome ? env : {}, metadata.release);
     } catch (error) {
       (options.stdout ?? process.stdout).write(redact(homeDiagnostic(error, selection)));
@@ -164,7 +166,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     commands,
     // `exitCodeForError` maps only the literal `VALIDATION_ERROR` to 2, and
     // three other codes must also exit 2 (§9).
-    formatError,
+    formatError: (error) => formatError(error, diagnostics),
     renderUnknownCommand: (command) =>
       `${encode({
         error: `Unknown command: ${command}`,

@@ -1,4 +1,5 @@
 import { AxiError } from "axi-sdk-js";
+import type { ResponseDiagnostics } from "../response-diagnostics.js";
 
 import { readControllerMetadata } from "./controller-discovery.js";
 import { PrivateFiles } from "./private-file.js";
@@ -78,7 +79,7 @@ export function resolveBasicAuth(envInput: Env): BasicAuth | undefined {
   return { username, password };
 }
 
-export function createTransport(env: Env, selection: Selection = {}, override?: Credential, signal?: AbortSignal): AwxTransport {
+export function createTransport(env: Env, selection: Selection = {}, override?: Credential, signal?: AbortSignal, diagnostics?: ResponseDiagnostics): AwxTransport {
   const config = resolveController(env, selection);
   const credential = override ?? requireCredential(env, selection);
   registerSecret(credential.token);
@@ -87,10 +88,11 @@ export function createTransport(env: Env, selection: Selection = {}, override?: 
     verifySsl: config.verifySsl, authorization: `Bearer ${credential.token}`,
     readOnly: isReadOnly(env), env,
     ...(signal === undefined ? {} : { signal }),
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
 }
 
-export function createBasicAuthTransport(env: Env, selection: Selection = {}): AwxTransport {
+export function createBasicAuthTransport(env: Env, selection: Selection = {}, diagnostics?: ResponseDiagnostics): AwxTransport {
   const config = resolveController(env, selection, true);
   const basic = resolveBasicAuth(env);
   if (!basic) throw new AxiError("AWX_AXI_USERNAME and AWX_AXI_PASSWORD are required to mint a token", "AUTH_REQUIRED");
@@ -99,5 +101,6 @@ export function createBasicAuthTransport(env: Env, selection: Selection = {}): A
     verifySsl: config.verifySsl,
     authorization: `Basic ${Buffer.from(`${basic.username}:${basic.password}`).toString("base64")}`,
     readOnly: isReadOnly(env), env,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
 }
