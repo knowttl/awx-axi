@@ -402,7 +402,8 @@ Redaction is applied on the way to stdout, and the redaction pass is unit-tested
 
 ### 6.5 The live-instance boundary: read-only, enforced in code
 
-Ordinary validation is offline and uses synthetic fixtures.
+Ordinary validation uses synthetic fixtures and follows §11.1's offline boundary: no traffic to any AWX controller or other vendor endpoint, except installing the packed package and its declared dependencies from the public npm registry in the package test.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the package-install network requirement.
 Live smoke tests, when separately authorized, are restricted to GET requests.
 Minting a token is a POST and is also forbidden under that boundary; §5.1 describes the supplied-token authentication.
 
@@ -1197,9 +1198,11 @@ That single interface is what makes §11 possible.
 
 ### 11.1 Offline validation
 
-Every test that gates changes runs offline against fixtures derived from the AWX 24.6.1 source.
+Offline validation means no traffic to any AWX controller or other vendor endpoint.
+AWX behavior is tested against fixtures derived from the AWX 24.6.1 source.
+Installing the packed package and its declared dependencies from the public npm registry in the package test is permitted.
 The optional live suite (§11.3) asserts response shape and is excluded from `npm test`.
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the required local gate and environment isolation.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the package-install network requirement, required local gate, and environment isolation.
 
 ### 11.2 How offline testing works
 
