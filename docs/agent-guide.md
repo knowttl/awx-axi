@@ -51,10 +51,7 @@ Use `host show` directly with a known name: it resolves the ID and gathers group
 Duplicate names across inventories require an ID from the ambiguity response or filtered list.
 Use `inventory hosts --facts` instead of listing then showing each host when fact key counts suffice; it still makes per-host controller reads and does not return fact values.
 Use `host inspect 501,601` for selected hosts, or `host inspect web-01,web-02 --inventory 11` to scope names and verify ID membership.
-The batch shares fixed limits of 10 selected hosts, 100 GET attempts including retries and pagination, 60 seconds total and 20,000 rendered characters.
-Each host reports `complete`, `failed` or `skipped`; any incomplete result exits 1 while retaining successful components.
-Group reads stop at 1,000 rows or 100 pages and disclose pagination truncation.
-Large variables/facts become labeled previews; output budget stops include a `host show` recovery hint.
+Check per-host completeness and follow recovery hints before using batch evidence; see [batch budgets and partial results](output.md#collections).
 `job show --type job` includes host and failure summaries; specifying a known type avoids a type-discovery request.
 `job list --type all` includes workflows, syncs, ad-hoc and system runs; `--since` filters on finish time, so it excludes unfinished runs.
 Use `job watch` instead of writing a poll loop: defaults are 600 seconds and a 5-second initial interval, backing off to 30 seconds.
@@ -64,7 +61,7 @@ Collection `--limit` accepts 1-1,000 rows.
 Alternatively use `--all --max-rows <n>` (default and maximum 10,000 rows, at most 100 pages); do not combine `--all` with `--limit`.
 Check completeness, truncation and stop reason before claiming exhaustive results.
 With `partial_page: true`, following `next` skips undisplayed rows; rerun with a larger budget or narrower filters.
-Single-resource detail aggregates gather complete related collections and have no row-limit flag; `host inspect` uses the batch limits above.
+Single-resource detail aggregates gather complete related collections and have no row-limit flag; `host inspect` uses the [batch limits](output.md#collections).
 `--fields` adds fields only where advertised; for job lists, `type`, `launched_by` and `template` usually avoid detail calls, while `created`, `started` and `elapsed` help with timing.
 It does not remove default fields; host reads have no `--fields` flag.
 Prefer stdout `--tail 50` or `--lines 1-50`; `--full` does not bypass controller truncation.
@@ -83,7 +80,7 @@ Top-level `--help` returns usage, global selectors, domain names and built-ins; 
 The no-argument command instead reads a live dashboard and can exit 0 even when its dashboard reports an error.
 
 See [errors and exits](output.md#errors-and-exits) for stdout, stderr and structured response diagnostics.
-Exit 0 means success, 2 means usage/ambiguity/input error, and 1 means runtime failure or a watched run that failed, errored or was canceled.
+See the [README exit table](../README.md#output-and-exit-codes) for process exit meanings, including incomplete host inspection batches.
 
 | Code | Adjust before retrying |
 | --- | --- |

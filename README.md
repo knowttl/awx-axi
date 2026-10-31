@@ -70,7 +70,7 @@ See [agent integration](docs/agent-integration.md) for dashboard behavior and th
 | `template`, `workflow` | Configure and launch automation; inspect workflow nodes | Read/write | [Templates](docs/commands.md#template), [workflows](docs/commands.md#workflow) |
 | `approval` | Inspect, approve or deny workflow gates | Read/write | [Approvals](docs/commands.md#approval) |
 | `project`, `inventory` | Manage source syncs, hosts, groups and inventory sources | Read/write | [Projects](docs/commands.md#project), [inventories](docs/commands.md#inventory) |
-| `host`, `group`, `inventory-source` | Inspect individual inventory resources | Read | [Hosts](docs/commands.md#host), [groups](docs/commands.md#group), [sources](docs/commands.md#inventory-source) |
+| `host`, `group`, `inventory-source` | Inspect inventory resources, including selected hosts in a bounded batch | Read | [Hosts](docs/commands.md#host), [groups](docs/commands.md#group), [sources](docs/commands.md#inventory-source) |
 | `schedule`, `execution-environment` | Manage recurring automation and execution images | Read/write | [Schedules](docs/commands.md#schedule), [images](docs/commands.md#execution-environment) |
 | `organization`, `credential`, `user`, `team`, `role` | Manage resources, credentials and access | Read/write | [Organizations](docs/commands.md#organization), [access](docs/commands.md#role) |
 | `notification`, `notification-template`, `activity-stream` | Read deliveries and audit events; configure notifications | Read/write | [Notifications](docs/commands.md#notification-template), [audit](docs/commands.md#activity-stream) |
@@ -134,8 +134,8 @@ See [output behavior](docs/output.md) for budgets, continuation caveats and log 
 | Exit | Meaning |
 | --- | --- |
 | 0 | Success or no-op; dashboard errors also exit 0 to preserve session startup |
-| 1 | Runtime, authentication, permission or safety failure; watched job failed/error/canceled |
-| 2 | Usage, validation, ambiguous name or launch-input error |
+| 1 | Runtime, authentication, permission or safety failure; watched job failed/error/canceled; incomplete host inspection batch |
+| 2 | Usage, validation, ambiguous name outside a host inspection batch, or launch-input error |
 
 ## Troubleshooting
 

@@ -9,7 +9,7 @@ Launch commands use `--limit` as an Ansible host pattern instead.
 
 Pagination reports budgets, pages read, stop reason, truncation and server continuation.
 When `partial_page: true`, following `next` skips undisplayed rows from that page; rerun the filtered command with a larger budget instead.
-Detail aggregates read complete collections independently and fail with `INCOMPLETE_COLLECTION` if continuation stalls.
+Single-resource detail aggregates read complete collections independently and fail with `INCOMPLETE_COLLECTION` if continuation stalls.
 `host inspect <selectors> [--inventory <id>]` is a bounded batch exception: 1-10 comma-separated host IDs or names, 100 GET attempts including retries/pages, 60 seconds total and 20,000 rendered characters.
 Inventory scopes name resolution and verifies numeric-ID membership.
 Each selected host reports `complete`, `failed` or `skipped`, retaining successful components and disclosing errors and skipped components; any incomplete detail exits 1.
