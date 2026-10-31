@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -45,5 +45,32 @@ describe("setup command (design.md §13)", () => {
     let text = "";
     await main({ argv: ["setup", "--help"], stdout: { write: (chunk) => { text += chunk; } }, env: {} });
     expect(text).toContain(SETUP_HELP);
+  });
+
+  it.each([
+    { name: "unterminated string", content: 'model = "synthetic-private-model\n[features]\nhooks = true\n' },
+    { name: "duplicate hook key", content: 'model = "synthetic-private-model"\n[features]\nhooks = true\nhooks = false\n' },
+    { name: "hook text inside a multiline string", content: '["features"]\nhooks = false\nnote = """synthetic-private-model\n[features]\nhooks = true\n"""\n' },
+  ])("reports partial failure for unusable Codex configuration: $name", async ({ content }) => {
+    const home = mkdtempSync(join(tmpdir(), "awx-axi-codex-failure-"));
+    const configPath = join(home, ".codex/config.toml");
+    const previousExitCode = process.exitCode;
+    let text = "";
+    try {
+      mkdirSync(join(home, ".codex"));
+      writeFileSync(configPath, content);
+      await main({ argv: ["setup", "hooks"], stdout: { write: (chunk) => { text += chunk; } }, env: { HOME: home } });
+      expect(process.exitCode).toBe(1);
+      expect(text).toContain("code: HOOK_INSTALL_FAILED");
+      expect(text).toContain("hooks: partial failure");
+      expect(text).toContain(configPath);
+      expect(text).toContain("installed entry could not be verified; repair configuration and retry");
+      expect(text).not.toContain("installed session-start hooks for Claude Code, Codex, and OpenCode");
+      expect(text).not.toContain("synthetic-private-model");
+      expect(readFileSync(configPath, "utf8")).toBe(content);
+    } finally {
+      process.exitCode = previousExitCode;
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

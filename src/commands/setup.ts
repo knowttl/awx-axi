@@ -7,6 +7,7 @@ import { installSessionStartHooks } from "axi-sdk-js";
 import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
+import { parse as parseToml } from "smol-toml";
 
 import { AwxAxiError, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
@@ -121,10 +122,6 @@ function verifyCommand(command: unknown, execPath: string): boolean {
 }
 
 function verifyCodexConfig(content: string): boolean {
-  let inFeatures = false;
-  for (const line of content.split(/\r?\n/)) {
-    if (/^\s*\[/.test(line)) inFeatures = /^\s*\[features\]\s*(?:#.*)?$/.test(line);
-    if (inFeatures && /^\s*hooks\s*=\s*true\s*(?:#.*)?$/.test(line)) return true;
-  }
-  return false;
+  const { features } = parseToml(content);
+  return typeof features === "object" && features !== null && "hooks" in features && features.hooks === true;
 }
