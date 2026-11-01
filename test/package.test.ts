@@ -61,7 +61,7 @@ afterAll(() => { rmSync(directory, { recursive: true, force: true }); });
 describe("the installed package (issue #65)", () => {
   it("installs the executable and credential schema with the published identity", async () => {
     expect(packed.files.map((file) => file.path)).toEqual(expect.arrayContaining(["LICENSE", "dist/bin/awx-axi.js", "axi-credential.schema.json"]));
-    const manifest = json(join(directory, "node_modules/awx-axi/package.json")) as { bin: Record<string, string>; repository: { url: string }; version: string };
+    const manifest = json(join(directory, "node_modules/@knowttl/awx-axi/package.json")) as { bin: Record<string, string>; repository: { url: string }; version: string };
     expect(manifest.repository.url).toBe("git+https://github.com/knowttl/awx-axi.git");
     expect(manifest.bin["awx-axi"]).toBe("dist/bin/awx-axi.js");
     expect(await run(["--version"], directory)).toEqual({ code: 0, stdout: `${manifest.version}\n`, stderr: "" });

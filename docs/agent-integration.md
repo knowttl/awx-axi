@@ -11,7 +11,7 @@ The error lists each integration's status and affected paths with safe repair gu
 Repair the reported configuration syntax or write permissions, or move an unmanaged OpenCode plugin aside, then rerun `awx-axi setup hooks`.
 Hooks inject the live home dashboard; `npx skills add knowttl/awx-axi --skill awx-axi` installs static guidance on demand.
 Add `-g` to the skill-install command for a global skill installation.
-The shipped skill uses `npx -y awx-axi` commands so a global binary is optional for skill users.
+The shipped skill uses `npx -y @knowttl/awx-axi` commands so a global binary is optional for skill users.
 Neither integration grants AWX permissions or bypasses local write gates.
 
 ## Dashboard

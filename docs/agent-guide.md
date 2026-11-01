@@ -4,7 +4,7 @@ Start with the relevant read below, without running `--help` first.
 Assume an existing authorized profile and token; select a profile with `--profile <name>` or config with `--config <path>`.
 Set `AWX_AXI_READ_ONLY=1` in the investigation environment.
 Examples use synthetic fixture names and IDs; replace them with case inputs.
-Commands assume a global install; otherwise replace `awx-axi` with `npx -y awx-axi`.
+Commands assume a global install; otherwise replace `awx-axi` with `npx -y @knowttl/awx-axi`.
 
 ## Read commands and examples
 

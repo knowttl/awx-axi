@@ -5,7 +5,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "awx-axi"
+      "package-name": "@knowttl/awx-axi"
     }
   }
 }

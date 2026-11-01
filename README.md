@@ -2,7 +2,7 @@
 
 Inspect and run AWX automation from the shell, for agents and the humans running them.
 
-[![npm](https://img.shields.io/npm/v/awx-axi)](https://www.npmjs.com/package/awx-axi) [![License](https://img.shields.io/github/license/knowttl/awx-axi)](LICENSE) [![Node.js](https://img.shields.io/node/v/awx-axi)](https://nodejs.org/en/download) [![npm provenance](https://img.shields.io/badge/npm-provenance-blue)](https://www.npmjs.com/package/awx-axi#provenance) [![AXI](https://img.shields.io/badge/AXI-TOON-blue)](https://github.com/knowttl/artium-axi)
+[![npm](https://img.shields.io/npm/v/@knowttl/awx-axi)](https://www.npmjs.com/package/@knowttl/awx-axi) [![License](https://img.shields.io/github/license/knowttl/awx-axi)](LICENSE) [![Node.js](https://img.shields.io/node/v/@knowttl/awx-axi)](https://nodejs.org/en/download) [![npm provenance](https://img.shields.io/badge/npm-provenance-blue)](https://www.npmjs.com/package/@knowttl/awx-axi#provenance) [![AXI](https://img.shields.io/badge/AXI-TOON-blue)](https://github.com/knowttl/artium-axi)
 
 [Why](#why-this-exists) · [Quickstart](#quickstart) · [Agent setup](#use-with-your-agent) · [Coverage](#what-it-covers) · [Safety](#safety) · [Configuration](#configuration) · [Output](#output-and-exit-codes) · [Troubleshooting](#troubleshooting) · [Contributing](#contributing) · [Security](#security) · [License](#license)
 
@@ -20,11 +20,11 @@ Requires Node.js 20 or newer; AWX 24.6.1 is the [compatibility anchor](docs/comp
 Install and check the CLI:
 
 ```sh
-npm install --global awx-axi
+npm install --global @knowttl/awx-axi
 awx-axi --version
 ```
 
-Without a global install, use `npx -y awx-axi doctor`.
+Without a global install, use `npx -y @knowttl/awx-axi doctor`.
 Have your secret manager inject an existing PAT as `AWX_AXI_TOKEN`, then run:
 
 ```sh

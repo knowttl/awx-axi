@@ -1,5 +1,5 @@
 {
-  "name": "awx-axi",
+  "name": "@knowttl/awx-axi",
   "version": "0.1.11",
   "description": "Inspect and run AWX automation from the shell",
   "type": "module",
