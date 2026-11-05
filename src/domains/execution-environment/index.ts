@@ -223,12 +223,6 @@ export const executionEnvironmentDomain: Domain = defineDomain({
     "  list  [--search <s>] [--organization <id>] [--type <type>] [--limit <n>]",
     "  show  <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "create_execution_environment", "update_execution_environment", "delete_execution_environment",
-    "list_execution_environments",
-    "get_execution_environment",
-    "list_execution_environment_unified_job_templates",
-  ],
   subcommands: [
     {
       name: "create", help: "awx-axi execution-environment create [<name>] --image <image> [--confirm] [--dry-run]",

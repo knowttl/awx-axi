@@ -1168,23 +1168,6 @@ const baseInventoryDomain: Domain = defineDomain({
     "  constructed-list     [--search <s>] [--limit <n>]",
     "  constructed-show     <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_inventories",
-    "get_inventory",
-    "create_inventory",
-    "update_inventory",
-    "delete_inventory",
-    "sync_inventory_source",
-    "create_host",
-    "update_host",
-    "delete_host",
-    "list_inventory_groups",
-    "list_inventory_hosts",
-    "list_inventory_sources",
-    "list_inventory_updates",
-    "list_constructed_inventories",
-    "get_constructed_inventory",
-  ],
   subcommands: [
     {
       name: "host-bulk-create", help: "awx-axi inventory host-bulk-create --inventory <i|name> --hosts-file <path> [--confirm] [--dry-run]",

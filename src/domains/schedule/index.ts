@@ -565,13 +565,6 @@ export const scheduleDomain: Domain = defineDomain({
     "  show    <id|name>",
     "  credential-add|credential-remove, label-add|label-remove, instance-group-add|instance-group-remove <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_schedules",
-    "get_schedule",
-    "create_schedule",
-    "update_schedule",
-    "delete_schedule",
-  ],
   subcommands: [
     ...Object.entries(SCHEDULE_ASSOCIATIONS).map(([name, spec]) => ({ name, help: `awx-axi schedule ${name} <id|name> --${spec.flag} <${spec.flag === "credential" ? "id|name" : "id"}> [--confirm] [--dry-run]`, flags: [{ name: spec.flag, description: `${spec.noun} ${spec.flag === "credential" ? "id or name" : "id"}`, takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "schedule_association", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: associationPlan(name) })),
     {

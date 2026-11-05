@@ -407,12 +407,6 @@ export const credentialDomain: Domain = defineDomain({
     "  show    <id|name>",
     "  object-roles <id|name> [--limit <n>]",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_credentials",
-    "create_credential",
-    "update_credential",
-    "delete_credential",
-  ],
   subcommands: [
     {
       name: "object-roles",

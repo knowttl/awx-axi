@@ -762,16 +762,6 @@ export const jobDomain: Domain = defineDomain({
     "  relaunch <id> [--failed-only] [--type <t>] [--confirm] [--dry-run]",
     "  watch    <id> [--timeout <seconds>] [--interval <seconds>]",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_jobs",
-    "get_job",
-    "get_job_stdout",
-    "get_job_events",
-    "get_job_host_summaries",
-    "cancel_job",
-    "relaunch_job",
-    "launch_job",
-  ],
   subcommands: [
     {
       name: "list",

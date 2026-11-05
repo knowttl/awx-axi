@@ -522,17 +522,6 @@ export const projectDomain: Domain = defineDomain({
     "  copy        <id|name> [--name <name>] [--confirm] [--dry-run]",
     "  notification-add|notification-remove <id|name> --event <event> --notification-template <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_projects",
-    "get_project",
-    "get_project_playbooks",
-    "list_project_updates",
-    "list_project_object_roles",
-    "sync_project",
-    "create_project",
-    "update_project",
-    "delete_project",
-  ],
   subcommands: [
     {
       name: "copy", help: "awx-axi project copy <id|name> [--name <name>] [--confirm] [--dry-run]", flags: [{ name: "name", description: "copy name", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "project", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: copyProjectPlan,

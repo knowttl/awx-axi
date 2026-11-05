@@ -733,16 +733,6 @@ export const templateDomain: Domain = defineDomain({
     "  credential-add|credential-remove, instance-group-add|instance-group-remove, label-add|label-remove",
     "  notification-add|notification-remove <id|name> --event <started|success|error> --notification-template <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_job_templates",
-    "get_job_template",
-    "get_job_template_survey",
-    "launch_job_template",
-    "create_job_template",
-    "update_job_template",
-    "delete_job_template",
-    "copy_job_template",
-  ],
   subcommands: [
     {
       name: "object-roles",

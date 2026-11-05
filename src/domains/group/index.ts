@@ -229,7 +229,6 @@ export const groupDomain: Domain = defineDomain({
     "  list  [--search <s>] [--name <n>] [--inventory <i>] [--limit <n>]",
     "  show  <id|name>",
   ].join("\n"),
-  mcpEquivalents: ["awx_inventory_groups_list"],
   subcommands: [
     {
       name: "list",

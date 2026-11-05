@@ -286,7 +286,6 @@ function* listPlan(input: SubcommandInput): Plan<DomainResult> {
 export const fakeDomain: Domain = defineDomain({
   name: "gadget",
   help: "gadget: a fake domain that exists only in the offline suite",
-  mcpEquivalents: [],
   subcommands: [
     {
       name: "list",

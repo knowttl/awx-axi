@@ -278,7 +278,6 @@ export const inventorySourceDomain: Domain = defineDomain({
     "  list  [--search <s>] [--name <n>] [--inventory <i>] [--source <type>] [--status <s>] [--limit <n>]",
     "  show  <id|name>",
   ].join("\n"),
-  mcpEquivalents: [],
   subcommands: [
     {
       name: "list",

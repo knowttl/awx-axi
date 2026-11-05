@@ -1127,13 +1127,12 @@ The noun-to-domain map lives in `src/cli.ts` rather than in `core/registry.ts`, 
 
 **A domain module never speaks HTTP and never imports another domain.**
 
-Each domain exports exactly five things:
+Each domain exports exactly four things:
 
 1. Its subcommands, and the known flag set for each, consumed by `core/flags.ts`.
 2. Route descriptions: the path and query it needs, returned as data, not executed.
 3. Its TOON field schemas, including the `--fields` allowlist and which derived aggregates it wants.
 4. Its contextual-disclosure suggestions, as a match table.
-5. `mcpEquivalents: string[]`, metadata naming the awx-mcp tools it covers; see §14.2 for tracking status.
 
 Everything else - auth, pagination, retry, error translation, redaction, TOON encoding, exit codes, help
 dispatch - lives in the core and is written once.
@@ -1316,8 +1315,7 @@ Historical tool counts and staged read-coverage plans are preserved on `archive/
 
 ### 14.2 Retired coverage tracking proposal
 
-Per-domain `mcpEquivalents` metadata exists, but the proposed `npm run coverage` command and coverage CI gate were never implemented and are retired.
-Automated coverage tracking is not a release requirement.
+The proposed automated coverage tracking command and CI gate were never implemented and are retired.
 
 ### 14.3 Benchmark status
 

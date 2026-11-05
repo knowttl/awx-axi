@@ -135,7 +135,6 @@ describe("the secret-name guard (design.md §5.3)", () => {
       defineDomain({
         name: "gadget",
         help: "",
-        mcpEquivalents: [],
         subcommands: [
           {
             name: "launch",

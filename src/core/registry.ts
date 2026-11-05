@@ -2,9 +2,9 @@
  * The domain contract (design.md §10.2), and the shared pipeline that runs it.
  *
  * A domain module never speaks HTTP and never imports another domain. It
- * declares five things - subcommands with their flag sets, the requests each
- * one needs, TOON field schemas, contextual-disclosure suggestions, and
- * `mcpEquivalents` - and the core owns everything else.
+ * declares four things - subcommands with their flag sets, the requests each
+ * one needs, TOON field schemas, and contextual-disclosure suggestions - and
+ * the core owns everything else.
  */
 import { validationError } from "./errors.js";
 import type { PageBudget } from "./paginate.js";
@@ -372,8 +372,6 @@ export interface Domain {
   /** Noun-level `--help`. */
   readonly help: string;
   readonly subcommands: readonly SubcommandSpec[];
-  /** The awx-mcp tool names this domain covers; tracking status is in §14.2. */
-  readonly mcpEquivalents: readonly string[];
   /** Dispatch to a subcommand through the core pipeline. Issues no request itself. */
   run(args: string[], context: DomainContext): Promise<DomainResult>;
 }

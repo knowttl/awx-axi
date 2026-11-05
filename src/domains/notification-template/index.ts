@@ -292,7 +292,6 @@ export const notificationTemplateDomain: Domain = defineDomain({
     "  list  [--search <s>] [--type <type>] [--organization <id>] [--limit <n>]",
     "  show  <id|name>",
   ].join("\n"),
-  mcpEquivalents: ["list_notification_templates", "get_notification_template", "create_notification_template", "update_notification_template", "delete_notification_template"],
   subcommands: [
     {
       name: "create", help: "awx-axi notification-template create [<name>] --organization <id|name> --notification-type <type> [--configuration-file <path>] [--confirm] [--dry-run]",
