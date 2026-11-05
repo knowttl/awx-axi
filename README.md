@@ -17,6 +17,7 @@ Recovery hints help agents act without running an MCP server.
 ## Quickstart
 
 Requires Node.js 20 or newer; AWX 24.6.1 is the [compatibility anchor](docs/compatibility.md).
+Offline validation is exercised on Linux; native macOS and Windows behavior has not been validated.
 Install and check the CLI:
 
 ```sh

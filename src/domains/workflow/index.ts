@@ -1100,16 +1100,6 @@ export const workflowDomain: Domain = defineDomain({
     "  node-create|node-edit|node-delete|node-link|node-add-approval",
     "  notification-add|notification-remove <id|name> --event <event> --notification-template <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_workflow_job_templates",
-    "get_workflow_job_template",
-    "get_workflow_job_template_survey",
-    "launch_workflow_job_template",
-    "get_workflow_job_nodes",
-    "create_workflow_job_template",
-    "update_workflow_job_template",
-    "delete_workflow_job_template",
-  ],
   subcommands: [
     {
       name: "object-roles",

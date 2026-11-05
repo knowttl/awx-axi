@@ -464,16 +464,6 @@ export const roleDomain: Domain = defineDomain({
     "  users     <id|name> [--limit <n>]",
     "  teams     <id|name> [--limit <n>]",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_roles",
-    "get_role",
-    "grant_role",
-    "revoke_role",
-    "list_role_parents",
-    "list_role_children",
-    "list_role_users",
-    "list_role_teams",
-  ],
   subcommands: [
     {
       name: "grant",

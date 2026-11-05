@@ -544,19 +544,6 @@ export const teamDomain: Domain = defineDomain({
     "  credential-create <id|name> --name <name> --credential-type <id|name>",
     "  Team projects are read-only sublists in AWX; manage project access with RBAC roles.",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_teams",
-    "get_team",
-    "create_team",
-    "update_team",
-    "delete_team",
-    "list_team_users",
-    "list_team_projects",
-    "list_team_credentials",
-    "list_team_roles",
-    "list_team_object_roles",
-    "list_team_access_list",
-  ],
   subcommands: [
     ...(["user-add", "user-remove"] as const).map((name) => ({
       name,

@@ -406,13 +406,6 @@ export const userDomain: Domain = defineDomain({
     "  list    [--search <s>] [--limit <n>]",
     "  show    <id|name>",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_users",
-    "get_user",
-    "create_user",
-    "update_user",
-    "delete_user",
-  ],
   subcommands: [
     {
       name: "token-create", help: "awx-axi user token-create <id|name> [--scope <scope>] [--confirm] [--dry-run]", flags: [{ name: "scope", description: "token scope", takesValue: true }, { name: "confirm", description: "confirm live execution", takesValue: false }, { name: "dry-run", description: "preview without mutating", takesValue: false }], positionals: { names: ["<id|name>"], required: 1 }, schema: { label: "token", defaultFields: [], fieldAllowlist: [] }, suggestions: [], plan: tokenCreatePlan,

@@ -225,7 +225,6 @@ export const organizationDomain: Domain = defineDomain({
     "  list  [--search <s>] [--limit <n>]",
     "  show  <id|name>",
   ].join("\n"),
-  mcpEquivalents: ["list_organizations", "get_organization", "create_organization", "update_organization", "delete_organization"],
   subcommands: [
     {
       name: "create",

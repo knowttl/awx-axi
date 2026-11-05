@@ -291,7 +291,6 @@ describe("the CLI shell", () => {
           },
         },
       ],
-      mcpEquivalents: [],
       run: () => Promise.resolve({}),
     });
 

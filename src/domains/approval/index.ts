@@ -321,12 +321,6 @@ export const approvalDomain: Domain = defineDomain({
     "  approve   <id|name>               approve a pending workflow approval",
     "  deny      <id|name>               deny a pending workflow approval",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_pending_approvals",
-    "get_approval",
-    "approve_approval",
-    "deny_approval",
-  ],
   subcommands: [
     {
       name: "list",

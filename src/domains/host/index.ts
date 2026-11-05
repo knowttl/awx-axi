@@ -428,7 +428,6 @@ export const hostDomain: Domain = defineDomain({
     "  show  <id|name>",
     "  inspect <selectors> [--inventory <id>]",
   ].join("\n"),
-  mcpEquivalents: ["list_inventory_hosts"],
   subcommands: [
     {
       name: "inspect",

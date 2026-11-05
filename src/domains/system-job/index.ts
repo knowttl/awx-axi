@@ -270,12 +270,6 @@ export const systemJobDomain: Domain = defineDomain({
     "  events          <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
     "  notifications   <id> [--limit <n>]",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_system_jobs",
-    "get_system_job",
-    "get_system_job_events",
-    "get_system_job_notifications",
-  ],
   subcommands: [
     {
       name: "cancel", help: "awx-axi system-job cancel <id> [--confirm] [--dry-run]",

@@ -177,7 +177,6 @@ export const activityStreamDomain: Domain = defineDomain({
     "  list  [--operation <name>] [--search <s>] [scope] [--limit <n>]",
     "  show  <id>",
   ].join("\n"),
-  mcpEquivalents: ["list_activity_stream", "get_activity_stream"],
   subcommands: [
     {
       name: "list",

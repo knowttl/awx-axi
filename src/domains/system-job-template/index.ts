@@ -179,12 +179,6 @@ export const systemJobTemplateDomain: Domain = defineDomain({
     "  show    <id|name>",
     "  The built-in system job template records remain read-only; only launch is supported.",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_system_job_templates",
-    "get_system_job_template",
-    "system_job_template_jobs",
-    "system_job_template_schedules",
-  ],
   subcommands: [
     {
       name: "launch", help: "awx-axi system-job-template launch <id|name> [--extra-vars <json>] [--confirm] [--dry-run]",

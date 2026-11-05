@@ -344,13 +344,6 @@ export const adHocDomain: Domain = defineDomain({
     "  events   <id> [--host <h>] [--task <t>] [--limit <n>]",
     "  stdout   <id> [--tail <n> | --lines <a-b>]",
   ].join("\n"),
-  mcpEquivalents: [
-    "list_ad_hoc_commands",
-    "get_ad_hoc_command",
-    "get_ad_hoc_command_events",
-    "get_ad_hoc_command_stdout",
-    "launch_ad_hoc_command",
-  ],
   subcommands: [
     {
       name: "launch",

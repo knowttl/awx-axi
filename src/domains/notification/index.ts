@@ -202,7 +202,6 @@ export const notificationDomain: Domain = defineDomain({
     "  list   [--status <pending|successful|failed|all>] [--search <s>] [--template <id>] [--scope] [--limit <n>]",
     "  show   <id>",
   ].join("\n"),
-  mcpEquivalents: ["list_notifications", "get_notification"],
   subcommands: [
     {
       name: "list",
