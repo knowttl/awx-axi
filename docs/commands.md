@@ -139,7 +139,7 @@ Subcommands:
   list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>] (newest first; default --limit 20)
   show     <id> [--type <t>]
   stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]
-  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]
+  events   <id> [--failed] [--host <h>] [--task <t>] [--full] [--limit <n>]
   hosts    <id>
   launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]
   cancel   <id> [--type <t>] [--confirm] [--dry-run]
@@ -169,7 +169,7 @@ awx-axi job stdout <id> [--tail <n> | --lines <a-b>] [--full] [--download <path>
 ### job events
 
 ```text
-awx-axi job events <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]
+awx-axi job events <id> [--failed] [--host <h>] [--task <t>] [--full] [--limit <n>]
 Pagination: --limit accepts 1-1000 rows; --all [--max-rows <n>] defaults to 10000 rows (maximum 10000), at most 100 pages. --all conflicts with --limit; --max-rows requires --all.
 ```
 

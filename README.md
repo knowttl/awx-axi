@@ -130,8 +130,6 @@ Environment-profile TLS and token settings do not override named profiles.
 See [errors and exits](docs/output.md#errors-and-exits) for stdout, stderr and structured response diagnostics.
 Native collection commands use `--limit` or bounded `--all`, and report completeness and truncation.
 Use `--fields` where command help advertises it; stdout commands offer `--tail` and `--lines` for line slicing.
-`job stdout` prints the last 200 lines by default; `--full` prints everything AWX will display, which stops at its 1 MiB display cap.
-`job events --full` adds each event's console text and result text.
 See [output behavior](docs/output.md) for budgets, continuation caveats and log controls.
 
 | Exit | Meaning |
