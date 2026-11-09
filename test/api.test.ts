@@ -20,6 +20,15 @@ async function withBody(body: string, run: (file: string) => Promise<void>): Pro
 }
 
 describe("api domain", () => {
+  it("get reads the API root using a dot path", async () => {
+    const run = await runCli(["api", "get", ".", "--query", "format=json"], {
+      script: [{ status: 200, body: { jobs: "/api/v2/jobs/" } }],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.transport.requests).toEqual([{ method: "GET", route: ".", query: { format: "json" } }]);
+    expect(run.stdout).toContain("/api/v2/jobs/");
+  });
+
   it("get reads a base-relative path with its query and redacts sensitive keys", async () => {
     const run = await runCli(["api", "get", "jobs/1839/", "--query", "page_size=5&status=failed"], {
       script: [{ status: 200, body: { id: 1839, token: "abcdefghijkl", name: "deploy" } }],
@@ -45,12 +54,19 @@ describe("api domain", () => {
     ["/api/v2/jobs/"],
     ["../admin/"],
     ["jobs/../../admin/"],
+    ["./jobs/"],
     ["jobs/%2e%2e/admin/"],
     ["jobs/?page=2"],
     ["https://evil.example/"],
   ])("rejects the unsafe path %s before any request", async (path) => {
     const run = await runCli(["api", "get", path]);
 
+    expect(run.exitCode).toBe(2);
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it.each(["post", "put", "patch", "delete"])("%s rejects a dot path", async (verb) => {
+    const run = await runCli(["api", verb, ".", "--confirm"], { env: WRITES_ON });
     expect(run.exitCode).toBe(2);
     expect(run.transport.requests).toEqual([]);
   });

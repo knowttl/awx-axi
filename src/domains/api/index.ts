@@ -34,6 +34,7 @@ const RESPONSE_SCHEMA = {
 } as const;
 
 function parsePath(raw: string, command: string): string {
+  if (command === "get" && raw === ".") return raw;
   if (raw.startsWith("/")) {
     throw validationError(`\`api ${command}\` paths are relative to the API root, got "${raw}"`, [
       "Drop the leading slash and the /api/v2/ prefix, e.g. `awx-axi api get jobs/1839/`",
@@ -189,6 +190,7 @@ export const apiDomain: Domain = defineDomain({
         "awx-axi api get <path> [--query <k=v&k=v>]",
         "",
         "Reads one endpoint and prints the redacted response as TOON.",
+        "Use . to read the API root.",
         "",
         "Examples:",
         "  awx-axi api get jobs/1839/",
