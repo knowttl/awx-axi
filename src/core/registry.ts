@@ -8,7 +8,7 @@
  */
 import { validationError } from "./errors.js";
 import type { PageBudget } from "./paginate.js";
-import { registerSecret } from "./redact.js";
+import { registerSecret, registerSensitiveValues } from "./redact.js";
 import {
   assertNoSecretFlags,
   assertUsableArity,
@@ -250,6 +250,7 @@ export async function runPlan<T>(
 
   while (!step.done) {
     const request = step.value;
+    if (request.kind === "write") registerSensitiveValues(request.body);
     let result: RequestResult;
     try {
       result = await execute(request, runner);

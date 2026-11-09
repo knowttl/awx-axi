@@ -42,7 +42,7 @@ export function listOutput(options: ListOutputOptions): Record<string, unknown> 
     output.pagination = options.pagination;
     output[options.label] = options.rows.length === 0
       ? options.pagination.truncated ? "0 rows returned; collection is incomplete" : options.empty
-      : options.rows.map(redactValue);
+      : options.rows.map((row) => redactValue(row));
     return withHelp(output, options.help);
   }
   if (options.rows.length === 0) {
@@ -53,7 +53,7 @@ export function listOutput(options: ListOutputOptions): Record<string, unknown> 
   if (options.count !== undefined) {
     output.count = countLine(options.rows.length, options.count);
   }
-  output[options.label] = options.rows.map(redactValue);
+  output[options.label] = options.rows.map((row) => redactValue(row));
 
   return withHelp(output, options.help);
 }
