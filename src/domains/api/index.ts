@@ -9,7 +9,7 @@ import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput } from "../../core/output.js";
 import { dryRun, isLive, MUTATION_FLAGS, parseJsonObject } from "../../core/mutations.js";
 import { PrivateFiles } from "../../core/private-file.js";
-import { REDACTION, registerSecretValues } from "../../core/redact.js";
+import { isSensitiveKey, REDACTION, registerSecretValues } from "../../core/redact.js";
 import { booleanEnv } from "../../core/profiles.js";
 import { AxiError } from "axi-sdk-js";
 import {
@@ -59,12 +59,7 @@ function parseQuery(raw: string | true | undefined): Query {
 }
 
 function readBody(flags: SubcommandInput["flags"]): Record<string, unknown> | undefined {
-  const inline = flags.body;
   const file = flags["body-file"];
-  if (inline !== undefined && file !== undefined) {
-    throw validationError("--body and --body-file are mutually exclusive");
-  }
-  if (typeof inline === "string") return parseJsonObject(inline, "--body");
   if (typeof file === "string") {
     const text = new PrivateFiles().read(file, true);
     if (text === undefined) throw validationError(`--body-file ${file} does not exist`);
@@ -77,7 +72,7 @@ function protectBody(value: unknown, secrets: string[]): unknown {
   if (Array.isArray(value)) return value.map((entry) => protectBody(entry, secrets));
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-    if (/^(?:inputs|credential_passwords|notification_configuration)$/i.test(key) || /authorization$/i.test(key)) {
+    if (isSensitiveKey(key) || /^(?:inputs|notification_configuration)$/i.test(key) || /authorization$/i.test(key)) {
       const collect = (item: unknown): void => {
         if (typeof item === "string" && item.length > 0) secrets.push(item);
         else if (typeof item === "number" || typeof item === "boolean") secrets.push(String(item));
@@ -147,20 +142,19 @@ function writeSubcommand(method: HttpMutationMethod, hasBody: boolean): Subcomma
   const name = method.toLowerCase();
   const bodyFlags = hasBody
     ? [
-        { name: "body", description: "JSON object request body", takesValue: true },
         { name: "body-file", description: "path to a 0600 JSON file holding the request body", takesValue: true },
       ]
     : [];
   return {
     name,
     help: [
-      `awx-axi api ${name} <path>${hasBody ? " [--body <json> | --body-file <path>]" : ""} [--confirm] [--dry-run]`,
+      `awx-axi api ${name} <path>${hasBody ? " [--body-file <path>]" : ""} [--confirm] [--dry-run]`,
       "",
       `Sends ${method} to the AWX API. Previews by default; --confirm sends it.`,
       "Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.",
       "Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.",
       "The method, timestamp and status go to the write journal; the payload does not.",
-      ...(hasBody ? ["Put secrets in --body-file (0600), never in --body."] : []),
+      ...(hasBody ? ["Request bodies must be in a private --body-file (0600)."] : []),
       "",
       "Examples:",
       method === "DELETE" ? "  awx-axi api delete labels/7/ --confirm" : `  awx-axi api ${name} jobs/1839/cancel/ --confirm`,
@@ -180,9 +174,9 @@ export const apiDomain: Domain = defineDomain({
     "",
     "Subcommands:",
     "  get     <path> [--query <k=v&k=v>]   read any endpoint",
-    "  post    <path> [--body <json> | --body-file <path>]   preview or send a POST",
-    "  put     <path> [--body <json> | --body-file <path>]   preview or send a PUT",
-    "  patch   <path> [--body <json> | --body-file <path>]   preview or send a PATCH",
+    "  post    <path> [--body-file <path>]   preview or send a POST",
+    "  put     <path> [--body-file <path>]   preview or send a PUT",
+    "  patch   <path> [--body-file <path>]   preview or send a PATCH",
     "  delete  <path>                       preview or send a DELETE",
     "",
     "Paths are relative to the API root (jobs/1839/, not /api/v2/jobs/1839/).",

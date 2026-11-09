@@ -8,6 +8,17 @@ import { runCli } from "./support/run.js";
 
 const WRITES_ON = { AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_CONFIG_WRITES: "1" };
 
+async function withBody(body: string, run: (file: string) => Promise<void>): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), "awx-axi-api-"));
+  try {
+    const file = join(dir, "body.json");
+    writeFileSync(file, body, { mode: 0o600 });
+    await run(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 describe("api domain", () => {
   it("get reads a base-relative path with its query and redacts sensitive keys", async () => {
     const run = await runCli(["api", "get", "jobs/1839/", "--query", "page_size=5&status=failed"], {
@@ -55,12 +66,11 @@ describe("api domain", () => {
   });
 
   it("preview redacts secrets in the body", async () => {
-    const run = await runCli(["api", "post", "credentials/", "--body", '{"name":"x","inputs":{"password":"hunter2hunter2"}}'], {
-      env: WRITES_ON,
+    await withBody('{"name":"x","inputs":{"password":"hunter2hunter2"}}', async (file) => {
+      const run = await runCli(["api", "post", "credentials/", "--body-file", file], { env: WRITES_ON });
+      expect(run.stdout).toContain("name: x");
+      expect(run.stdout).not.toContain("hunter2hunter2");
     });
-
-    expect(run.stdout).toContain("name: x");
-    expect(run.stdout).not.toContain("hunter2hunter2");
   });
 
   it.each([
@@ -87,13 +97,14 @@ describe("api domain", () => {
   });
 
   it("post sends the parsed body", async () => {
-    const run = await runCli(["api", "post", "labels/", "--body", '{"name":"prod","organization":1}', "--confirm"], {
-      env: WRITES_ON,
-      script: [{ status: 201, body: { id: 9, name: "prod" } }],
+    await withBody('{"name":"prod","organization":1}', async (file) => {
+      const run = await runCli(["api", "post", "labels/", "--body-file", file, "--confirm"], {
+        env: WRITES_ON,
+        script: [{ status: 201, body: { id: 9, name: "prod" } }],
+      });
+      expect(run.transport.requests[0]?.body).toEqual({ name: "prod", organization: 1 });
+      expect(run.stdout).toContain("status: 201");
     });
-
-    expect(run.transport.requests[0]?.body).toEqual({ name: "prod", organization: 1 });
-    expect(run.stdout).toContain("status: 201");
   });
 
   it("post reads the body from a private file and rejects a group-readable one", async () => {
@@ -118,10 +129,10 @@ describe("api domain", () => {
     }
   });
 
-  it("rejects --body together with --body-file", async () => {
-    const run = await runCli(["api", "post", "labels/", "--body", "{}", "--body-file", "/x", "--confirm"], { env: WRITES_ON });
-
+  it.each(["post", "put", "patch"])("%s rejects inline bodies", async (verb) => {
+    const run = await runCli(["api", verb, "labels/", "--body", "{}", "--confirm"], { env: WRITES_ON });
     expect(run.exitCode).toBe(2);
+    expect(run.transport.requests).toEqual([]);
   });
 
   it("delete takes no body", async () => {
@@ -161,17 +172,21 @@ describe("api domain", () => {
   });
 
   it("requires a private file and password gate for launch passwords", async () => {
-    const run = await runCli(["api", "post", "job_templates/1/launch/", "--body", '{"credential_passwords":{"ssh_password":"sensitive-value"}}', "--confirm"], { env: WRITES_ON });
-    expect(run.stdout).toContain("LAUNCH_INPUT_REQUIRED");
-    expect(run.transport.requests).toEqual([]);
+    await withBody('{"credential_passwords":{"ssh_password":"sensitive-value"}}', async (file) => {
+      const run = await runCli(["api", "post", "job_templates/1/launch/", "--body-file", file, "--confirm"], { env: WRITES_ON });
+      expect(run.stdout).toContain("LAUNCH_INPUT_REQUIRED");
+      expect(run.transport.requests).toEqual([]);
+    });
   });
 
   it("masks custom credential inputs in previews and controller responses", async () => {
-    const args = ["api", "post", "credentials/", "--body", '{"inputs":{"custom_field":"sensitive-value"}}'];
-    const preview = await runCli(args);
-    const live = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "sensitive-value" } }] });
-    expect(preview.stdout).not.toContain("sensitive-value");
-    expect(live.stdout).not.toContain("sensitive-value");
+    await withBody('{"inputs":{"custom_field":"sensitive-value"}}', async (file) => {
+      const args = ["api", "post", "credentials/", "--body-file", file];
+      const preview = await runCli(args);
+      const live = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "sensitive-value" } }] });
+      expect(preview.stdout).not.toContain("sensitive-value");
+      expect(live.stdout).not.toContain("sensitive-value");
+    });
   });
 
   it.each(["post", "put", "patch"])("%s gates named resources that resemble actions", async (verb) => {
@@ -205,16 +220,21 @@ describe("api domain", () => {
     ['{"credential_passwords":{"ssh":"xyz456"}}', "xyz456"],
     ['{"notification_configuration":{"headers":{"Authorization":"short"}}}', "short"],
     ['{"headers":{"Proxy-Authorization":"brief"}}', "brief"],
+    ['{"password":"abc123"}', "abc123"],
+    ['{"nested":{"access_token":"tiny"}}', "tiny"],
+    ['{"api_key":"key123"}', "key123"],
   ])("masks sensitive body values in previews and responses: %s", async (body, secret) => {
-    const args = ["api", "post", "credentials/", "--body", body];
-    const preview = await runCli(args);
-    const success = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: { echoed: `value ${secret}` } }] });
-    const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: `value ${secret}` } }] });
-    expect(preview.stdout).not.toContain(secret);
-    expect(success.stdout).not.toContain(secret);
-    expect(failure.stdout).not.toContain(secret);
-    expect(success.exitCode).toBe(0);
-    expect(failure.exitCode).toBe(2);
+    await withBody(body, async (file) => {
+      const args = ["api", "post", "credentials/", "--body-file", file];
+      const preview = await runCli(args);
+      const success = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: { echoed: `value ${secret}` } }] });
+      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: `value ${secret}` } }] });
+      expect(preview.stdout).not.toContain(secret);
+      expect(success.stdout).not.toContain(secret);
+      expect(failure.stdout).not.toContain(secret);
+      expect(success.exitCode).toBe(0);
+      expect(failure.exitCode).toBe(2);
+    });
   });
 
   it("masks a private notification body in previews and errors", async () => {

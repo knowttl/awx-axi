@@ -1820,9 +1820,9 @@ api: the raw AWX REST API, for endpoints no dedicated noun covers
 
 Subcommands:
   get     <path> [--query <k=v&k=v>]   read any endpoint
-  post    <path> [--body <json> | --body-file <path>]   preview or send a POST
-  put     <path> [--body <json> | --body-file <path>]   preview or send a PUT
-  patch   <path> [--body <json> | --body-file <path>]   preview or send a PATCH
+  post    <path> [--body-file <path>]   preview or send a POST
+  put     <path> [--body-file <path>]   preview or send a PUT
+  patch   <path> [--body-file <path>]   preview or send a PATCH
   delete  <path>                       preview or send a DELETE
 
 Paths are relative to the API root (jobs/1839/, not /api/v2/jobs/1839/).
@@ -1844,13 +1844,13 @@ Examples:
 ### api post
 
 ```text
-awx-axi api post <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
+awx-axi api post <path> [--body-file <path>] [--confirm] [--dry-run]
 
 Sends POST to the AWX API. Previews by default; --confirm sends it.
 Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
 Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
-Put secrets in --body-file (0600), never in --body.
+Request bodies must be in a private --body-file (0600).
 
 Examples:
   awx-axi api post jobs/1839/cancel/ --confirm
@@ -1859,13 +1859,13 @@ Examples:
 ### api put
 
 ```text
-awx-axi api put <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
+awx-axi api put <path> [--body-file <path>] [--confirm] [--dry-run]
 
 Sends PUT to the AWX API. Previews by default; --confirm sends it.
 Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
 Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
-Put secrets in --body-file (0600), never in --body.
+Request bodies must be in a private --body-file (0600).
 
 Examples:
   awx-axi api put jobs/1839/cancel/ --confirm
@@ -1874,13 +1874,13 @@ Examples:
 ### api patch
 
 ```text
-awx-axi api patch <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
+awx-axi api patch <path> [--body-file <path>] [--confirm] [--dry-run]
 
 Sends PATCH to the AWX API. Previews by default; --confirm sends it.
 Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
 Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
-Put secrets in --body-file (0600), never in --body.
+Request bodies must be in a private --body-file (0600).
 
 Examples:
   awx-axi api patch jobs/1839/cancel/ --confirm
