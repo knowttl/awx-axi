@@ -79,7 +79,9 @@ function protectBody(value: unknown, secrets: string[]): unknown {
       try {
         protectBody(parseYaml(entry), secrets);
       } catch {
-        return [key, entry];
+        secrets.push(entry);
+        registerSecretValues(entry);
+        return [key, REDACTION];
       }
       return [key, secrets.length > before ? REDACTION : entry];
     }

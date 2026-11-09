@@ -236,6 +236,22 @@ describe("api domain", () => {
     });
   });
 
+  it.each(["post", "put", "patch"])("masks malformed serialized extra_vars in %s previews and responses", async (verb) => {
+    const extraVars = "password: hunter2\ninvalid: [";
+    await withBody(JSON.stringify({ extra_vars: extraVars }), async (file) => {
+      const args = ["api", verb, "job_templates/7/", "--body-file", file];
+      const preview = await runCli(args);
+      const success = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 200, body: { echoed: extraVars } }] });
+      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: `Invalid variables: ${extraVars}` } }] });
+      expect(preview.exitCode).toBe(0);
+      expect(success.exitCode).toBe(0);
+      expect(failure.exitCode).toBe(2);
+      expect(preview.stdout).not.toContain("hunter2");
+      expect(success.stdout).not.toContain("hunter2");
+      expect(failure.stdout).not.toContain("hunter2");
+    });
+  });
+
   it("masks credential inputs with unrecognized field names in GET collections and write responses", async () => {
     const credential = { id: 1, credential_type: 1, inputs: { ssh_key_data: "ssh-key-material", username: "svc-account" } };
     const read = await runCli(["api", "get", "workflow_job_template_nodes/1/credentials/"], {
