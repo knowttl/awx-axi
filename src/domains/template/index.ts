@@ -179,7 +179,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   let extraVars: unknown = null;
   if (typeof body.extra_vars === "string" && body.extra_vars !== "") {
     try {
-      extraVars = parseYaml(body.extra_vars, { merge: true, uniqueKeys: false });
+      extraVars = parseYaml(body.extra_vars, { merge: true, uniqueKeys: false, logLevel: "error", maxAliasCount: -1 });
     } catch {
       throw new AxiError("template extra variables could not be parsed", "UNKNOWN");
     }

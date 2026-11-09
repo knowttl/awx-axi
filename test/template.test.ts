@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { runCli } from "./support/run.js";
 
@@ -75,6 +75,37 @@ describe("template domain (design.md §7.4, §7.5)", () => {
     expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain("template extra variables could not be parsed");
     expect(run.stdout).not.toContain("hunter2-secret-value");
+  });
+
+  it("template show suppresses parser warnings containing variable values", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      const run = await runCli(["template", "show", "12"], {
+        script: [
+          { status: 200, body: { id: 12, extra_vars: "password: !!int 0b101010101010" } },
+          EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE,
+        ],
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("extra_var_names[1]: password");
+      expect(run.stdout).not.toContain("0b101010101010");
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it("template show lists names when values have more than 100 aliases", async () => {
+    const extraVars = `base: &value secret\n${Array.from({ length: 101 }, (_, i) => `variable${i}: *value`).join("\n")}`;
+    const run = await runCli(["template", "show", "12"], {
+      script: [{ status: 200, body: { id: 12, extra_vars: extraVars } }, EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("extra_var_names[102]: base,variable0");
+    expect(run.stdout).toContain("variable100");
+    expect(run.stdout).not.toContain("secret");
   });
 
   it("template survey displays survey questions", async () => {
