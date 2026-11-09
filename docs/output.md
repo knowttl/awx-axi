@@ -6,6 +6,7 @@ Native collection commands support `--limit` (1-1,000 rows) or `--all` with opti
 `--all` conflicts with `--limit`; `--max-rows` requires `--all`.
 `--fields`, where advertised by command help, selects additional fields.
 Launch commands use `--limit` as an Ansible host pattern instead.
+`api get` reads one endpoint without following pagination; use the returned continuation information to request another page.
 
 Pagination reports budgets, pages read, stop reason, truncation and server continuation.
 When `partial_page: true`, following `next` skips undisplayed rows from that page; rerun the filtered command with a larger budget instead.

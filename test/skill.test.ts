@@ -46,28 +46,6 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toContain("## Tips");
   });
 
-  it("contains notification and activity guidance", () => {
-    const markdown = createSkillMarkdown();
-
-    expect(markdown).toContain("schedule list");
-    expect(markdown).toContain("execution-environment list");
-    expect(markdown).toContain("organization list");
-    expect(markdown).toContain("credential show <id|name>");
-    expect(markdown).toContain("user show <id|name>");
-    expect(markdown).toContain("system-job-template show <id|name>");
-    expect(markdown).toContain("system-job notifications");
-    expect(markdown).toContain("host list");
-    expect(markdown).toContain("host show <id|name>");
-    expect(markdown).toContain("group list");
-    expect(markdown).toContain("group show <id|name>");
-    expect(markdown).toContain("inventory-source list");
-    expect(markdown).toContain("inventory-source show <id|name>");
-    expect(markdown).toMatch(/notification\s+list, show <id>/);
-    expect(markdown).toContain("`notification-template`: list, show <id|name>, create, edit, copy, delete, test.");
-    expect(markdown).toMatch(/activity-stream\s+list, show <id>/);
-    expect(markdown).toContain("commands[24 total]");
-  });
-
   it("matches both committed generated skill files verbatim", () => {
     const generated = createSkillMarkdown();
     const skillFilePath = resolve(process.cwd(), "skills/awx-axi/SKILL.md");

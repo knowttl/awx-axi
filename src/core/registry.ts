@@ -106,7 +106,7 @@ export type HttpMutationMethod = "POST" | "PUT" | "PATCH" | "DELETE";
  * `write` requests support `method` ("POST" | "PUT" | "PATCH" | "DELETE") and risk tier tags.
  */
 export type AwxRequest =
-  | { readonly kind: "read"; readonly route: RouteDescription; readonly budget?: ReadBudget }
+  | { readonly kind: "read"; readonly route: RouteDescription; readonly budget?: ReadBudget; readonly allowText?: boolean }
   | {
       readonly kind: "readPaged";
       readonly route: RouteDescription;
@@ -166,10 +166,11 @@ function assertBaseRelative(path: string): void {
 }
 
 /** Declare a single read. */
-export function* read(path: string, query?: Query, budget?: ReadBudget): Plan<AwxResponse> {
+export function* read(path: string, query?: Query, budget?: ReadBudget, allowText?: boolean): Plan<AwxResponse> {
   assertBaseRelative(path);
   const result = yield {
     kind: "read",
+    ...(allowText ? { allowText } : {}),
     ...(budget === undefined ? {} : { budget }),
     route: query === undefined ? { path } : { path, query },
   };
@@ -273,7 +274,7 @@ async function execute(
 ): Promise<RequestResult> {
   switch (request.kind) {
     case "read":
-      return runner.transport.get(request.route.path, request.route.query, request.budget);
+      return runner.transport.get(request.route.path, request.route.query, request.budget, request.allowText);
     case "readPaged":
       return runner.transport.getPaged(
         request.route.path,

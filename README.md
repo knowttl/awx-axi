@@ -76,6 +76,7 @@ See [agent integration](docs/agent-integration.md) for dashboard behavior and th
 | `organization`, `credential`, `user`, `team`, `role` | Manage resources, credentials and access | Read/write | [Organizations](docs/commands.md#organization), [access](docs/commands.md#role) |
 | `notification`, `notification-template`, `activity-stream` | Read deliveries and audit events; configure notifications | Read/write | [Notifications](docs/commands.md#notification-template), [audit](docs/commands.md#activity-stream) |
 | `system-job`, `system-job-template` | Inspect, launch and cancel maintenance runs | Read/write | [System jobs](docs/commands.md#system-job) |
+| `api` | Raw AWX REST access for endpoints no dedicated group covers; writes need `--confirm`, the security gate and applicable operation gates, and are journaled | Read/write | [API](docs/commands.md#api) |
 | `auth`, `doctor`, `config`, `profile`, `setup`, `update` | Configure access, diagnose credentials and install integrations | Local/controller | [Reference](docs/commands.md) |
 
 ## Safety
@@ -83,7 +84,7 @@ See [agent integration](docs/agent-integration.md) for dashboard behavior and th
 Domain operations are read-only by default: mutations produce previews until `--confirm` is supplied.
 `--dry-run` forces a preview even with `--confirm`; previews can read controller data.
 Configuration, delete and security writes additionally require their respective `AWX_AXI_ALLOW_*` gates.
-Launch-time credential passwords additionally require `AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1` and `--credential-passwords-file`.
+Launch-time credential passwords have an additional gate and private-file requirement; see the [write-gate matrix](docs/safety.md#write-gates).
 `AWX_AXI_READ_ONLY=1` blocks every controller write, including login and logout.
 `auth login` and `auth logout` act immediately and have no preview or confirmation switch.
 Credentials use environment references, private files or protected local state; never put secrets in command arguments or agent chat.
@@ -127,7 +128,7 @@ Environment-profile TLS and token settings do not override named profiles.
 ## Output and exit codes
 
 See [errors and exits](docs/output.md#errors-and-exits) for stdout, stderr and structured response diagnostics.
-Collection commands use `--limit` or bounded `--all`, and report completeness and truncation.
+Native collection commands use `--limit` or bounded `--all`, and report completeness and truncation.
 Use `--fields` where command help advertises it; stdout commands offer `--tail` and `--lines` for line slicing.
 `job stdout` accepts `--full`, but it does not change the request or bypass truncation.
 See [output behavior](docs/output.md) for budgets, continuation caveats and log controls.
