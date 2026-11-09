@@ -8,13 +8,18 @@
     "name": "Deploy web tier",
     "playbook": "deploy/web.yml",
     "survey_enabled": true,
+    "extra_vars": "---\nenvironment: production\ndb_password: hunter2-secret-value\n",
     "ask_limit_on_launch": true,
     "ask_tags_on_launch": true,
     "ask_variables_on_launch": true,
     "summary_fields": {
       "project": { "id": 4, "name": "infra-playbooks" },
       "inventory": { "id": 3, "name": "Production" },
-      "last_job": { "id": 1841, "status": "running" }
+      "last_job": { "id": 1841, "status": "running" },
+      "credentials": [
+        { "id": 5, "name": "ssh-prod", "kind": "ssh", "cloud": false },
+        { "id": 9, "name": "vault-main", "kind": "vault", "cloud": false }
+      ]
     }
   }
 }

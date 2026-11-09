@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { runCli } from "./support/run.js";
 
+const EMPTY_PAGE = { status: 200, body: { count: 0, next: null, previous: null, results: [] } };
+
 describe("template domain (design.md §7.4, §7.5)", () => {
   it("template list lists job templates", async () => {
     const run = await runCli(["template", "list"], {
@@ -16,13 +18,35 @@ describe("template domain (design.md §7.4, §7.5)", () => {
 
   it("template show displays prompts on launch and survey status", async () => {
     const run = await runCli(["template", "show", "12"], {
-      script: ["template-detail"],
+      script: ["template-detail", "notification-template-name-one", EMPTY_PAGE, "notification-template-name-one"],
     });
 
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("id: 12");
     expect(run.stdout).toContain("name: Deploy web tier");
     expect(run.stdout).toContain("prompts_on_launch");
+  });
+
+  it("template show lists credentials, notification templates per event and extra variable names without values (#80)", async () => {
+    const run = await runCli(["template", "show", "12"], {
+      script: ["template-detail", "notification-template-name-one", EMPTY_PAGE, "notification-template-name-one"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("5,ssh-prod,ssh");
+    expect(run.stdout).toContain("9,vault-main,vault");
+    expect(run.stdout).toContain("notifications_started[1]: 11 (email-ops)");
+    expect(run.stdout).toContain("notifications_success: []");
+    expect(run.stdout).toContain("notifications_error[1]: 11 (email-ops)");
+    expect(run.stdout).toContain("extra_var_names[2]: environment,db_password");
+    expect(run.stdout).not.toContain("production");
+    expect(run.stdout).not.toContain("hunter2-secret-value");
+    expect(run.transport.requests.map((request) => request.route)).toEqual([
+      "job_templates/12/",
+      "job_templates/12/notification_templates_started/",
+      "job_templates/12/notification_templates_success/",
+      "job_templates/12/notification_templates_error/",
+    ]);
   });
 
   it("template survey displays survey questions", async () => {

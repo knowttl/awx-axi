@@ -7,6 +7,7 @@ import { statSync, readFileSync } from "node:fs";
 import { AxiError } from "axi-sdk-js";
 import { booleanEnv } from "../../core/profiles.js";
 import { registerSecretValues } from "../../core/redact.js";
+import { parse as parseYaml } from "yaml";
 
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { dryRun, isLive, parseInteger } from "../../core/mutations.js";
@@ -163,6 +164,22 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const prompts = computePromptsOnLaunch(body);
   const surveyEnabled = body.survey_enabled === true;
 
+  const credentials = ((summary.credentials ?? []) as readonly Record<string, unknown>[]).map((credential) => ({
+    id: credential.id ?? null,
+    name: credential.name ?? null,
+    kind: credential.kind ?? null,
+  }));
+
+  const notifications: Record<string, unknown[]> = {};
+  for (const event of ["started", "success", "error"]) {
+    const attached = yield* readPaged(`job_templates/${id}/notification_templates_${event}/`, {}, null);
+    notifications[event] = (attached.rows as readonly Record<string, unknown>[]).map((row) => `${row.id} (${row.name})`);
+  }
+
+  const extraVars: unknown = typeof body.extra_vars === "string" && body.extra_vars !== "" ? parseYaml(body.extra_vars) : null;
+  const extraVarNames =
+    extraVars !== null && typeof extraVars === "object" && !Array.isArray(extraVars) ? Object.keys(extraVars) : [];
+
   const fields: Record<string, unknown> = {
     id,
     name: body.name ?? null,
@@ -170,6 +187,11 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
     playbook: body.playbook ?? null,
     inventory: inventory.name !== undefined ? `${inventory.id ?? ""} (${inventory.name})` : null,
     last_run: lastJob.id !== undefined ? `${lastJob.id} ${lastJob.status ?? ""}` : null,
+    credentials,
+    notifications_started: notifications.started,
+    notifications_success: notifications.success,
+    notifications_error: notifications.error,
+    extra_var_names: extraVarNames,
     prompts_on_launch: prompts,
     survey: surveyEnabled ? "enabled" : "disabled",
     needs_at_launch: "none",
