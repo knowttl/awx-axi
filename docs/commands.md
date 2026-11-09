@@ -313,10 +313,10 @@ Pagination: --limit accepts 1-1000 rows; --all [--max-rows <n>] defaults to 1000
 
 ```text
 awx-axi template show <id|name>
-```
 
 Shows attached credentials (ID, name and kind), notification templates for the started, success and error events, and top-level extra-variable names without their values.
 It also reports launch prompts and survey status.
+```
 
 ### template survey
 

@@ -865,7 +865,7 @@ export const templateDomain: Domain = defineDomain({
     },
     {
       name: "show",
-      help: "awx-axi template show <id|name>",
+      help: "awx-axi template show <id|name>\n\nShows attached credentials (ID, name and kind), notification templates for the started, success and error events, and top-level extra-variable names without their values.\nIt also reports launch prompts and survey status.",
       flags: [],
       positionals: { names: ["<id|name>"], required: 1 },
       schema: { label: "template", defaultFields: [], fieldAllowlist: [] },
