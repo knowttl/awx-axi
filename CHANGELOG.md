@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.12](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.11...awx-axi-v0.1.12) (2026-11-09)
+
+
+### Features
+
+* add raw AWX API commands ([#77](https://github.com/knowttl/awx-axi/issues/77)) ([58eeb00](https://github.com/knowttl/awx-axi/commit/58eeb00a129ecd58c913aeb6f7ebb3a8ea26a220))
+* show template credentials, notifications, and variable names ([#81](https://github.com/knowttl/awx-axi/issues/81)) ([7d5141a](https://github.com/knowttl/awx-axi/commit/7d5141af4bc7c142af78f2da2cf350aeec205138))
+
+
+### Bug Fixes
+
+* correct AWX stdout retrieval ([#82](https://github.com/knowttl/awx-axi/issues/82)) ([53d0fd9](https://github.com/knowttl/awx-axi/commit/53d0fd9c621e1216fb1d44946baf49642b9fa443))
+
 ## [0.1.11](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.10...awx-axi-v0.1.11) (2026-10-31)
 
 
