@@ -332,7 +332,7 @@ export class HttpTransport implements AwxTransport {
   }
 
   async getText(route: string, query: Query = {}): Promise<TextResponse> {
-    return interpretText(await this.#get(route, { ...query, format: "json", content_format: "ansi" }, false));
+    return interpretText(await this.#get(route, { ...query, format: "json" }, false));
   }
 
   async #send(

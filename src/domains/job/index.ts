@@ -426,10 +426,11 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
 
     const eventData = (rec.event_data ?? {}) as Record<string, unknown>;
     const outcome = (eventData.res ?? {}) as Record<string, unknown>;
+    const result = typeof outcome.msg === "string" ? outcome.msg : outcome.stdout;
     return {
       ...row,
       stdout: typeof rec.stdout === "string" ? stripAnsi(rec.stdout).replaceAll("\r", "") : null,
-      result: typeof outcome.msg === "string" ? outcome.msg : null,
+      result: typeof result === "string" ? stripAnsi(result).replaceAll("\r", "") : null,
     };
   });
 
@@ -834,7 +835,7 @@ export const jobDomain: Domain = defineDomain({
         { name: "failed", description: "only failed events", takesValue: false },
         { name: "host", description: "filter by host name", takesValue: true },
         { name: "task", description: "filter by task name", takesValue: true },
-        { name: "full", description: "include each event's console text and result message", takesValue: false },
+        { name: "full", description: "include each event's console text and result text", takesValue: false },
         ...PAGINATION_FLAGS,
         { name: "type", description: "concrete job type", takesValue: true },
       ],

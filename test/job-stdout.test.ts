@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { decode } from "@toon-format/toon";
 
 import { main } from "../src/cli.js";
 import { HttpTransport, type FetchLike } from "../src/core/transport.js";
@@ -26,8 +27,8 @@ function fakeAwx(options: { alwaysNotAcceptable?: boolean } = {}): { fetch: Fetc
         count: 2,
         next: null,
         results: [
-          { id: 11, event: "runner_on_ok", host_name: "web-01", task: "debug", failed: false, changed: false, stdout: "\u001b[0;32mok: [web-01] => {\r\n    \"msg\": \"script log line\"\r\n}\u001b[0m", event_data: { res: { msg: "script log line" } } },
-          { id: 12, event: "playbook_on_stats", host_name: "", task: "", failed: false, changed: false, stdout: "", event_data: {} },
+          { id: 11, event: "runner_on_ok", host_name: "web-01", task: "debug", failed: false, changed: false, stdout: "console message", event_data: { res: { msg: "result message" } } },
+          { id: 12, event: "runner_on_ok", host_name: "web-01", task: "command", failed: false, changed: false, stdout: "console command", event_data: { res: { stdout: "\u001b[0;32mresult command\r\u001b[0m" } } },
         ],
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
     }
@@ -40,15 +41,13 @@ function fakeAwx(options: { alwaysNotAcceptable?: boolean } = {}): { fetch: Fetc
       return Promise.resolve(new Response(BROWSABLE_406, { status: 406, headers: { "Content-Type": "text/html" } }));
     }
 
-    const wantsAnsi = url.searchParams.get("content_format") === "ansi";
-    const source = wantsAnsi ? ANSI_LINES : LINES.map((line) => `<span class="ansi32">${line}</span>`);
     if (format === "txt") {
       return Promise.resolve(new Response(LINES.join("\n"), { status: 200, headers: { "Content-Type": "text/plain" } }));
     }
     const start = Number(url.searchParams.get("start_line") ?? 0);
     const end = Math.min(Number(url.searchParams.get("end_line") ?? TOTAL_LINES), TOTAL_LINES);
     return Promise.resolve(new Response(
-      JSON.stringify({ range: { start, end, absolute_end: TOTAL_LINES }, content: `${source.slice(start, end).join("\n")}\n` }),
+      JSON.stringify({ range: { start, end, absolute_end: TOTAL_LINES }, content: `${ANSI_LINES.slice(start, end).join("\n")}\n` }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     ));
   };
@@ -132,20 +131,23 @@ describe.each([
 });
 
 describe("job events --full", () => {
-  it("adds the console text and result message of each event", async () => {
+  it("adds distinct console and result text for message and command events", async () => {
     const result = await runAgainst(["job", "events", "1839", "--type", "job", "--full"], fakeAwx().fetch);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("script log line");
-    expect(result.stdout).toContain("stdout");
-    expect(result.stdout).toContain("result");
+    expect(decode(result.stdout)).toMatchObject({ events: [
+      { id: 11, stdout: "console message", result: "result message" },
+      { id: 12, stdout: "console command", result: "result command" },
+    ] });
     expect(result.stdout).not.toContain("\u001b");
+    expect(result.stdout).not.toContain("\r");
   });
 
   it("leaves the console text out without --full", async () => {
     const result = await runAgainst(["job", "events", "1839", "--type", "job"], fakeAwx().fetch);
 
-    expect(result.stdout).not.toContain("script log line");
+    expect(result.stdout).not.toContain("console message");
+    expect(result.stdout).not.toContain("result command");
   });
 });
 
