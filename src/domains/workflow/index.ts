@@ -288,21 +288,11 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
   const org = (summary.organization ?? {}) as Record<string, unknown>;
   const lastJob = (summary.last_job ?? {}) as Record<string, unknown>;
 
-  const notifications: Record<string, unknown[]> = {};
-  for (const event of ["started", "success", "error", "approvals"]) {
-    const attached = yield* readPaged(`workflow_job_templates/${id}/notification_templates_${event}/`, {}, null);
-    notifications[event] = (attached.rows as readonly Record<string, unknown>[]).map((row) => `${row.id} (${row.name})`);
-  }
-
   const fields: Record<string, unknown> = {
     id,
     name: body.name ?? null,
     organization: org.name !== undefined ? `${org.id ?? ""} (${org.name})` : null,
     last_run: lastJob.id !== undefined ? `${lastJob.id} ${lastJob.status ?? ""}` : null,
-    notifications_started: notifications.started,
-    notifications_success: notifications.success,
-    notifications_error: notifications.error,
-    notifications_approval: notifications.approvals,
     survey: body.survey_enabled === true ? "enabled" : "disabled",
   };
 

@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { runCli } from "./support/run.js";
 
-const EMPTY_PAGE = { status: 200, body: { count: 0, next: null, previous: null, results: [] } };
-
 describe("workflow domain (design.md §7.6)", () => {
   it("workflow list lists workflow job templates", async () => {
     const run = await runCli(["workflow", "list"], {
@@ -18,31 +16,12 @@ describe("workflow domain (design.md §7.6)", () => {
 
   it("workflow show displays detail", async () => {
     const run = await runCli(["workflow", "show", "10"], {
-      script: ["workflow-detail", EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE],
+      script: ["workflow-detail"],
     });
 
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("id: 10");
     expect(run.stdout).toContain("Release pipeline");
-  });
-
-  it("workflow show lists notification templates per event including approval (#80)", async () => {
-    const run = await runCli(["workflow", "show", "10"], {
-      script: ["workflow-detail", EMPTY_PAGE, EMPTY_PAGE, "notification-template-name-one", EMPTY_PAGE],
-    });
-
-    expect(run.exitCode).toBe(0);
-    expect(run.stdout).toContain("notifications_started: []");
-    expect(run.stdout).toContain("notifications_success: []");
-    expect(run.stdout).toContain("notifications_error[1]: 11 (email-ops)");
-    expect(run.stdout).toContain("notifications_approval: []");
-    expect(run.transport.requests.map((request) => request.route)).toEqual([
-      "workflow_job_templates/10/",
-      "workflow_job_templates/10/notification_templates_started/",
-      "workflow_job_templates/10/notification_templates_success/",
-      "workflow_job_templates/10/notification_templates_error/",
-      "workflow_job_templates/10/notification_templates_approvals/",
-    ]);
   });
 
   it("workflow survey displays survey questions", async () => {
