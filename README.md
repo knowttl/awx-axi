@@ -76,6 +76,7 @@ See [agent integration](docs/agent-integration.md) for dashboard behavior and th
 | `organization`, `credential`, `user`, `team`, `role` | Manage resources, credentials and access | Read/write | [Organizations](docs/commands.md#organization), [access](docs/commands.md#role) |
 | `notification`, `notification-template`, `activity-stream` | Read deliveries and audit events; configure notifications | Read/write | [Notifications](docs/commands.md#notification-template), [audit](docs/commands.md#activity-stream) |
 | `system-job`, `system-job-template` | Inspect, launch and cancel maintenance runs | Read/write | [System jobs](docs/commands.md#system-job) |
+| `api` | Raw AWX REST access for endpoints no dedicated group covers; writes need `--confirm`, the security gate (plus the delete gate for `delete`) and are journaled | Read/write | [API](docs/commands.md#api) |
 | `auth`, `doctor`, `config`, `profile`, `setup`, `update` | Configure access, diagnose credentials and install integrations | Local/controller | [Reference](docs/commands.md) |
 
 ## Safety

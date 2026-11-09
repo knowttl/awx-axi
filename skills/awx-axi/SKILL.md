@@ -69,7 +69,7 @@ Do not use write commands against a controller that has been designated read-onl
 
 ## Commands
 
-commands[24 total]:
+commands[25 total]:
 `job`: list, show, stdout, events, hosts, launch, cancel, relaunch, watch.
 `template`: create, edit, copy, delete, list, show, object-roles, survey, launch, credential-add/remove, instance-group-add/remove, label-add/remove, notification-add/remove.
 `workflow`: create, edit, copy, delete, list, show, object-roles, survey, launch, nodes, template-nodes, template-node, label-add/remove, node-create/edit/delete/link/unlink, node-add-approval, node credential/label/instance-group add/remove, notification-add/remove.
@@ -92,6 +92,7 @@ commands[24 total]:
 `notification`: list, show <id> only.
 `activity-stream`: list, show <id> only.
 `ad-hoc`: launch, list, show, stdout, events.
+`api`: get, post, put, patch, delete.
 `auth`: status, login, logout.
 `setup`: hooks.
 
@@ -100,6 +101,9 @@ AWX exposes no create, edit, or delete operation for those records, and notifica
 Built-in system-job-template definitions are also read-only; only their launch endpoint is supported.
 Read-only generated commands: notification list, show <id>; activity-stream list, show <id>.
 Use the actual resource nouns above instead of inventing CRUD commands for generated history.
+Use `api get <path>` only for endpoints no dedicated noun covers; paths are relative to the API root, such as `jobs/1839/`.
+`api post|put|patch|delete <path>` preview by default, then need `--confirm` and `AWX_AXI_ALLOW_SECURITY_WRITES=1` (plus `AWX_AXI_ALLOW_DELETES=1` for delete).
+Put secret-bearing request bodies in a 0600 file passed with `--body-file`.
 
 ## Output and errors
 

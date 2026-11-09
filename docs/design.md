@@ -55,6 +55,7 @@ the boundary matters more than the heading's symmetry.
 - **A deliberately bounded configuration and mutation surface.**
   v1 ships the AWX 24.6.1 operations validated for templates, workflows, projects, inventories, hosts, groups, inventory sources, schedules, organizations, execution environments, notification templates, credentials, users, teams, and roles.
   This includes supported copies, workflow topology, bulk host operations, and resource associations.
+  The `api` domain is the raw escape hatch beyond that list: `api get` reads any endpoint, and `api post|put|patch|delete` preview by default, need `--confirm`, always carry the security tag (and the delete gate for `delete`), and are journaled like every other write.
   It does not imply CRUD for every AWX noun: notification, activity-stream, and system-job records are generated history, so notifications and activity-stream entries remain read-only and system jobs support only their genuine cancel lifecycle action.
   Built-in system-job-template definitions are also read-only; only their genuine launch action is exposed.
 - **Every mutation defaults to dry-run and requires explicit confirmation.**

@@ -65,7 +65,7 @@ describe("skill definition (design.md §13)", () => {
     expect(markdown).toMatch(/notification\s+list, show <id>/);
     expect(markdown).toContain("`notification-template`: list, show <id|name>, create, edit, copy, delete, test.");
     expect(markdown).toMatch(/activity-stream\s+list, show <id>/);
-    expect(markdown).toContain("commands[24 total]");
+    expect(markdown).toContain("commands[25 total]");
   });
 
   it("matches both committed generated skill files verbatim", () => {

@@ -29,6 +29,7 @@
 - [activity-stream](#activity-stream)
 - [team](#team)
 - [role](#role)
+- [api](#api)
 
 Regenerate with `npm run docs:commands` after building.
 
@@ -62,6 +63,7 @@ Regenerate with `npm run docs:commands` after building.
 | `activity-stream` | list, show |
 | `team` | user-add, user-remove, credential-create, create, edit, delete, list, show, users, projects, credentials, roles, object-roles, access-list |
 | `role` | grant, revoke, list, show, parents, children, users, teams |
+| `api` | get, post, put, patch, delete |
 
 ## auth
 
@@ -1809,4 +1811,87 @@ Pagination: --limit accepts 1-1000 rows; --all [--max-rows <n>] defaults to 1000
 ```text
 awx-axi role teams <id|name> [--limit <n>]
 Pagination: --limit accepts 1-1000 rows; --all [--max-rows <n>] defaults to 10000 rows (maximum 10000), at most 100 pages. --all conflicts with --limit; --max-rows requires --all.
+```
+
+## api
+
+```text
+api: the raw AWX REST API, for endpoints no dedicated noun covers
+
+Subcommands:
+  get     <path> [--query <k=v&k=v>]   read any endpoint
+  post    <path> [--body <json> | --body-file <path>]   preview or send a POST
+  put     <path> [--body <json> | --body-file <path>]   preview or send a PUT
+  patch   <path> [--body <json> | --body-file <path>]   preview or send a PATCH
+  delete  <path>                       preview or send a DELETE
+
+Paths are relative to the API root (jobs/1839/, not /api/v2/jobs/1839/).
+Writes preview unless --confirm is passed.
+```
+
+### api get
+
+```text
+awx-axi api get <path> [--query <k=v&k=v>]
+
+Reads one endpoint and prints the redacted JSON response as TOON.
+
+Examples:
+  awx-axi api get jobs/1839/
+  awx-axi api get jobs/ --query "status=failed&page_size=5"
+```
+
+### api post
+
+```text
+awx-axi api post <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
+
+Sends POST to the AWX API. Previews by default; --confirm sends it.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1.
+The method, timestamp and status go to the write journal; the payload does not.
+Put secrets in --body-file (0600), never in --body.
+
+Examples:
+  awx-axi api post jobs/1839/cancel/ --confirm
+```
+
+### api put
+
+```text
+awx-axi api put <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
+
+Sends PUT to the AWX API. Previews by default; --confirm sends it.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1.
+The method, timestamp and status go to the write journal; the payload does not.
+Put secrets in --body-file (0600), never in --body.
+
+Examples:
+  awx-axi api put jobs/1839/cancel/ --confirm
+```
+
+### api patch
+
+```text
+awx-axi api patch <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
+
+Sends PATCH to the AWX API. Previews by default; --confirm sends it.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1.
+The method, timestamp and status go to the write journal; the payload does not.
+Put secrets in --body-file (0600), never in --body.
+
+Examples:
+  awx-axi api patch jobs/1839/cancel/ --confirm
+```
+
+### api delete
+
+```text
+awx-axi api delete <path> [--confirm] [--dry-run]
+
+Sends DELETE to the AWX API. Previews by default; --confirm sends it.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and AWX_AXI_ALLOW_DELETES=1.
+The method, timestamp and status go to the write journal; the payload does not.
+
+Examples:
+  awx-axi api delete labels/7/ --confirm
 ```
