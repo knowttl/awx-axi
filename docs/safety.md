@@ -24,7 +24,7 @@ All gates default to false and accept `1`, `true`, `0` or `false`, case-insensit
 | `auth logout` | Immediate upstream token revocation and local removal; both `AWX_AXI_ALLOW_DELETES=1` and `AWX_AXI_ALLOW_SECURITY_WRITES=1`; no preview or confirmation switch |
 
 The configuration, deletion and security gates select write families rather than forming a cumulative hierarchy.
-Logout explicitly checks both gates.
+Raw API writes and logout are exceptions that can require multiple gates.
 Consult [command help](commands.md) for each operation's inputs and preview.
 There is no separate CLI resource allowlist; use controller RBAC to restrict targets.
 
