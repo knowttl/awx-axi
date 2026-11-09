@@ -64,18 +64,18 @@ describe("api domain", () => {
   });
 
   it.each([
-    ["post", "POST", "security"],
-    ["put", "PUT", "security"],
-    ["patch", "PATCH", "security"],
-    ["delete", "DELETE", "security"],
-  ])("%s --confirm sends %s with the %s tag", async (verb, method, tag) => {
+    ["post", "POST"],
+    ["put", "PUT"],
+    ["patch", "PATCH"],
+    ["delete", "DELETE"],
+  ])("%s --confirm sends %s when gates are enabled", async (verb, method) => {
     const run = await runCli(["api", verb, "labels/7/", "--confirm"], {
       env: WRITES_ON,
       script: [{ status: 204 }],
     });
 
     expect(run.exitCode).toBe(0);
-    expect(run.transport.requests).toEqual([{ method, route: "labels/7/", query: {}, tag }]);
+    expect(run.transport.requests).toMatchObject([{ method, route: "labels/7/" }]);
     expect(run.stdout).toContain("status: 204");
   });
 
@@ -172,6 +172,65 @@ describe("api domain", () => {
     const live = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "sensitive-value" } }] });
     expect(preview.stdout).not.toContain("sensitive-value");
     expect(live.stdout).not.toContain("sensitive-value");
+  });
+
+  it.each(["post", "put", "patch"])("%s gates named resources that resemble actions", async (verb) => {
+    const run = await runCli(["api", verb, "job_templates/launch/", "--confirm"], { env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" } });
+    expect(run.stdout).toContain("CONFIG_WRITES_DISABLED");
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it("gates a named resource that resembles a security collection", async () => {
+    const run = await runCli(["api", "patch", "job_templates/credentials/", "--confirm"], { env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" } });
+    expect(run.stdout).toContain("CONFIG_WRITES_DISABLED");
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it.each(["post", "put", "patch", "delete"])("%s refuses writes without the security gate", async (verb) => {
+    const run = await runCli(["api", verb, "labels/7/", "--confirm"], { env: { AWX_AXI_ALLOW_CONFIG_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1" } });
+    expect(run.stdout).toContain("SECURITY_WRITES_DISABLED");
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it("allows an operational action on a named resource", async () => {
+    const run = await runCli(["api", "post", "job_templates/example/launch/", "--confirm"], {
+      env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" }, script: [{ status: 202 }],
+    });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("status: 202");
+  });
+
+  it.each([
+    ['{"inputs":{"custom_field":"abc123"}}', "abc123"],
+    ['{"credential_passwords":{"ssh":"xyz456"}}', "xyz456"],
+    ['{"notification_configuration":{"headers":{"Authorization":"short"}}}', "short"],
+    ['{"headers":{"Proxy-Authorization":"brief"}}', "brief"],
+  ])("masks sensitive body values in previews and responses: %s", async (body, secret) => {
+    const args = ["api", "post", "credentials/", "--body", body];
+    const preview = await runCli(args);
+    const success = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: { echoed: `value ${secret}` } }] });
+    const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: `value ${secret}` } }] });
+    expect(preview.stdout).not.toContain(secret);
+    expect(success.stdout).not.toContain(secret);
+    expect(failure.stdout).not.toContain(secret);
+    expect(success.exitCode).toBe(0);
+    expect(failure.exitCode).toBe(2);
+  });
+
+  it("masks a private notification body in previews and errors", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "awx-axi-api-"));
+    try {
+      const file = join(dir, "body.json");
+      writeFileSync(file, '{"notification_configuration":{"headers":{"Authorization":"abc123"}}}', { mode: 0o600 });
+      const args = ["api", "post", "notification_templates/", "--body-file", file];
+      const preview = await runCli(args);
+      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "rejected abc123" } }] });
+      expect(preview.stdout).not.toContain("abc123");
+      expect(failure.stdout).not.toContain("abc123");
+      expect(failure.exitCode).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("preserves repeated query values and reads text", async () => {

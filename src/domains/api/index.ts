@@ -73,6 +73,34 @@ function readBody(flags: SubcommandInput["flags"]): Record<string, unknown> | un
   return undefined;
 }
 
+function protectBody(value: unknown, secrets: string[]): unknown {
+  if (Array.isArray(value)) return value.map((entry) => protectBody(entry, secrets));
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+    if (/^(?:inputs|credential_passwords|notification_configuration)$/i.test(key) || /authorization$/i.test(key)) {
+      const collect = (item: unknown): void => {
+        if (typeof item === "string" && item.length > 0) secrets.push(item);
+        else if (typeof item === "number" || typeof item === "boolean") secrets.push(String(item));
+        else if (item !== null && typeof item === "object") Object.values(item).forEach(collect);
+      };
+      collect(entry);
+      registerSecretValues(entry);
+      return [key, REDACTION];
+    }
+    return [key, protectBody(entry, secrets)];
+  }));
+}
+
+function scrubResponse(value: unknown, secrets: readonly string[]): unknown {
+  if (typeof value === "string") return secrets.reduce((text, secret) => text.replaceAll(secret, REDACTION), value);
+  if ((typeof value === "number" || typeof value === "boolean") && secrets.includes(String(value))) return REDACTION;
+  if (Array.isArray(value)) return value.map((entry) => scrubResponse(entry, secrets));
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+    String(scrubResponse(key, secrets)), scrubResponse(entry, secrets),
+  ]));
+}
+
 function responseOutput(method: string, path: string, response: AwxResponse) {
   if (response.status < 200 || response.status >= 300) {
     throw errorForResponse(response, { subject: `${method} ${path}` });
@@ -93,16 +121,16 @@ function writePlan(method: HttpMutationMethod) {
   return function* (input: SubcommandInput): Plan<DomainResult> {
     const path = parsePath(input.args[0] as string, method.toLowerCase());
     const body = readBody(input.flags);
-    if (body?.inputs !== undefined) registerSecretValues(body.inputs);
-    if (body?.credential_passwords !== undefined) registerSecretValues(body.credential_passwords);
+    const secrets: string[] = [];
+    const preview = protectBody(body, secrets) as Record<string, unknown> | undefined;
     if (!isLive(input.flags)) {
-      const preview = body?.inputs === undefined ? body : { ...body, inputs: REDACTION };
-      return dryRun("send", "api_request", { method, path }, `${method} ${path}`, preview);
+      return dryRun("send", "api_request", { method, path }, `${method} ${path}`, scrubResponse(preview, secrets) as Record<string, unknown> | undefined);
     }
     const normalized = decodeURIComponent(path).toLowerCase().replace(/\/+$/, "");
     if (method === "DELETE" || normalized === "bulk/host_delete") assertWritable(input.context.env, method, path, "delete");
-    else if (!/(?:^|\/)(?:credentials|galaxy_credentials|users|teams|roles|object_roles|tokens|personal_tokens|admins)$/.test(normalized.replace(/\/\d+$/, "")) &&
-      !/(?:^|\/)(?:launch|cancel|relaunch|update|test|approve|deny)$/.test(normalized)) {
+    else if (!/^(?:credentials|users|teams|roles|tokens)(?:\/[^/]+)?$/.test(normalized) &&
+      !(method === "POST" && /^[^/]+\/[^/]+\/(?:credentials|galaxy_credentials|users|teams|roles|object_roles|tokens|personal_tokens|admins)$/.test(normalized)) &&
+      !(method === "POST" && /^(?:(?:job_templates|workflow_job_templates|system_job_templates)\/[^/]+\/launch|(?:jobs|workflow_jobs|system_jobs|project_updates|inventory_updates|ad_hoc_commands)\/[^/]+\/(?:cancel|relaunch)|(?:projects|inventory_sources)\/[^/]+\/update|notification_templates\/[^/]+\/test|workflow_approvals\/[^/]+\/(?:approve|deny)|ad_hoc_commands)$/.test(normalized))) {
       assertWritable(input.context.env, method, path, "config");
     }
     if (body?.credential_passwords !== undefined && /(?:^|\/)launch$/.test(normalized)) {
@@ -111,7 +139,7 @@ function writePlan(method: HttpMutationMethod) {
       }
     }
     const response = yield* write(path, body, { method, tag: "security" });
-    return responseOutput(method, path, response);
+    return responseOutput(method, path, { ...response, body: scrubResponse(response.body, secrets) });
   };
 }
 
