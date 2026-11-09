@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { runCli } from "./support/run.js";
+
+const EMPTY_PAGE = { status: 200, body: { count: 0, next: null, previous: null, results: [] } };
 
 describe("template domain (design.md §7.4, §7.5)", () => {
   it("template list lists job templates", async () => {
@@ -16,13 +18,94 @@ describe("template domain (design.md §7.4, §7.5)", () => {
 
   it("template show displays prompts on launch and survey status", async () => {
     const run = await runCli(["template", "show", "12"], {
-      script: ["template-detail"],
+      script: ["template-detail", "notification-template-name-one", EMPTY_PAGE, "notification-template-name-one"],
     });
 
     expect(run.exitCode).toBe(0);
     expect(run.stdout).toContain("id: 12");
     expect(run.stdout).toContain("name: Deploy web tier");
     expect(run.stdout).toContain("prompts_on_launch");
+  });
+
+  it("template show lists credentials, notification templates per event and extra variable names without values (#80)", async () => {
+    const run = await runCli(["template", "show", "12"], {
+      script: ["template-detail", "notification-template-name-one", EMPTY_PAGE, "notification-template-name-one"],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("5,ssh-prod,ssh");
+    expect(run.stdout).toContain("9,vault-main,vault");
+    expect(run.stdout).toContain("notifications_started[1]: 11 (email-ops)");
+    expect(run.stdout).toContain("notifications_success: []");
+    expect(run.stdout).toContain("notifications_error[1]: 11 (email-ops)");
+    expect(run.stdout).toContain("extra_var_names[2]: environment,db_password");
+    expect(run.stdout).not.toContain("production");
+    expect(run.stdout).not.toContain("hunter2-secret-value");
+    expect(run.transport.requests.map((request) => request.route)).toEqual([
+      "job_templates/12/",
+      "job_templates/12/notification_templates_started/",
+      "job_templates/12/notification_templates_success/",
+      "job_templates/12/notification_templates_error/",
+    ]);
+  });
+
+  it("template show lists duplicate and merged variable names without values", async () => {
+    const run = await runCli(["template", "show", "12"], {
+      script: [
+        { status: 200, body: { id: 12, extra_vars: "<<: {region: west}\nenvironment: production\npassword: first\npassword: hunter2-secret-value" } },
+        EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE,
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("extra_var_names[3]: region,environment,password");
+    expect(run.stdout).not.toContain("hunter2-secret-value");
+    expect(run.stdout).not.toContain("production");
+    expect(run.stdout).not.toContain("west");
+  });
+
+  it("template show suppresses variable values when YAML parsing fails", async () => {
+    const run = await runCli(["template", "show", "12"], {
+      script: [
+        { status: 200, body: { id: 12, extra_vars: "password: [hunter2-secret-value" } },
+        EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE,
+      ],
+    });
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("template extra variables could not be parsed");
+    expect(run.stdout).not.toContain("hunter2-secret-value");
+  });
+
+  it("template show suppresses parser warnings containing variable values", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      const run = await runCli(["template", "show", "12"], {
+        script: [
+          { status: 200, body: { id: 12, extra_vars: "password: !!int 0b101010101010" } },
+          EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE,
+        ],
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain("extra_var_names[1]: password");
+      expect(run.stdout).not.toContain("0b101010101010");
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it("template show lists names when values have more than 100 aliases", async () => {
+    const extraVars = `base: &value secret\n${Array.from({ length: 101 }, (_, i) => `variable${i}: *value`).join("\n")}`;
+    const run = await runCli(["template", "show", "12"], {
+      script: [{ status: 200, body: { id: 12, extra_vars: extraVars } }, EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("extra_var_names[102]: base,variable0");
+    expect(run.stdout).toContain("variable100");
+    expect(run.stdout).not.toContain("secret");
   });
 
   it("template survey displays survey questions", async () => {

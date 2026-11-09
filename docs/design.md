@@ -533,6 +533,13 @@ template:
   playbook: deploy/web.yml
   inventory: 3 (Production)
   last_run: 1841 running
+  credentials[2]{id,name,kind}:
+    5,ssh-prod,ssh
+    9,vault-main,vault
+  notifications_started[1]: 11 (email-ops)
+  notifications_success: []
+  notifications_error[1]: 11 (email-ops)
+  extra_var_names[2]: environment,db_password
   prompts_on_launch[3]: limit,job_tags,extra_vars
   survey: enabled, 2 required questions
   needs_at_launch: none
