@@ -9,6 +9,9 @@ import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput } from "../../core/output.js";
 import { dryRun, isLive, MUTATION_FLAGS, parseJsonObject } from "../../core/mutations.js";
 import { PrivateFiles } from "../../core/private-file.js";
+import { REDACTION, registerSecretValues } from "../../core/redact.js";
+import { booleanEnv } from "../../core/profiles.js";
+import { AxiError } from "axi-sdk-js";
 import {
   defineDomain,
   read,
@@ -41,12 +44,18 @@ function parsePath(raw: string, command: string): string {
       "Pass query parameters with --query and never use dot segments or encoded dots",
     ]);
   }
+  try { decodeURIComponent(raw); } catch { throw validationError("path contains invalid encoding"); }
   return raw;
 }
 
 function parseQuery(raw: string | true | undefined): Query {
   if (typeof raw !== "string") return {};
-  return Object.fromEntries(new URLSearchParams(raw));
+  const result: Query = {};
+  for (const [key, value] of new URLSearchParams(raw)) {
+    const previous = result[key];
+    result[key] = previous === undefined ? value : Array.isArray(previous) ? [...previous, value] : [String(previous), value];
+  }
+  return result;
 }
 
 function readBody(flags: SubcommandInput["flags"]): Record<string, unknown> | undefined {
@@ -76,7 +85,7 @@ function responseOutput(method: string, path: string, response: AwxResponse) {
 
 function* getPlan(input: SubcommandInput): Plan<DomainResult> {
   const path = parsePath(input.args[0] as string, "get");
-  const response = yield* read(path, parseQuery(input.flags.query));
+  const response = yield* read(path, parseQuery(input.flags.query), undefined, true);
   return responseOutput("GET", path, response);
 }
 
@@ -84,10 +93,23 @@ function writePlan(method: HttpMutationMethod) {
   return function* (input: SubcommandInput): Plan<DomainResult> {
     const path = parsePath(input.args[0] as string, method.toLowerCase());
     const body = readBody(input.flags);
+    if (body?.inputs !== undefined) registerSecretValues(body.inputs);
+    if (body?.credential_passwords !== undefined) registerSecretValues(body.credential_passwords);
     if (!isLive(input.flags)) {
-      return dryRun("send", "api_request", { method, path }, `${method} ${path}`, body);
+      const preview = body?.inputs === undefined ? body : { ...body, inputs: REDACTION };
+      return dryRun("send", "api_request", { method, path }, `${method} ${path}`, preview);
     }
-    if (method === "DELETE") assertWritable(input.context.env, method, path, "delete");
+    const normalized = decodeURIComponent(path).toLowerCase().replace(/\/+$/, "");
+    if (method === "DELETE" || normalized === "bulk/host_delete") assertWritable(input.context.env, method, path, "delete");
+    else if (!/(?:^|\/)(?:credentials|galaxy_credentials|users|teams|roles|object_roles|tokens|personal_tokens|admins)$/.test(normalized.replace(/\/\d+$/, "")) &&
+      !/(?:^|\/)(?:launch|cancel|relaunch|update|test|approve|deny)$/.test(normalized)) {
+      assertWritable(input.context.env, method, path, "config");
+    }
+    if (body?.credential_passwords !== undefined && /(?:^|\/)launch$/.test(normalized)) {
+      if (typeof input.flags["body-file"] !== "string" || !booleanEnv(input.context.env, "AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS")) {
+        throw new AxiError("credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1", "LAUNCH_INPUT_REQUIRED");
+      }
+    }
     const response = yield* write(path, body, { method, tag: "security" });
     return responseOutput(method, path, response);
   };
@@ -107,7 +129,8 @@ function writeSubcommand(method: HttpMutationMethod, hasBody: boolean): Subcomma
       `awx-axi api ${name} <path>${hasBody ? " [--body <json> | --body-file <path>]" : ""} [--confirm] [--dry-run]`,
       "",
       `Sends ${method} to the AWX API. Previews by default; --confirm sends it.`,
-      "Requires AWX_AXI_ALLOW_SECURITY_WRITES=1" + (method === "DELETE" ? " and AWX_AXI_ALLOW_DELETES=1." : "."),
+      "Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.",
+      "Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.",
       "The method, timestamp and status go to the write journal; the payload does not.",
       ...(hasBody ? ["Put secrets in --body-file (0600), never in --body."] : []),
       "",
@@ -143,7 +166,7 @@ export const apiDomain: Domain = defineDomain({
       help: [
         "awx-axi api get <path> [--query <k=v&k=v>]",
         "",
-        "Reads one endpoint and prints the redacted JSON response as TOON.",
+        "Reads one endpoint and prints the redacted response as TOON.",
         "",
         "Examples:",
         "  awx-axi api get jobs/1839/",

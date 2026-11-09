@@ -102,7 +102,7 @@ Built-in system-job-template definitions are also read-only; only their launch e
 Read-only generated commands: notification list, show <id>; activity-stream list, show <id>.
 Use the actual resource nouns above instead of inventing CRUD commands for generated history.
 Use `api get <path>` only for endpoints no dedicated noun covers; paths are relative to the API root, such as `jobs/1839/`.
-`api post|put|patch|delete <path>` preview by default, then need `--confirm` and `AWX_AXI_ALLOW_SECURITY_WRITES=1` (plus `AWX_AXI_ALLOW_DELETES=1` for delete).
+`api post|put|patch|delete <path>` preview by default, then need `--confirm`, `AWX_AXI_ALLOW_SECURITY_WRITES=1`, and applicable operation gates.
 Put secret-bearing request bodies in a 0600 file passed with `--body-file`.
 
 ## Output and errors

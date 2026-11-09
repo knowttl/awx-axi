@@ -1834,7 +1834,7 @@ Writes preview unless --confirm is passed.
 ```text
 awx-axi api get <path> [--query <k=v&k=v>]
 
-Reads one endpoint and prints the redacted JSON response as TOON.
+Reads one endpoint and prints the redacted response as TOON.
 
 Examples:
   awx-axi api get jobs/1839/
@@ -1847,7 +1847,8 @@ Examples:
 awx-axi api post <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
 
 Sends POST to the AWX API. Previews by default; --confirm sends it.
-Requires AWX_AXI_ALLOW_SECURITY_WRITES=1.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
+Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
 Put secrets in --body-file (0600), never in --body.
 
@@ -1861,7 +1862,8 @@ Examples:
 awx-axi api put <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
 
 Sends PUT to the AWX API. Previews by default; --confirm sends it.
-Requires AWX_AXI_ALLOW_SECURITY_WRITES=1.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
+Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
 Put secrets in --body-file (0600), never in --body.
 
@@ -1875,7 +1877,8 @@ Examples:
 awx-axi api patch <path> [--body <json> | --body-file <path>] [--confirm] [--dry-run]
 
 Sends PATCH to the AWX API. Previews by default; --confirm sends it.
-Requires AWX_AXI_ALLOW_SECURITY_WRITES=1.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
+Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
 Put secrets in --body-file (0600), never in --body.
 
@@ -1889,7 +1892,8 @@ Examples:
 awx-axi api delete <path> [--confirm] [--dry-run]
 
 Sends DELETE to the AWX API. Previews by default; --confirm sends it.
-Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and AWX_AXI_ALLOW_DELETES=1.
+Requires AWX_AXI_ALLOW_SECURITY_WRITES=1 and applicable configuration or delete gates.
+Launch credential passwords require a private body file and AWX_AXI_ALLOW_CREDENTIAL_PASSWORDS=1.
 The method, timestamp and status go to the write journal; the payload does not.
 
 Examples:

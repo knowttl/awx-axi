@@ -15,7 +15,7 @@ import { redact } from "./redact.js";
 import { createTlsFetch } from "./tls-fetch.js";
 
 /** Query parameters for a read. Values are serialized by the implementation. */
-export type Query = Record<string, string | number | boolean>;
+export type Query = Record<string, string | number | boolean | readonly string[]>;
 
 /** Shared across all reads in one bounded investigation, including retries. */
 export interface ReadBudget {
@@ -73,7 +73,7 @@ export interface TextResponse {
 export type RiskTier = "operational" | "config" | "delete" | "security";
 
 export interface AwxTransport {
-  get(route: string, query?: Query, budget?: ReadBudget): Promise<AwxResponse>;
+  get(route: string, query?: Query, budget?: ReadBudget, allowText?: boolean): Promise<AwxResponse>;
   /** Refused with `READ_ONLY_VIOLATION` or safety gate when flags/env forbid it. */
   post(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
   put(route: string, body?: unknown, tag?: RiskTier): Promise<AwxResponse>;
@@ -275,8 +275,8 @@ export class HttpTransport implements AwxTransport {
     this.#apiRoot = new URL(options.apiBasePath, options.baseUrl);
   }
 
-  async get(route: string, query: Query = {}, budget?: ReadBudget): Promise<AwxResponse> {
-    return this.#get(route, query, false, budget);
+  async get(route: string, query: Query = {}, budget?: ReadBudget, allowText = false): Promise<AwxResponse> {
+    return this.#get(route, query, allowText, budget);
   }
 
   async #get(route: string, query: Query, allowText: boolean, budget?: ReadBudget): Promise<AwxResponse> {
@@ -373,7 +373,9 @@ export class HttpTransport implements AwxTransport {
       throw new AxiError("refused to send credentials outside the configured origin", "CONFIG_INVALID");
     }
     for (const [key, value] of Object.entries(query)) {
-      url.searchParams.set(key, String(value));
+      if (Array.isArray(value)) {
+        for (const item of value) url.searchParams.append(key, item);
+      } else url.searchParams.set(key, String(value));
     }
 
     const headers: Record<string, string> = { Accept: "application/json" };

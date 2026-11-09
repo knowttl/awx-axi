@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { runCli } from "./support/run.js";
 
-const WRITES_ON = { AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1" };
+const WRITES_ON = { AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_CONFIG_WRITES: "1" };
 
 describe("api domain", () => {
   it("get reads a base-relative path with its query and redacts sensitive keys", async () => {
@@ -131,7 +131,7 @@ describe("api domain", () => {
   });
 
   it.each([
-    [{}, "SECURITY_WRITES_DISABLED"],
+    [{ AWX_AXI_ALLOW_CONFIG_WRITES: "1" }, "SECURITY_WRITES_DISABLED"],
     [{ AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_READ_ONLY: "1" }, "READ_ONLY_VIOLATION"],
   ])("refuses a confirmed write under env %j with %s", async (env, code) => {
     const run = await runCli(["api", "post", "labels/", "--confirm"], { env });
@@ -147,6 +147,37 @@ describe("api domain", () => {
 
     expect(run.stdout).toContain("DELETE_WRITES_DISABLED");
     expect(run.transport.requests).toEqual([]);
+  });
+
+  it.each([
+    ["post", "bulk/host_delete/", "DELETE_WRITES_DISABLED"],
+    ["post", "labels/", "CONFIG_WRITES_DISABLED"],
+    ["patch", "labels/7/", "CONFIG_WRITES_DISABLED"],
+    ["post", "credentials/", "SECURITY_WRITES_DISABLED"],
+  ])("gates %s %s", async (verb, path, code) => {
+    const run = await runCli(["api", verb, path, "--confirm"], { env: {} });
+    expect(run.stdout).toContain(code);
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it("requires a private file and password gate for launch passwords", async () => {
+    const run = await runCli(["api", "post", "job_templates/1/launch/", "--body", '{"credential_passwords":{"ssh_password":"sensitive-value"}}', "--confirm"], { env: WRITES_ON });
+    expect(run.stdout).toContain("LAUNCH_INPUT_REQUIRED");
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it("masks custom credential inputs in previews and controller responses", async () => {
+    const args = ["api", "post", "credentials/", "--body", '{"inputs":{"custom_field":"sensitive-value"}}'];
+    const preview = await runCli(args);
+    const live = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "sensitive-value" } }] });
+    expect(preview.stdout).not.toContain("sensitive-value");
+    expect(live.stdout).not.toContain("sensitive-value");
+  });
+
+  it("preserves repeated query values and reads text", async () => {
+    const run = await runCli(["api", "get", "jobs/1/stdout/", "--query", "format=txt&chain__name=a&chain__name=b"], { script: [{ status: 200, body: "hello world" }] });
+    expect(run.transport.requests[0]?.query).toEqual({ format: "txt", chain__name: ["a", "b"] });
+    expect(run.stdout).toContain("hello world");
   });
 
   it("write maps a non-2xx response to its error code", async () => {
