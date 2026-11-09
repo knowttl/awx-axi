@@ -205,6 +205,56 @@ describe("api domain", () => {
     });
   });
 
+  it.each([
+    ["bulk/job_launch/", []],
+    ["bulk/job_launch/", ["--confirm"]],
+    ["Bulk/Job_Launch", ["--confirm"]],
+  ])("refuses %s with %j because bulk job launch is excluded", async (path, extra) => {
+    const run = await runCli(["api", "post", path, ...extra], { env: WRITES_ON });
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("bulk job launch is excluded");
+    expect(run.transport.requests).toEqual([]);
+  });
+
+  it.each([
+    ["JSON", '{"extra_vars":"{\\"password\\":\\"hunter2\\"}"}'],
+    ["YAML", '{"extra_vars":"password: hunter2\\nenv: prod"}'],
+  ])("masks serialized %s extra_vars secrets in previews and controller responses", async (_format, body) => {
+    await withBody(body, async (file) => {
+      const args = ["api", "post", "job_templates/7/launch/", "--body-file", file];
+      const preview = await runCli(args);
+      const live = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "hunter2" } }] });
+      expect(preview.stdout).not.toContain("hunter2");
+      expect(live.stdout).not.toContain("hunter2");
+    });
+  });
+
+  it("keeps non-secret serialized extra_vars visible in previews", async () => {
+    await withBody('{"extra_vars":"{\\"env\\":\\"prod\\"}"}', async (file) => {
+      const run = await runCli(["api", "post", "job_templates/7/launch/", "--body-file", file]);
+      expect(run.stdout).toContain("prod");
+    });
+  });
+
+  it("masks credential inputs with unrecognized field names in GET collections and write responses", async () => {
+    const credential = { id: 1, credential_type: 1, inputs: { ssh_key_data: "ssh-key-material", username: "svc-account" } };
+    const read = await runCli(["api", "get", "workflow_job_template_nodes/1/credentials/"], {
+      script: [{ status: 200, body: { count: 1, results: [credential] } }],
+    });
+    const write = await runCli(["api", "post", "credentials/", "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: credential }] });
+    for (const run of [read, write]) {
+      expect(run.stdout).not.toContain("ssh-key-material");
+      expect(run.stdout).not.toContain("svc-account");
+    }
+  });
+
+  it("keeps inputs visible on resources that are not credentials", async () => {
+    const run = await runCli(["api", "get", "credential_types/1/"], {
+      script: [{ status: 200, body: { id: 1, kind: "cloud", inputs: { fields: [{ id: "host" }] } } }],
+    });
+    expect(run.stdout).toContain("host");
+  });
+
   it.each(["post", "put", "patch"])("%s gates named resources that resemble actions", async (verb) => {
     const run = await runCli(["api", verb, "job_templates/launch/", "--confirm"], { env: { AWX_AXI_ALLOW_SECURITY_WRITES: "1" } });
     expect(run.stdout).toContain("CONFIG_WRITES_DISABLED");

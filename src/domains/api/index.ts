@@ -12,6 +12,7 @@ import { PrivateFiles } from "../../core/private-file.js";
 import { isSensitiveKey, REDACTION, registerSecretValues } from "../../core/redact.js";
 import { booleanEnv } from "../../core/profiles.js";
 import { AxiError } from "axi-sdk-js";
+import { parse as parseYaml } from "yaml";
 import {
   defineDomain,
   read,
@@ -73,6 +74,15 @@ function protectBody(value: unknown, secrets: string[]): unknown {
   if (Array.isArray(value)) return value.map((entry) => protectBody(entry, secrets));
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+    if (key === "extra_vars" && typeof entry === "string") {
+      const before = secrets.length;
+      try {
+        protectBody(parseYaml(entry), secrets);
+      } catch {
+        return [key, entry];
+      }
+      return [key, secrets.length > before ? REDACTION : entry];
+    }
     if (isSensitiveKey(key) || /^(?:inputs|notification_configuration)$/i.test(key)) {
       const collect = (item: unknown): void => {
         if (typeof item === "string" && item.length > 0) secrets.push(item);
@@ -92,18 +102,20 @@ function scrubResponse(value: unknown, secrets: readonly string[]): unknown {
   if ((typeof value === "number" || typeof value === "boolean") && secrets.includes(String(value))) return REDACTION;
   if (Array.isArray(value)) return value.map((entry) => scrubResponse(entry, secrets));
   if (value === null || typeof value !== "object") return value;
+  const credential = "credential_type" in value;
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
-    key, isSensitiveKey(key) ? REDACTION : scrubResponse(entry, secrets),
+    key, isSensitiveKey(key) || (credential && key === "inputs") ? REDACTION : scrubResponse(entry, secrets),
   ]));
 }
 
-function responseOutput(method: string, path: string, response: AwxResponse) {
+function responseOutput(method: string, path: string, response: AwxResponse, secrets: readonly string[] = []) {
+  const body = scrubResponse(response.body ?? null, secrets);
   if (response.status < 200 || response.status >= 300) {
-    throw errorForResponse(response, { subject: `${method} ${path}` });
+    throw errorForResponse({ ...response, body }, { subject: `${method} ${path}` });
   }
   return detailOutput({
     label: RESPONSE_SCHEMA.label,
-    fields: { method, path, status: response.status, body: response.body ?? null },
+    fields: { method, path, status: response.status, body },
   });
 }
 
@@ -117,6 +129,11 @@ function writePlan(method: HttpMutationMethod) {
   return function* (input: SubcommandInput): Plan<DomainResult> {
     const path = parsePath(input.args[0] as string, method.toLowerCase());
     const body = readBody(input.flags);
+    if (decodeURIComponent(path).toLowerCase().replace(/\/+$/, "") === "bulk/job_launch") {
+      throw validationError("`api` refuses bulk/job_launch/: bulk job launch is excluded from awx-axi (design.md section 2)", [
+        "Launch jobs one at a time with `awx-axi template launch` or `awx-axi workflow launch`",
+      ]);
+    }
     const secrets: string[] = [];
     const preview = protectBody(body, secrets) as Record<string, unknown> | undefined;
     if (!isLive(input.flags)) {
@@ -135,7 +152,7 @@ function writePlan(method: HttpMutationMethod) {
       }
     }
     const response = yield* write(path, body, { method, tag: "security" });
-    return responseOutput(method, path, { ...response, body: scrubResponse(response.body, secrets) });
+    return responseOutput(method, path, response, secrets);
   };
 }
 
@@ -182,6 +199,7 @@ export const apiDomain: Domain = defineDomain({
     "",
     "Paths are relative to the API root (jobs/1839/, not /api/v2/jobs/1839/).",
     "Writes preview unless --confirm is passed.",
+    "bulk/job_launch/ is refused: bulk job launch is excluded from awx-axi.",
   ].join("\n"),
   subcommands: [
     {

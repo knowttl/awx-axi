@@ -1827,6 +1827,7 @@ Subcommands:
 
 Paths are relative to the API root (jobs/1839/, not /api/v2/jobs/1839/).
 Writes preview unless --confirm is passed.
+bulk/job_launch/ is refused: bulk job launch is excluded from awx-axi.
 ```
 
 ### api get
