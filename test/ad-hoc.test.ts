@@ -58,7 +58,7 @@ describe("ad-hoc domain (design.md §7.2)", () => {
     expect(run.transport.requests[0]).toMatchObject({
       method: "GET",
       route: "ad_hoc_commands/401/stdout/",
-      query: { format: "txt" },
+      query: {},
     });
     expect(run.stdout).toContain("ad_hoc_stdout:");
     expect(run.stdout).toContain("lines: 1-4 of 4");
@@ -75,7 +75,6 @@ describe("ad-hoc domain (design.md §7.2)", () => {
       method: "GET",
       route: "ad_hoc_commands/401/stdout/",
       query: {
-        format: "txt",
         start_line: 1,
         end_line: 2,
       },

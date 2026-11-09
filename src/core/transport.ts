@@ -6,7 +6,7 @@
  */
 import { AxiError } from "axi-sdk-js";
 
-import { AwxAxiError, networkError } from "./errors.js";
+import { AwxAxiError, errorForResponse, networkError } from "./errors.js";
 import { ResponseDiagnostics } from "../response-diagnostics.js";
 import { walkPages, type PageBudget } from "./paginate.js";
 import { booleanEnv, writeLogPath } from "./profiles.js";
@@ -164,6 +164,9 @@ export function assertWritable(
  * prints the apology as though it were playbook output.
  */
 export function interpretText(response: AwxResponse): TextResponse {
+  if (response.status < 200 || response.status >= 300) {
+    throw errorForResponse(response, { subject: "stdout" });
+  }
   const { content, range } = readStdoutBody(response.body);
   const apology = APOLOGY.exec(content);
 
@@ -197,11 +200,8 @@ function readStdoutBody(body: unknown): {
   content: string;
   range: { start: number; end: number; absoluteEnd: number };
 } {
-  if (typeof body === "string") {
-    return { content: body, range: { start: 0, end: 0, absoluteEnd: 0 } };
-  }
   if (body === null || typeof body !== "object") {
-    return { content: "", range: { start: 0, end: 0, absoluteEnd: 0 } };
+    throw new AxiError("the controller returned a non-JSON response", "INVALID_RESPONSE");
   }
 
   const record = body as Record<string, unknown>;
@@ -332,7 +332,7 @@ export class HttpTransport implements AwxTransport {
   }
 
   async getText(route: string, query: Query = {}): Promise<TextResponse> {
-    return interpretText(await this.#get(route, query, true));
+    return interpretText(await this.#get(route, { ...query, format: "json", content_format: "ansi" }, false));
   }
 
   async #send(

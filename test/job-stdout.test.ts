@@ -1,0 +1,178 @@
+import { afterEach, describe, expect, it } from "vitest";
+
+import { main } from "../src/cli.js";
+import { HttpTransport, type FetchLike } from "../src/core/transport.js";
+
+const TOTAL_LINES = 300;
+const LINES = Array.from({ length: TOTAL_LINES }, (_, index) => `line ${index + 1}`);
+const ANSI_LINES = LINES.map((line) => `\u001b[0;32m${line}\u001b[0m`);
+const BROWSABLE_406 = "<!DOCTYPE html><html><head><title>Job Stdout - AWX REST API</title></head><body>HTTP 406 Not Acceptable</body></html>";
+
+const RENDERER_FOR_FORMAT: Record<string, string> = { json: "application/json", txt: "text/plain" };
+
+/**
+ * An AWX stdout endpoint that negotiates content the way Django REST framework
+ * does: the `format` query parameter narrows the renderers, and the `Accept`
+ * header must still match the one that remains, otherwise the browsable API
+ * answers 406 with an HTML page.
+ */
+function fakeAwx(options: { alwaysNotAcceptable?: boolean } = {}): { fetch: FetchLike; urls: URL[] } {
+  const urls: URL[] = [];
+  const fetchLike: FetchLike = (rawUrl, init) => {
+    const url = new URL(rawUrl);
+    urls.push(url);
+    if (url.pathname.endsWith("/job_events/")) {
+      return Promise.resolve(new Response(JSON.stringify({
+        count: 2,
+        next: null,
+        results: [
+          { id: 11, event: "runner_on_ok", host_name: "web-01", task: "debug", failed: false, changed: false, stdout: "\u001b[0;32mok: [web-01] => {\r\n    \"msg\": \"script log line\"\r\n}\u001b[0m", event_data: { res: { msg: "script log line" } } },
+          { id: 12, event: "playbook_on_stats", host_name: "", task: "", failed: false, changed: false, stdout: "", event_data: {} },
+        ],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }
+
+    const format = url.searchParams.get("format");
+    const accept = init.headers.Accept ?? "*/*";
+    const renderer = format === null ? accept : RENDERER_FOR_FORMAT[format];
+    const accepted = renderer !== undefined && (accept === "*/*" || accept.includes(renderer));
+    if (options.alwaysNotAcceptable === true || !accepted) {
+      return Promise.resolve(new Response(BROWSABLE_406, { status: 406, headers: { "Content-Type": "text/html" } }));
+    }
+
+    const wantsAnsi = url.searchParams.get("content_format") === "ansi";
+    const source = wantsAnsi ? ANSI_LINES : LINES.map((line) => `<span class="ansi32">${line}</span>`);
+    if (format === "txt") {
+      return Promise.resolve(new Response(LINES.join("\n"), { status: 200, headers: { "Content-Type": "text/plain" } }));
+    }
+    const start = Number(url.searchParams.get("start_line") ?? 0);
+    const end = Math.min(Number(url.searchParams.get("end_line") ?? TOTAL_LINES), TOTAL_LINES);
+    return Promise.resolve(new Response(
+      JSON.stringify({ range: { start, end, absolute_end: TOTAL_LINES }, content: `${source.slice(start, end).join("\n")}\n` }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+  };
+  return { fetch: fetchLike, urls };
+}
+
+async function runAgainst(argv: string[], fetch: FetchLike): Promise<{ stdout: string; exitCode: number }> {
+  let stdout = "";
+  process.exitCode = 0;
+  await main({
+    argv,
+    env: {},
+    stdout: { write: (chunk) => { stdout += chunk; } },
+    createTransport: () => new HttpTransport({ baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: true, fetch, sleep: () => Promise.resolve() }),
+  });
+  return { stdout, exitCode: Number(process.exitCode ?? 0) };
+}
+
+const previousExitCode = process.exitCode;
+afterEach(() => { process.exitCode = previousExitCode; });
+
+describe.each([
+  { noun: "job", id: "1839", extra: ["--type", "job"], header: "job_stdout" },
+])("$noun stdout against an AWX that answers 406 HTML to a mismatched format", ({ noun, id, extra, header }) => {
+  it("prints the tail by default", async () => {
+    const result = await runAgainst([noun, "stdout", id, ...extra], fakeAwx().fetch);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(`${header}:`);
+    expect(result.stdout).toContain("lines: 100-300 of 300");
+    expect(result.stdout).toContain("line 300");
+    expect(result.stdout).toContain("line 101");
+    expect(result.stdout).not.toContain("line 100\n");
+    expect(result.stdout).not.toContain("<span");
+    expect(result.stdout).not.toContain("\u001b");
+  });
+
+  it("honours --tail", async () => {
+    const result = await runAgainst([noun, "stdout", id, ...extra, "--tail", "3"], fakeAwx().fetch);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("lines: 297-300 of 300");
+    expect(result.stdout).toContain("line 298");
+    expect(result.stdout).not.toContain("line 297\n");
+  });
+
+  it("honours --lines", async () => {
+    const result = await runAgainst([noun, "stdout", id, ...extra, "--lines", "0-2"], fakeAwx().fetch);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("lines: 0-2 of 300");
+    expect(result.stdout).toContain("line 1");
+    expect(result.stdout).toContain("line 2");
+    expect(result.stdout).not.toContain("line 3\n");
+  });
+
+  it("prints everything with --full", async () => {
+    const result = await runAgainst([noun, "stdout", id, ...extra, "--full"], fakeAwx().fetch);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("lines: 0-300 of 300");
+    expect(result.stdout).toContain("line 1\n");
+    expect(result.stdout).toContain("line 300");
+  });
+
+  it("keeps colour codes only with --ansi", async () => {
+    const result = await runAgainst([noun, "stdout", id, ...extra, "--tail", "1", "--ansi"], fakeAwx().fetch);
+
+    expect(result.stdout).toContain("\u001b[0;32mline 300\u001b[0m");
+  });
+
+  it("reports an HTML error page as an error and never prints it", async () => {
+    const result = await runAgainst([noun, "stdout", id, ...extra], fakeAwx({ alwaysNotAcceptable: true }).fetch);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("code: ");
+    expect(result.stdout).toContain("406");
+    expect(result.stdout).not.toContain("<html");
+    expect(result.stdout).not.toContain("Job Stdout - AWX REST API");
+  });
+});
+
+describe("job events --full", () => {
+  it("adds the console text and result message of each event", async () => {
+    const result = await runAgainst(["job", "events", "1839", "--type", "job", "--full"], fakeAwx().fetch);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("script log line");
+    expect(result.stdout).toContain("stdout");
+    expect(result.stdout).toContain("result");
+    expect(result.stdout).not.toContain("\u001b");
+  });
+
+  it("leaves the console text out without --full", async () => {
+    const result = await runAgainst(["job", "events", "1839", "--type", "job"], fakeAwx().fetch);
+
+    expect(result.stdout).not.toContain("script log line");
+  });
+});
+
+describe("ad-hoc stdout against an AWX that answers 406 HTML to a mismatched format", () => {
+  it("prints the whole output by default", async () => {
+    const result = await runAgainst(["ad-hoc", "stdout", "401"], fakeAwx().fetch);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("ad_hoc_stdout:");
+    expect(result.stdout).toContain("lines: 0-300 of 300");
+    expect(result.stdout).toContain("line 300");
+    expect(result.stdout).not.toContain("\u001b");
+    expect(result.stdout).not.toContain("<span");
+  });
+
+  it("honours --tail", async () => {
+    const result = await runAgainst(["ad-hoc", "stdout", "401", "--tail", "3"], fakeAwx().fetch);
+
+    expect(result.stdout).toContain("lines: 297-300 of 300");
+    expect(result.stdout).not.toContain("line 297\n");
+  });
+
+  it("reports an HTML error page as an error and never prints it", async () => {
+    const result = await runAgainst(["ad-hoc", "stdout", "401"], fakeAwx({ alwaysNotAcceptable: true }).fetch);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("406");
+    expect(result.stdout).not.toContain("<html");
+  });
+});
