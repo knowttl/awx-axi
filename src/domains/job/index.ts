@@ -39,9 +39,11 @@ import {
   resolveId,
   resolveUnifiedJob,
 } from "../../core/resolve.js";
+import { parseTail, presentStdout, stripAnsi } from "../../core/stdout.js";
 
 const DEFAULT_LIST_LIMIT = 20;
 const EVENTS_LIMIT = 50;
+const DEFAULT_TAIL_LINES = 200;
 
 const VALID_STATUSES: readonly string[] = [
   "new",
@@ -290,7 +292,7 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
       fields.failed_tasks = failedTasks;
     }
 
-    const stdoutRes = yield* readText(`jobs/${id}/stdout/`, { format: "txt" });
+    const stdoutRes = yield* readText(`jobs/${id}/stdout/`, { start_line: 0, end_line: 1 });
     if (!stdoutRes.tooLarge && stdoutRes.absoluteEnd > 0) {
       fields.stdout = `${stdoutRes.absoluteEnd} lines`;
     }
@@ -340,7 +342,8 @@ function* stdoutPlan(input: SubcommandInput): Plan<DomainResult> {
   const typeFlag = typeof input.flags.type === "string" ? input.flags.type : undefined;
   const { routePrefix } = yield* resolveTypedRoute(id, typeFlag);
 
-  const query: Record<string, string | number | boolean> = { format: "txt" };
+  const query: Record<string, string | number | boolean> = {};
+  let tail: number | undefined = DEFAULT_TAIL_LINES;
 
   if (typeof input.flags.lines === "string") {
     const match = /^(\d+)-(\d+)$/.exec(input.flags.lines);
@@ -351,11 +354,15 @@ function* stdoutPlan(input: SubcommandInput): Plan<DomainResult> {
     }
     query.start_line = Number(match[1]);
     query.end_line = Number(match[2]);
+    tail = undefined;
   } else if (typeof input.flags.tail === "string") {
-    query.tail = Number(input.flags.tail);
+    tail = parseTail(input.flags.tail, "job stdout");
+  } else if (input.flags.full === true) {
+    tail = undefined;
   }
 
-  const textRes = yield* readText(`${routePrefix}/${id}/stdout/`, query);
+  const rawText = yield* readText(`${routePrefix}/${id}/stdout/`, query);
+  const textRes = rawText.tooLarge ? rawText : presentStdout(rawText, { tail, keepAnsi: input.flags.ansi === true });
 
   if (textRes.tooLarge) {
     const sizeMb = ((textRes.sizeBytes ?? 0) / (1024 * 1024)).toFixed(1);
@@ -407,13 +414,23 @@ function* eventsPlan(input: SubcommandInput): Plan<DomainResult> {
   const paged = yield* readPaged(`jobs/${id}/job_events/`, query, limit);
   const rows = paged.rows.map((r) => {
     const rec = (r ?? {}) as Record<string, unknown>;
-    return {
+    const row: Row = {
       id: typeof rec.id === "number" ? rec.id : 0,
       event: typeof rec.event === "string" ? rec.event : "",
       host: typeof rec.host_name === "string" ? rec.host_name : null,
       task: typeof rec.task === "string" ? rec.task : null,
       failed: typeof rec.failed === "boolean" ? rec.failed : false,
       changed: typeof rec.changed === "boolean" ? rec.changed : false,
+    };
+    if (input.flags.full !== true) return row;
+
+    const eventData = (rec.event_data ?? {}) as Record<string, unknown>;
+    const outcome = (eventData.res ?? {}) as Record<string, unknown>;
+    const result = typeof outcome.msg === "string" ? outcome.msg : outcome.stdout;
+    return {
+      ...row,
+      stdout: typeof rec.stdout === "string" ? stripAnsi(rec.stdout).replaceAll("\r", "") : null,
+      result: typeof result === "string" ? stripAnsi(result).replaceAll("\r", "") : null,
     };
   });
 
@@ -755,7 +772,7 @@ export const jobDomain: Domain = defineDomain({
     "  list     [--status <s>] [--type <t>] [--failed] [--since <time>] [--template <id|name>] [--limit <n>] [--fields <fields>] (newest first; default --limit 20)",
     "  show     <id> [--type <t>]",
     "  stdout   <id> [--tail <n> | --lines <a-b>] [--full] [--type <t>]",
-    "  events   <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]",
+    "  events   <id> [--failed] [--host <h>] [--task <t>] [--full] [--limit <n>]",
     "  hosts    <id>",
     "  launch   <id|name> [--limit <h>] [--extra-vars '<json>'] [--wait] [--confirm] [--dry-run]",
     "  cancel   <id> [--type <t>] [--confirm] [--dry-run]",
@@ -813,11 +830,12 @@ export const jobDomain: Domain = defineDomain({
     },
     {
       name: "events",
-      help: "awx-axi job events <id> [--failed] [--host <h>] [--task <t>] [--limit <n>]" + PAGINATION_HELP,
+      help: "awx-axi job events <id> [--failed] [--host <h>] [--task <t>] [--full] [--limit <n>]" + PAGINATION_HELP,
       flags: [
         { name: "failed", description: "only failed events", takesValue: false },
         { name: "host", description: "filter by host name", takesValue: true },
         { name: "task", description: "filter by task name", takesValue: true },
+        { name: "full", description: "include each event's console text and result text", takesValue: false },
         ...PAGINATION_FLAGS,
         { name: "type", description: "concrete job type", takesValue: true },
       ],

@@ -25,7 +25,8 @@ Oversized ambiguity results retain up to three compact candidates with IDs, name
 ## Logs
 
 Job and ad-hoc stdout support `--tail` and `--lines`; job stdout also supports `--download`.
-`job stdout` accepts `--full`, but it does not change the request or bypass truncation.
+`job stdout` prints the last 200 lines by default; `--full` prints everything AWX will display, which stops at its 1 MiB display cap.
+`job events --full` adds each event's console text and result text.
 Empty results are explicit.
 See [the command reference](commands.md) for supported fields and flags on each command.
 

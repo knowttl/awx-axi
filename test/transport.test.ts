@@ -36,12 +36,9 @@ describe("invalid successful responses", () => {
     await expect(http.getPaged("jobs/", {}, 20)).resolves.toMatchObject({ rows: [], count: 0 });
   });
 
-  it("preserves explicitly requested plain text", async () => {
+  it("refuses an HTML page served in place of stdout", async () => {
     const { transport: http } = transport(["login-page"]);
-    await expect(http.getText("jobs/1/stdout/", { format: "txt" })).resolves.toMatchObject({
-      content: loadFixture("login-page").body,
-      tooLarge: false,
-    });
+    await expect(http.getText("jobs/1/stdout/")).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 });
 

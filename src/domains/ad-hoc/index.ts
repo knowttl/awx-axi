@@ -20,6 +20,7 @@ import {
   type SubcommandInput,
 } from "../../core/registry.js";
 import { resolveId } from "../../core/resolve.js";
+import { parseTail, presentStdout } from "../../core/stdout.js";
 
 const DEFAULT_LIST_LIMIT = 100;
 const EVENTS_LIMIT = 50;
@@ -151,16 +152,18 @@ function parseLinesRange(
 
 function* stdoutPlan(input: SubcommandInput): Plan<DomainResult> {
   const id = parseAdHocId(input.args[0], "stdout");
-  const query: Record<string, string | number | boolean> = { format: "txt" };
+  const query: Record<string, string | number | boolean> = {};
+  let tail: number | undefined;
   if (typeof input.flags.lines === "string") {
     const { startLine, endLine } = parseLinesRange(input.flags.lines, "stdout");
     query.start_line = startLine;
     query.end_line = endLine;
   } else if (typeof input.flags.tail === "string") {
-    query.tail = Number(input.flags.tail);
+    tail = parseTail(input.flags.tail, "ad-hoc stdout");
   }
 
-  const textRes = yield* readText(`ad_hoc_commands/${id}/stdout/`, query);
+  const rawText = yield* readText(`ad_hoc_commands/${id}/stdout/`, query);
+  const textRes = rawText.tooLarge ? rawText : presentStdout(rawText, { tail });
   if (textRes.tooLarge) {
     const sizeMb = ((textRes.sizeBytes ?? 0) / (1024 * 1024)).toFixed(1);
     const limitMb = ((textRes.displayLimitBytes ?? 0) / (1024 * 1024)).toFixed(1);
