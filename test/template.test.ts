@@ -49,6 +49,34 @@ describe("template domain (design.md §7.4, §7.5)", () => {
     ]);
   });
 
+  it("template show lists duplicate and merged variable names without values", async () => {
+    const run = await runCli(["template", "show", "12"], {
+      script: [
+        { status: 200, body: { id: 12, extra_vars: "<<: {region: west}\nenvironment: production\npassword: first\npassword: hunter2-secret-value" } },
+        EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE,
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("extra_var_names[3]: region,environment,password");
+    expect(run.stdout).not.toContain("hunter2-secret-value");
+    expect(run.stdout).not.toContain("production");
+    expect(run.stdout).not.toContain("west");
+  });
+
+  it("template show suppresses variable values when YAML parsing fails", async () => {
+    const run = await runCli(["template", "show", "12"], {
+      script: [
+        { status: 200, body: { id: 12, extra_vars: "password: [hunter2-secret-value" } },
+        EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE,
+      ],
+    });
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("template extra variables could not be parsed");
+    expect(run.stdout).not.toContain("hunter2-secret-value");
+  });
+
   it("template survey displays survey questions", async () => {
     const run = await runCli(["template", "survey", "12"], {
       script: ["template-survey"],

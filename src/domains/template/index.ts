@@ -176,7 +176,14 @@ function* showPlan(input: SubcommandInput): Plan<DomainResult> {
     notifications[event] = (attached.rows as readonly Record<string, unknown>[]).map((row) => `${row.id} (${row.name})`);
   }
 
-  const extraVars: unknown = typeof body.extra_vars === "string" && body.extra_vars !== "" ? parseYaml(body.extra_vars) : null;
+  let extraVars: unknown = null;
+  if (typeof body.extra_vars === "string" && body.extra_vars !== "") {
+    try {
+      extraVars = parseYaml(body.extra_vars, { merge: true, uniqueKeys: false });
+    } catch {
+      throw new AxiError("template extra variables could not be parsed", "UNKNOWN");
+    }
+  }
   const extraVarNames =
     extraVars !== null && typeof extraVars === "object" && !Array.isArray(extraVars) ? Object.keys(extraVars) : [];
 
