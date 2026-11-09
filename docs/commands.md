@@ -1835,6 +1835,7 @@ Writes preview unless --confirm is passed.
 awx-axi api get <path> [--query <k=v&k=v>]
 
 Reads one endpoint and prints the redacted response as TOON.
+Use . to read the API root.
 
 Examples:
   awx-axi api get jobs/1839/
