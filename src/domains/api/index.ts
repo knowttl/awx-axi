@@ -72,7 +72,7 @@ function protectBody(value: unknown, secrets: string[]): unknown {
   if (Array.isArray(value)) return value.map((entry) => protectBody(entry, secrets));
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-    if (isSensitiveKey(key) || /^(?:inputs|notification_configuration)$/i.test(key) || /authorization$/i.test(key)) {
+    if (isSensitiveKey(key) || /^(?:inputs|notification_configuration)$/i.test(key)) {
       const collect = (item: unknown): void => {
         if (typeof item === "string" && item.length > 0) secrets.push(item);
         else if (typeof item === "number" || typeof item === "boolean") secrets.push(String(item));
@@ -87,12 +87,12 @@ function protectBody(value: unknown, secrets: string[]): unknown {
 }
 
 function scrubResponse(value: unknown, secrets: readonly string[]): unknown {
-  if (typeof value === "string") return secrets.reduce((text, secret) => text.replaceAll(secret, REDACTION), value);
+  if (typeof value === "string") return secrets.includes(value) ? REDACTION : value;
   if ((typeof value === "number" || typeof value === "boolean") && secrets.includes(String(value))) return REDACTION;
   if (Array.isArray(value)) return value.map((entry) => scrubResponse(entry, secrets));
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
-    String(scrubResponse(key, secrets)), scrubResponse(entry, secrets),
+    key, isSensitiveKey(key) ? REDACTION : scrubResponse(entry, secrets),
   ]));
 }
 

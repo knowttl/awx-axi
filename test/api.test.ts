@@ -227,8 +227,8 @@ describe("api domain", () => {
     await withBody(body, async (file) => {
       const args = ["api", "post", "credentials/", "--body-file", file];
       const preview = await runCli(args);
-      const success = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: { echoed: `value ${secret}` } }] });
-      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: `value ${secret}` } }] });
+      const success = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: { echoed: secret } }] });
+      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: secret } }] });
       expect(preview.stdout).not.toContain(secret);
       expect(success.stdout).not.toContain(secret);
       expect(failure.stdout).not.toContain(secret);
@@ -244,13 +244,41 @@ describe("api domain", () => {
       writeFileSync(file, '{"notification_configuration":{"headers":{"Authorization":"abc123"}}}', { mode: 0o600 });
       const args = ["api", "post", "notification_templates/", "--body-file", file];
       const preview = await runCli(args);
-      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "rejected abc123" } }] });
+      const failure = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: "abc123" } }] });
       expect(preview.stdout).not.toContain("abc123");
       expect(failure.stdout).not.toContain("abc123");
       expect(failure.exitCode).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it.each([
+    { headers: { Authorization: "stored-header" } },
+    { results: [{ headers: { "Proxy-Authorization": "stored-header" } }] },
+  ])("redacts stored authorization headers from GET responses", async (body) => {
+    const run = await runCli(["api", "get", "notification_templates/"], { script: [{ status: 200, body }] });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).not.toContain("stored-header");
+    expect(run.stdout).toContain("***");
+  });
+
+  it("redacts stored authorization headers from write responses", async () => {
+    const run = await runCli(["api", "post", "credentials/", "--confirm"], { env: WRITES_ON, script: [{ status: 201, body: { headers: { Authorization: "stored-header" } } }] });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).not.toContain("stored-header");
+    expect(run.stdout).toContain("***");
+  });
+
+  it("preserves error details and response keys containing short secrets", async () => {
+    await withBody('{"password":"e"}', async (file) => {
+      const args = ["api", "post", "credentials/", "--body-file", file, "--confirm"];
+      const failure = await runCli(args, { env: WRITES_ON, script: [{ status: 403, body: { detail: "Account disabled" } }] });
+      const success = await runCli(args, { env: WRITES_ON, script: [{ status: 201, body: { detail: "enabled", exact: "e" } }] });
+      expect(failure.stdout).toContain("Account disabled");
+      expect(success.stdout).toContain("detail: enabled");
+      expect(success.stdout).toContain("exact: ***");
+    });
   });
 
   it("preserves repeated query values and reads text", async () => {
