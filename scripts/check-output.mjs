@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
