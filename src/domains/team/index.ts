@@ -367,7 +367,7 @@ function teamUserPlan(remove: boolean) {
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) {
       throw errorForResponse(response, { subject: `team ${team} user` });
     }
-    return detailOutput({
+    return detailOutput({ trustedFields: ["status"],
       label: "team_user",
       fields: { team, user, status: remove ? "removed" : "added" },
     });
@@ -514,7 +514,7 @@ function* deleteTeamPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `team ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "team",
     fields: {
       id,

@@ -17,7 +17,7 @@ import {
 import { discoverController } from "./core/controller-discovery.js";
 import { formatError, validationError } from "./core/errors.js";
 import { configPath, loadConfig, normalizeEnv, type Selection } from "./core/profiles.js";
-import { clearSecrets, redact } from "./core/redact.js";
+import { clearSecrets, redact, redactResult, redactValue } from "./core/redact.js";
 import {
   splitResult,
   type Domain,
@@ -123,7 +123,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
   } catch (error) { globalError = error; }
   if (globalError) {
     const error = formatError(globalError);
-    (options.stdout ?? process.stdout).write(redact(error.output));
+    (options.stdout ?? process.stdout).write(error.output);
     process.exitCode = error.exitCode;
     return;
   }
@@ -132,7 +132,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
       "Remove the unsupported flag; run `awx-axi --help` to see commands and their flags",
       "global flags: --config <path>, --profile <name>, --origin <origin>, --verify-ssl <true|false>, --help, --version",
     ]));
-    (options.stdout ?? process.stdout).write(redact(error.output));
+    (options.stdout ?? process.stdout).write(error.output);
     process.exitCode = error.exitCode;
     return;
   }
@@ -169,7 +169,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
 
   await runAxiCli({
     argv,
-    stdout: { write: (chunk) => (options.stdout ?? process.stdout).write(redact(chunk)) },
+    stdout: options.stdout ?? process.stdout,
     description: DESCRIPTION,
     version: readPackageVersion(),
     topLevelHelp: topLevelHelp(),
@@ -178,11 +178,10 @@ export async function main(options: MainOptions = {}): Promise<void> {
     // three other codes must also exit 2 (§9).
     formatError: (error) => formatError(error, diagnostics),
     renderUnknownCommand: (command) =>
-      `${encode({
+      `${encode({ ...(redactValue({
         error: `Unknown command: ${command}`,
-        code: "VALIDATION_ERROR",
         help: ["Run `awx-axi --help` to see available commands"],
-      })}\n`,
+      }) as Record<string, unknown>), code: "VALIDATION_ERROR" })}\n`,
     getCommandHelp: (command) => {
       if (command === "auth") {
         return AUTH_HELP;
@@ -199,7 +198,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
           ?.help ?? domain?.help;
       return help === undefined || help.endsWith("\n") ? help : `${help}\n`;
     },
-    home: () => home!,
+    home: () => redactResult(home!),
   });
 }
 
@@ -234,7 +233,10 @@ function buildCommands(
       return output;
     };
   }
-  return commands;
+  return Object.fromEntries(Object.entries(commands).map(([name, command]) => [
+    name,
+    async (args, commandContext) => redactResult((await command(args, commandContext)) as string | Record<string, unknown>),
+  ])) as Record<string, AxiCliCommand<undefined>>;
 }
 
 function topLevelHelp(): string {

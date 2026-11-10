@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { decode } from "@toon-format/toon";
 
 import { main } from "../src/cli.js";
+import { resolveCredential } from "../src/core/auth.js";
 import { HttpTransport, type FetchLike } from "../src/core/transport.js";
 
 const TOTAL_LINES = 300;
@@ -54,20 +55,49 @@ function fakeAwx(options: { alwaysNotAcceptable?: boolean } = {}): { fetch: Fetc
   return { fetch: fetchLike, urls };
 }
 
-async function runAgainst(argv: string[], fetch: FetchLike): Promise<{ stdout: string; exitCode: number }> {
+async function runAgainst(argv: string[], fetch: FetchLike, token?: string): Promise<{ stdout: string; exitCode: number }> {
   let stdout = "";
   process.exitCode = 0;
+  const env = token === undefined ? {} : { XDG_CONFIG_HOME: process.cwd(), AWX_AXI_HOME: process.cwd(), AWX_AXI_ORIGIN: "https://awx.example.com", AWX_AXI_TOKEN: token };
   await main({
     argv,
-    env: {},
+    env,
     stdout: { write: (chunk) => { stdout += chunk; } },
-    createTransport: () => new HttpTransport({ baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: true, fetch, sleep: () => Promise.resolve() }),
+    createTransport: () => {
+      if (token !== undefined) resolveCredential(env);
+      return new HttpTransport({ baseUrl: "https://awx.example.com", apiBasePath: "/api/v2/", readOnly: true, fetch, sleep: () => Promise.resolve() });
+    },
   });
   return { stdout, exitCode: Number(process.exitCode ?? 0) };
 }
 
 const previousExitCode = process.exitCode;
 afterEach(() => { process.exitCode = previousExitCode; });
+
+it.each([
+  ["job", "job_stdout", ["--type", "job"]],
+  ["ad-hoc", "ad_hoc_stdout", []],
+  ["job", "stdout", ["--type", "job"]],
+])("preserves %s stdout protocol when the token is %s", async (noun, token, extra) => {
+  const fetch: FetchLike = async () => new Response(JSON.stringify({ range: { start: 0, end: 1, absolute_end: 1 }, content: `secret ${token}\n` }), { status: 200, headers: { "Content-Type": "application/json" } });
+  const result = await runAgainst([noun, "stdout", "7", ...extra], fetch, token);
+  expect(result.exitCode, result.stdout).toBe(0);
+  expect(result.stdout).toContain(`${noun === "job" ? "job_stdout" : "ad_hoc_stdout"}:`);
+  expect(result.stdout).toContain("\nstdout:\nsecret ***\n");
+});
+
+it.each([
+  ["job", ["--type", "job"], "stdout", "job *** 7"],
+  ["ad-hoc", [], "stdout", "ad-hoc *** 7"],
+  ["job", ["--type", "job"], "stdout 7", "job ***"],
+])("redacts the %s stdout help when the token is %s", async (noun, extra, token, suggestion) => {
+  const result = await runAgainst([noun, "stdout", "7", ...extra], fakeAwx().fetch, token);
+  expect(result.exitCode, result.stdout).toBe(0);
+  expect(result.stdout).toContain(`${noun === "job" ? "job_stdout" : "ad_hoc_stdout"}:`);
+  expect(result.stdout).toContain("\nstdout:\n");
+  expect(result.stdout).toContain(`awx-axi ${suggestion} --lines 1-200`);
+  expect(result.stdout.slice(result.stdout.indexOf("\nhelp"))).not.toContain(token);
+});
 
 describe.each([
   { noun: "job", id: "1839", extra: ["--type", "job"], header: "job_stdout" },

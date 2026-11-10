@@ -303,6 +303,7 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   return detailOutput({
+    trustedFields: typeof resBody.status !== "string" ? ["status"] : [],
     label: "job",
     fields: {
       id: jobId,
@@ -465,7 +466,7 @@ function notificationAssociationPlan(remove: boolean) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { project, notification_template: template, event }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `project ${project} notifications` });
-    return detailOutput({ label: "project_notification", fields: { project, notification_template: template, event, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "project_notification", fields: { project, notification_template: template, event, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -495,7 +496,7 @@ function* deleteProjectPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `project ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "project",
     fields: {
       id,

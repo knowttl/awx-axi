@@ -240,7 +240,7 @@ function* approvePlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `approval ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "approval",
     fields: {
       id,
@@ -300,7 +300,7 @@ function* denyPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `approval ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "approval",
     fields: {
       id,

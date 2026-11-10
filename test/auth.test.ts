@@ -11,6 +11,7 @@ import { RecordedTransport } from "../src/core/transport.js";
 import { PrivateFiles } from "../src/core/private-file.js";
 import { booleanEnv, configPath, credentialsPath, deleteToken, loadConfig, loadCredentials, normalizeEnv, saveToken, selectProfile, toolDirectory, validateOrigin, validateRef, type Env } from "../src/core/profiles.js";
 import { runCli } from "./support/run.js";
+import { main } from "../src/cli.js";
 
 const homes: string[] = [];
 const files = new PrivateFiles();
@@ -29,6 +30,60 @@ const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["s
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
+  it("registers authentication response secrets before translating errors", async () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "login-password" };
+    const run = await runCli(["auth", "login"], { env, script: [{ status: 400, body: { password: "longsecret", detail: "echo longsecret" } }] });
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("echo ***");
+    expect(run.stdout).not.toContain("longsecret");
+  });
+
+  it("preserves mutation status when it matches the configured token", async () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_TOKEN: "deleted", AWX_AXI_ALLOW_DELETES: "1" };
+    const transport = new RecordedTransport([{ status: 204 }], { env });
+    const chunks: string[] = [];
+    const previousExitCode = process.exitCode;
+    process.exitCode = 0;
+    try {
+      await main({ argv: ["user", "delete", "7", "--confirm"], env, stdout: { write: (chunk) => { chunks.push(chunk); } }, createTransport: () => {
+        resolveCredential(env);
+        return transport;
+      } });
+      expect(Number(process.exitCode)).toBe(0);
+      expect(chunks.join("")).toContain("status: deleted");
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
+
+  it.each([
+    [["job", "relaunch", "7", "--type", "job", "--confirm"], "pending", {}, "pending"],
+    [["job", "relaunch", "7", "--type", "job", "--confirm"], "pending", { status: "pending" }, "***"],
+    [["job", "cancel", "7", "--type", "job", "--confirm"], "canceled", { status: null }, "canceled"],
+    [["job", "cancel", "7", "--type", "job", "--confirm"], "canceled", { status: "canceled" }, "***"],
+    [["inventory", "sync", "7", "--confirm"], "pending", {}, "pending"],
+    [["inventory", "sync", "7", "--confirm"], "pending", { status: "pending" }, "***"],
+    [["system-job-template", "launch", "7", "--confirm"], "pending", {}, "pending"],
+    [["system-job-template", "launch", "7", "--confirm"], "pending", { status: "pending" }, "***"],
+    [["notification-template", "test", "7", "--confirm"], "pending", {}, "pending"],
+    [["notification-template", "test", "7", "--confirm"], "pending", { status: "pending" }, "***"],
+  ])("preserves only CLI fallback status for %j", async (argv, token, body, expected) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_TOKEN: token };
+    const transport = new RecordedTransport([{ status: 202, body: { id: 8, ...body } }], { env });
+    const chunks: string[] = [];
+    const previousExitCode = process.exitCode;
+    process.exitCode = 0;
+    try {
+      await main({ argv, env, stdout: { write: (chunk) => { chunks.push(chunk); } }, createTransport: () => {
+        resolveCredential(env);
+        return transport;
+      } });
+      expect(Number(process.exitCode)).toBe(0);
+      expect(chunks.join("")).toContain(`status: ${expected}`);
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
   it("explains how to configure a missing profile before any request", async () => {
     const run = await runCli(["auth", "status"], { env: environment() });
     expect(run.exitCode).toBe(1);
@@ -40,12 +95,12 @@ describe("credential profiles", () => {
     expect(run.transport.requests).toHaveLength(0);
   });
 
-  it.each(["t", "token", "1234567"])("preserves prose when a short token is resolved: %s", async (token) => {
+  it.each([["t", "operator-token-1234567"], ["token", "operator-***-1234567"], ["1234567", "operator-token-***"]])("applies word boundaries when a short token is resolved: %s", async (token, expected) => {
     const env = { ...environment(), PRODUCTION_PAT: token };
     configure(env, { production });
     const run = await runCli(["auth", "status"], { env, script: [{ status: 200, body: { results: [{ username: "operator-token-1234567" }] } }] });
     expect(run.exitCode).toBe(0);
-    expect(run.stdout).toContain("user: operator-token-1234567");
+    expect(run.stdout).toContain(`user: ${expected}`);
     expect(run.stdout).toContain("profile: production");
   });
 

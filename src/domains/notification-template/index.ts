@@ -189,7 +189,7 @@ function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "notification_template", { notification_template: id }, `DELETE notification_templates/${id}/`);
   const response = yield* write(`notification_templates/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `notification template ${id}` });
-  return detailOutput({ label: "notification_template", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "notification_template", fields: { id, status: "deleted" } });
 }
 
 function* testPlan(input: SubcommandInput): Plan<DomainResult> {
@@ -199,7 +199,7 @@ function* testPlan(input: SubcommandInput): Plan<DomainResult> {
   if (response.status !== 202 && response.status !== 200 && response.status !== 201) throw errorForResponse(response, { subject: `notification template ${id} test` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   const status = typeof body.status === "string" ? body.status : "pending";
-  return detailOutput({ label: "notification_test", fields: { notification_template: id, notification: body.notification ?? null, status } });
+  return detailOutput({ trustedFields: typeof body.status !== "string" ? ["status"] : [], label: "notification_test", fields: { notification_template: id, notification: body.notification ?? null, status } });
 }
 
 function* copyPlan(input: SubcommandInput): Plan<DomainResult> {

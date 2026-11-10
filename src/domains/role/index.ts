@@ -370,7 +370,7 @@ function* grantRolePlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `role ${roleId}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "role_grant",
     fields: {
       role: roleId,
@@ -439,7 +439,7 @@ function* revokeRolePlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `role ${roleId}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "role_revoke",
     fields: {
       role: roleId,

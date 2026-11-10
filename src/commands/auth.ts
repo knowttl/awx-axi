@@ -5,9 +5,9 @@ import { errorForResponse, validationError } from "../core/errors.js";
 import { parseFlags } from "../core/flags.js";
 import { PrivateFiles } from "../core/private-file.js";
 import { credentialsPath, deleteToken, loadConfig, loadCredentials, saveToken, selectProfile, storedToken, type Selection } from "../core/profiles.js";
-import { redact, registerSecret } from "../core/redact.js";
+import { redact, registerSecret, registerSensitiveValues } from "../core/redact.js";
 import type { Renderable } from "../core/registry.js";
-import type { AwxTransport } from "../core/transport.js";
+import type { AwxResponse, AwxTransport } from "../core/transport.js";
 import { assertWritable } from "../core/transport.js";
 
 export interface AuthContext {
@@ -36,6 +36,12 @@ examples:
   awx-axi auth logout --profile production
 `;
 
+async function authResponse(request: Promise<AwxResponse>): Promise<AwxResponse> {
+  const response = await request;
+  registerSensitiveValues(response.body);
+  return response;
+}
+
 export async function authCommand(args: string[], context: AuthContext): Promise<Renderable> {
   const name = args[0];
   if (!name || !["login", "status", "logout"].includes(name)) throw validationError("auth needs login, status, logout");
@@ -56,7 +62,7 @@ async function login(context: AuthContext): Promise<Renderable> {
     [selected.config.profiles.env?.origin, credentials.profiles.env?.origin].some((origin) => origin !== undefined && origin !== selected.profile.origin)) {
     throw new AxiError("environment login would replace an env profile bound to another controller; select a configured profile explicitly with --profile or AWX_AXI_PROFILE", "CONFIG_INVALID");
   }
-  const response = await context.createBasicAuthTransport().post("tokens/", { description: "awx-axi", scope: "write" });
+  const response = await authResponse(context.createBasicAuthTransport().post("tokens/", { description: "awx-axi", scope: "write" }));
   if (response.status !== 201) throw errorForResponse(response, { subject: selected.profile.origin });
   const body = (response.body ?? {}) as Record<string, unknown>;
   if (typeof body.token !== "string" || !body.token) throw new AxiError("controller returned no token", "AUTH_REQUIRED");
@@ -83,7 +89,7 @@ async function status(context: AuthContext): Promise<Renderable> {
   const config = resolveController(context.env, context.selection);
   const credential = resolveCredential(context.env, context.selection, undefined, true);
   if (!credential) return { auth: { profile: selected.name, origin: selected.profile.origin, controller: config.host, source: "none", valid: false }, help: ["Run `awx-axi auth login` to store a PAT"] };
-  const response = await context.createTransport().get("me/");
+  const response = await authResponse(context.createTransport().get("me/"));
   const body = response.body as { results?: { username?: string }[]; username?: string } | null;
   return { auth: { profile: selected.name, origin: selected.profile.origin, controller: config.host, source: credential.path ?? credential.source,
     user: response.status === 200 ? redact(body?.results?.[0]?.username ?? body?.username ?? "unknown") : "unknown", valid: response.status === 200 } };
@@ -94,7 +100,7 @@ async function logout(context: AuthContext): Promise<Renderable> {
   const stored = storedToken(context.env, selected);
   if (!stored) return { auth: "no stored PAT for the selected profile (no-op)" };
   assertWritable(context.env, "DELETE", `tokens/${stored.id}/`);
-  const response = await context.createTransport({ token: stored.token, source: "stored" }).delete(`tokens/${stored.id}/`, "security");
+  const response = await authResponse(context.createTransport({ token: stored.token, source: "stored" }).delete(`tokens/${stored.id}/`, "security"));
   if (response.status !== 204 && response.status !== 404) throw errorForResponse(response, { subject: "PAT revocation" });
   const removed = deleteToken(context.env, selected, stored);
   return { auth: removed ? `PAT revoked and removed for profile ${selected.name}` : `PAT revoked for profile ${selected.name}; replacement credential retained` };

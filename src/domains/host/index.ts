@@ -9,7 +9,7 @@ import { encode } from "@toon-format/toon";
 import { AwxAxiError, errorForResponse, validationError } from "../../core/errors.js";
 import { pageBudget, PAGINATION_FLAGS, PAGINATION_HELP } from "../../core/paginate.js";
 import { detailOutput, listOutput, type Row } from "../../core/output.js";
-import { redactValue } from "../../core/redact.js";
+import { redactValue, trustFields } from "../../core/redact.js";
 import {
   defineDomain,
   read,
@@ -316,7 +316,7 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
     if (stopped !== undefined) {
       row.status = "skipped";
       row.complete = false;
-      row.error = { code: stopped };
+      row.error = trustFields({ code: stopped }, ["code"]);
     } else {
       try {
         id = yield* resolveHost(selector, inventory, budget);
@@ -340,7 +340,7 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
               const groups = yield* readPaged(`hosts/${id}/groups/`, {}, { all: true, maxRows: 1000 }, budget);
               row.groups = groups.rows.map(toGroup);
               row.groups_pagination = groups.pagination;
-              if (groups.pagination.truncated) errors.push({ component, code: "INCOMPLETE_COLLECTION" });
+              if (groups.pagination.truncated) errors.push(trustFields({ component, code: "INCOMPLETE_COLLECTION" }, ["code"]));
             } else {
               const route = component === "variables" ? "variable_data" : "ansible_facts";
               const response = yield* read(`hosts/${id}/${route}/`, {}, budget);
@@ -349,7 +349,7 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
             }
           } catch (error) {
             if (!(error instanceof AxiError)) throw error;
-            errors.push({ component, code: error.code, error: error.message });
+            errors.push(trustFields({ component, code: error.code, error: error.message }, ["code"]));
             if (error.code === "REQUEST_BUDGET" || error.code === "TIME_BUDGET") {
               stopped = error.code;
               row.skipped_components = component === "groups" ? ["variables", "facts"] : component === "variables" ? ["facts"] : [];
@@ -367,13 +367,13 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
         if (error.code === "AMBIGUOUS_NAME") ambiguous = true;
         row.status = "failed";
         row.complete = false;
-        row.error = { code: error.code, error: error.message, ...(error instanceof AwxAxiError ? error.details : {}) };
+        row.error = trustFields({ ...(error instanceof AwxAxiError ? error.details : {}), code: error.code, error: error.message }, ["code"]);
         if (error.code === "REQUEST_BUDGET" || error.code === "TIME_BUDGET") stopped = error.code;
       }
     }
     const help = `Run \`awx-axi host show ${id ?? "<id>"}\` for full details`;
     row.help = help;
-    row = redactValue(row) as RecordValue;
+    row = redactValue(trustFields(row, ["status", "code"])) as RecordValue;
     const selectorError = record(row.error);
     if (Array.isArray(selectorError.candidates) && encode({ hosts: [row] }).length > rowLimit) {
       const candidates = selectorError.candidates;

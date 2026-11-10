@@ -350,7 +350,7 @@ function* tokenCreatePlan(input: SubcommandInput): Plan<DomainResult> {
   const response = yield* write(`users/${user}/personal_tokens/`, payload, { method: "POST", tag: "security" });
   if (response.status !== 201 && response.status !== 200) throw errorForResponse(response, { subject: `user ${user} token` });
   const body = (response.body ?? {}) as Record<string, unknown>; const tokenId = typeof body.id === "number" ? body.id : 0;
-  return detailOutput({ label: "token", fields: { id: tokenId, user, scope: body.scope ?? input.flags.scope ?? "write", status: "created", secret: "not displayed" }, help: [`Run \`awx-axi user token-revoke ${tokenId} --confirm\` to revoke this token`] });
+  return detailOutput({ trustedFields: ["status"], label: "token", fields: { id: tokenId, user, scope: body.scope ?? input.flags.scope ?? "write", status: "created", secret: "not displayed" }, help: [`Run \`awx-axi user token-revoke ${tokenId} --confirm\` to revoke this token`] });
 }
 
 function* tokenRevokePlan(input: SubcommandInput): Plan<DomainResult> {
@@ -359,7 +359,7 @@ function* tokenRevokePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("revoke", "token", { token: id }, `DELETE tokens/${id}/`);
   const response = yield* write(`tokens/${id}/`, undefined, { method: "DELETE", tag: "security" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `token ${id}` });
-  return detailOutput({ label: "token", fields: { id, status: "revoked" } });
+  return detailOutput({ trustedFields: ["status"], label: "token", fields: { id, status: "revoked" } });
 }
 
 function* deleteUserPlan(input: SubcommandInput): Plan<DomainResult> {
@@ -383,7 +383,7 @@ function* deleteUserPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `user ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "user",
     fields: {
       id,

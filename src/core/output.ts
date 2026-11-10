@@ -8,7 +8,7 @@
  */
 import { encode } from "@toon-format/toon";
 
-import { redact, redactValue } from "./redact.js";
+import { rawOutput, redact, redactValue, trustFields } from "./redact.js";
 import type { PagedResult } from "./transport.js";
 
 /** Row values after projection: whatever the encoder can put in a cell. */
@@ -42,7 +42,7 @@ export function listOutput(options: ListOutputOptions): Record<string, unknown> 
     output.pagination = options.pagination;
     output[options.label] = options.rows.length === 0
       ? options.pagination.truncated ? "0 rows returned; collection is incomplete" : options.empty
-      : options.rows.map(redactValue);
+      : options.rows.map((row) => redactValue(row));
     return withHelp(output, options.help);
   }
   if (options.rows.length === 0) {
@@ -53,7 +53,7 @@ export function listOutput(options: ListOutputOptions): Record<string, unknown> 
   if (options.count !== undefined) {
     output.count = countLine(options.rows.length, options.count);
   }
-  output[options.label] = options.rows.map(redactValue);
+  output[options.label] = options.rows.map((row) => redactValue(row));
 
   return withHelp(output, options.help);
 }
@@ -85,13 +85,15 @@ export interface DetailOutputOptions {
   readonly label: string;
   readonly fields: Record<string, unknown>;
   readonly help?: readonly string[];
+  readonly trustedFields?: readonly string[];
 }
 
 /** A detail response. Suggestions are optional: a detail view is self-contained. */
 export function detailOutput(
   options: DetailOutputOptions,
 ): Record<string, unknown> {
-  const fields = Object.fromEntries(Object.entries(options.fields).map(([key, value]) => [key, redactValue(value)]));
+  const trusted = options.label === "dry_run" ? ["action"] : options.trustedFields ?? [];
+  const fields = redactValue(trustFields(options.fields, trusted));
   return withHelp({ [options.label]: fields }, options.help);
 }
 
@@ -135,7 +137,7 @@ export interface RawRegionOptions {
  * body run through the encoder becomes one escaped line, which costs tokens and
  * destroys readability at once.
  */
-export function rawRegion(options: RawRegionOptions): string {
+export function rawRegion(options: RawRegionOptions): Record<string, unknown> {
   const body = redact(options.body);
   const parts = [
     encode(redactValue(options.header)),
@@ -144,10 +146,10 @@ export function rawRegion(options: RawRegionOptions): string {
   ];
 
   if (options.help !== undefined && options.help.length > 0) {
-    parts.push(encode({ help: [...options.help] }));
+    parts.push(encode({ help: options.help.map(redact) }));
   }
 
-  return parts.join("\n");
+  return rawOutput(parts.join("\n"));
 }
 
 function withHelp(

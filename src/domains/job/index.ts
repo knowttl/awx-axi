@@ -517,6 +517,7 @@ function* cancelPlan(input: SubcommandInput): Plan<DomainResult> {
 
   const body = (cancelRes.body ?? {}) as Record<string, unknown>;
   return detailOutput({
+    trustedFields: body.status == null ? ["status"] : [],
     label: "job",
     fields: {
       id,
@@ -675,6 +676,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   return detailOutput({
+    trustedFields: typeof resBody.status !== "string" ? ["status"] : [],
     label: "job",
     fields: {
       id: jobId,
@@ -716,6 +718,7 @@ function* relaunchPlan(input: SubcommandInput): Plan<DomainResult> {
   const newId = typeof resBody.id === "number" ? resBody.id : id;
 
   return detailOutput({
+    trustedFields: resBody.status == null ? ["status"] : [],
     label: "job",
     fields: {
       id: newId,

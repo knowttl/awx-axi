@@ -462,6 +462,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   return detailOutput({
+    trustedFields: typeof resBody.status !== "string" ? ["status"] : [],
     label: "job",
     fields,
     help: [
@@ -691,7 +692,7 @@ function associationPlan(operation: string) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", spec.noun, { template, [spec.flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: spec.tag });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `template ${template}` });
-    return detailOutput({ label: "template_association", fields: { template, [spec.flag]: target, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "template_association", fields: { template, [spec.flag]: target, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -705,7 +706,7 @@ function notificationAssociationPlan(remove: boolean) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { template, notification_template: notificationTemplate, event }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `template ${template} notifications` });
-    return detailOutput({ label: "template_notification", fields: { template, notification_template: notificationTemplate, event, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "template_notification", fields: { template, notification_template: notificationTemplate, event, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -735,7 +736,7 @@ function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `template ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "template",
     fields: {
       id,

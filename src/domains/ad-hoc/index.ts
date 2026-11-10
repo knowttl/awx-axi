@@ -297,6 +297,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   return detailOutput({
+    trustedFields: typeof resBody.status !== "string" ? ["status"] : [],
     label: "ad_hoc_command",
     fields: {
       id: commandId,

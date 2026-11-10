@@ -21,7 +21,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/check-output.mjs && tsc -p tsconfig.json",
     "docs:commands": "node scripts/command-reference.ts",
     "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.test.json",
