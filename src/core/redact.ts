@@ -22,6 +22,7 @@ export const REDACTION = "***";
 
 const secrets = new Map<string, boolean>();
 const trustedFields = new WeakMap<object, ReadonlySet<string>>();
+const RAW_OUTPUT = Symbol("raw output");
 
 export function registerSecret(secret: string): void {
   if (secret.length === 0) return;
@@ -122,8 +123,13 @@ export function registerSensitiveValues(value: unknown): void {
   redactValue(value);
 }
 
+export function rawOutput(value: string): Record<string, unknown> {
+  return { [RAW_OUTPUT]: value };
+}
+
 export function redactResult(result: string | Record<string, unknown>): string | Record<string, unknown> {
   if (typeof result === "string") return redact(result);
+  if (RAW_OUTPUT in result) return result[RAW_OUTPUT] as string;
   registerSensitiveValues(result);
   return Object.fromEntries(Object.entries(result).map(([label, section]) => [label, redactValue(section, label)]));
 }

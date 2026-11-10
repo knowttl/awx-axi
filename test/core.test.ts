@@ -12,7 +12,7 @@ import {
   parseFlags,
 } from "../src/core/flags.js";
 import { countLine, detailOutput, listOutput, rawRegion, truncate } from "../src/core/output.js";
-import { clearSecrets, redact, redactValue, registerSecret } from "../src/core/redact.js";
+import { clearSecrets, redact, redactResult, redactValue, registerSecret } from "../src/core/redact.js";
 import {
   defineDomain,
   read,
@@ -390,12 +390,12 @@ describe("output helpers (design.md §8)", () => {
   });
 
   it("writes a raw log region between an encoded header and an encoded help block", () => {
-    const output = rawRegion({
+    const output = redactResult(rawRegion({
       header: { job_stdout: { id: 1839, lines: "4013-4212 of 4212" } },
       label: "stdout",
       body: "PLAY [db] ***\nfatal: [db-02]: FAILED!\n",
       help: ["Run `awx-axi job events 1839 --failed` for the failing tasks only"],
-    });
+    }));
 
     expect(output).toBe(
       [
@@ -411,11 +411,11 @@ describe("output helpers (design.md §8)", () => {
   });
 
   it("redacts every log body on the way out", () => {
-    const output = rawRegion({
+    const output = redactResult(rawRegion({
       header: {},
       label: "stdout",
       body: "git fetch https://btsai:s3cr3t@github.com/org/repo\n",
-    });
+    }));
 
     expect(output).not.toContain("s3cr3t");
   });

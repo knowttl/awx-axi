@@ -8,7 +8,7 @@
  */
 import { encode } from "@toon-format/toon";
 
-import { redact, redactValue, trustFields } from "./redact.js";
+import { rawOutput, redact, redactValue, trustFields } from "./redact.js";
 import type { PagedResult } from "./transport.js";
 
 /** Row values after projection: whatever the encoder can put in a cell. */
@@ -137,7 +137,7 @@ export interface RawRegionOptions {
  * body run through the encoder becomes one escaped line, which costs tokens and
  * destroys readability at once.
  */
-export function rawRegion(options: RawRegionOptions): string {
+export function rawRegion(options: RawRegionOptions): Record<string, unknown> {
   const body = redact(options.body);
   const parts = [
     encode(redactValue(options.header)),
@@ -149,7 +149,7 @@ export function rawRegion(options: RawRegionOptions): string {
     parts.push(encode({ help: [...options.help] }));
   }
 
-  return parts.join("\n");
+  return rawOutput(parts.join("\n"));
 }
 
 function withHelp(
