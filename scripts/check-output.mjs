@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const allowances = {
-  "cli.ts": { streams: 3, encodes: 2 },
-  "core/auth.ts": { streams: 1 },
-  "core/profiles.ts": { streams: 1 },
-  "core/transport.ts": { streams: 1 },
+  "cli.ts": { streams: { "process.stdout": 3 }, encodes: 2 },
+  "core/auth.ts": { streams: { "process.stderr": 1 } },
+  "core/profiles.ts": { streams: { "process.stderr": 1 } },
+  "core/transport.ts": { streams: { "process.stderr": 1 } },
   "core/errors.ts": { encodes: 2 },
   "core/output.ts": { encodes: 2 },
   "domains/host/index.ts": { encodes: 4 },
@@ -104,26 +104,30 @@ export function checkOutput(sources) {
     const allowed = allowances[name] ?? {};
     const { isProcessReference } = collectProcessAliases(source);
     const isToonReference = collectToonAliases(source);
-    let streams = 0;
+    const streams = new Map();
     let encodes = 0;
     function visit(node) {
       if (ts.isIdentifier(node) && node.text === "console") errors.push(`${name}: console output`);
       if (isMemberAccess(node) && isProcessReference(node.expression)) {
         const member = memberName(node);
-        if (ts.isElementAccessExpression(node) ? member === undefined || STREAMS.includes(member) : STREAMS.includes(member)) streams++;
+        if (ts.isElementAccessExpression(node) && member === undefined) errors.push(`${name}: unknown process stream`);
+        else if (STREAMS.includes(member)) {
+          const reference = node.getText(source);
+          streams.set(reference, (streams.get(reference) ?? 0) + 1);
+        }
       }
       if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isProcessReference(node.initializer)) {
         for (const element of node.name.elements) {
           const property = element.propertyName ?? element.name;
           if (isUnknownComputedName(property)) errors.push(`${name}: unknown process stream`);
-          else if (isStreamName(property)) streams++;
+          else if (isStreamName(property)) errors.push(`${name}: unapproved process stream`);
         }
       }
       if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isProcessReference(node.right)) {
         for (const property of unwrap(node.left).properties) {
           if (!ts.isShorthandPropertyAssignment(property) && !ts.isPropertyAssignment(property)) continue;
           if (isUnknownComputedName(property.name)) errors.push(`${name}: unknown process stream`);
-          else if (isStreamName(property.name)) streams++;
+          else if (isStreamName(property.name)) errors.push(`${name}: unapproved process stream`);
         }
       }
       if (ts.isImportDeclaration(node) && PROCESS_MODULES.includes(node.moduleSpecifier.text)) {
@@ -134,21 +138,21 @@ export function checkOutput(sources) {
         const bindings = node.importClause?.namedBindings;
         if (node.importClause?.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => element.name.text !== "encode" || element.propertyName)) errors.push(`${name}: unsupported TOON import`);
       }
-      if (isMemberAccess(node) && isToonReference(node.expression) && memberName(node) === "encode") errors.push(`${name}: aliased TOON encoder`);
+      if (isMemberAccess(node) && isToonReference(node.expression) && (memberName(node) === "encode" || (ts.isElementAccessExpression(node) && memberName(node) === undefined))) errors.push(`${name}: aliased TOON encoder`);
       if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isToonReference(node.initializer) && node.name.elements.some((element) => {
         const property = element.propertyName ?? element.name;
-        return (ts.isComputedPropertyName(property) ? literalText(property.expression) : property.text) === "encode";
+        return isUnknownComputedName(property) || (ts.isComputedPropertyName(property) ? literalText(property.expression) : property.text) === "encode";
       })) errors.push(`${name}: aliased TOON encoder`);
       if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isToonReference(node.right) && unwrap(node.left).properties.some((property) => {
         if (!ts.isShorthandPropertyAssignment(property) && !ts.isPropertyAssignment(property)) return false;
-        return (ts.isComputedPropertyName(property.name) ? literalText(property.name.expression) : property.name.text) === "encode";
+        return isUnknownComputedName(property.name) || (ts.isComputedPropertyName(property.name) ? literalText(property.name.expression) : property.name.text) === "encode";
       })) errors.push(`${name}: aliased TOON encoder`);
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "encode") encodes++;
       if (ts.isIdentifier(node) && node.text === "encode" && !(ts.isCallExpression(node.parent) && node.parent.expression === node) && !ts.isImportSpecifier(node.parent)) errors.push(`${name}: aliased TOON encoder`);
       ts.forEachChild(node, visit);
     }
     visit(source);
-    if (streams > (allowed.streams ?? 0)) errors.push(`${name}: unapproved process stream`);
+    if ([...streams].some(([reference, count]) => count > (allowed.streams?.[reference] ?? 0))) errors.push(`${name}: unapproved process stream`);
     if (encodes > (allowed.encodes ?? 0)) errors.push(`${name}: unapproved TOON encode`);
   }
   return errors;

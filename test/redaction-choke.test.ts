@@ -236,6 +236,10 @@ describe("redaction guard", () => {
     ["aliased require member", "const toon = require('@toon-format/toon'); const other = toon; const render = other['encode']; render(secret)"],
     ["dynamic import destructuring", "const { ['encode']: render } = await import('@toon-format/toon'); render(secret)"],
     ["require destructuring assignment", "let render; ({ ['encode']: render } = require('@toon-format/toon')); render(secret)"],
+    ["dynamic import variable key", "const toon = await import('@toon-format/toon'); const key = 'encode'; const render = toon[key]; render(secret)"],
+    ["require variable key", "const key = 'encode'; const render = require('@toon-format/toon')[key]; render(secret)"],
+    ["dynamic import variable binding", "const key = 'encode'; const { [key]: render } = await import('@toon-format/toon'); render(secret)"],
+    ["require variable assignment", "const key = 'encode'; let render; ({ [key]: render } = require('@toon-format/toon')); render(secret)"],
   ])("rejects an encoder reached through %s", (_name, source) => {
     expect(checkOutput([["new.ts", source]])).not.toEqual([]);
   });
@@ -248,6 +252,15 @@ describe("redaction guard", () => {
     ["multiple assignment streams", "core/auth.ts", "let stderr, stdout; ({ stderr, stdout } = process);"],
   ])("counts a %s spelling against the per-file allowance", (_name, file, source) => {
     expect(checkOutput([[file, source]])).toContain(`${file}: unapproved process stream`);
+  });
+
+  it.each([
+    "const key = 'stdout'; const out = process[key]; out.write(secret)",
+    "import { stdout as out } from 'node:process'; out.write(secret)",
+    "import proc from 'node:process'; proc.stderr.write(secret)",
+    "process.stdout.write(secret)",
+  ])("rejects unapproved access in an allowed file: %s", (source) => {
+    expect(checkOutput([["core/auth.ts", source]])).not.toEqual([]);
   });
 
   it.each([
@@ -266,6 +279,7 @@ describe("redaction guard", () => {
     "const { ['decode']: parse } = await import('@toon-format/toon'); parse(value)",
     "const proc = require('node:process'); proc.cwd()",
     "other.require('node:process')",
+    "process['cwd'](); process.argv",
   ])("accepts unrelated module operations: %s", (source) => {
     expect(checkOutput([["new.ts", source]])).toEqual([]);
   });
