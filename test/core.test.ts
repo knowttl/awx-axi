@@ -417,6 +417,7 @@ describe("output helpers (design.md §8)", () => {
       body: "git fetch https://btsai:s3cr3t@github.com/org/repo\n",
     }));
 
+    expect(output).toContain("stdout:\ngit fetch https://***@github.com/org/repo");
     expect(output).not.toContain("s3cr3t");
   });
 });
