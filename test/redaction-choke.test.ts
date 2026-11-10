@@ -279,9 +279,12 @@ describe("redaction guard", () => {
     "const { ['decode']: parse } = await import('@toon-format/toon'); parse(value)",
     "const proc = require('node:process'); proc.cwd()",
     "other.require('node:process')",
-    "process['cwd'](); process.argv",
   ])("accepts unrelated module operations: %s", (source) => {
     expect(checkOutput([["new.ts", source]])).toEqual([]);
+  });
+
+  it("rejects computed process access previously covered by the guard", () => {
+    expect(checkOutput([["new.ts", "process['cwd']()"]])).not.toEqual([]);
   });
 
   it("fails the build for a guarded bypass", () => {

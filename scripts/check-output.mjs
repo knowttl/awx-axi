@@ -110,7 +110,7 @@ export function checkOutput(sources) {
       if (ts.isIdentifier(node) && node.text === "console") errors.push(`${name}: console output`);
       if (isMemberAccess(node) && isProcessReference(node.expression)) {
         const member = memberName(node);
-        if (ts.isElementAccessExpression(node) && member === undefined) errors.push(`${name}: unknown process stream`);
+        if (ts.isElementAccessExpression(node) && !STREAMS.includes(member)) errors.push(`${name}: unknown process stream`);
         else if (STREAMS.includes(member)) {
           const reference = node.getText(source);
           streams.set(reference, (streams.get(reference) ?? 0) + 1);
