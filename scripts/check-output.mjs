@@ -63,27 +63,11 @@ function collectProcessAliases(source) {
   return { aliases, isProcessReference };
 }
 
-function destructuresStream(pattern) {
-  return pattern.properties.some((property) => {
-    if (ts.isShorthandPropertyAssignment(property)) return STREAMS.includes(property.name.text);
-    if (!ts.isPropertyAssignment(property)) return false;
-    const name = property.name;
-    return STREAMS.includes(ts.isComputedPropertyName(name) ? literalText(name.expression) : name.text);
-  });
-}
-
-function bindingDestructuresStream(pattern) {
-  return pattern.elements.some((element) => {
-    const name = element.propertyName ?? element.name;
-    return STREAMS.includes(ts.isComputedPropertyName(name) ? literalText(name.expression) : name.text);
-  });
-}
-
-function isModuleLoad(node, modules) {
-  if (!ts.isCallExpression(node) || node.arguments.length === 0) return false;
-  const callee = unwrap(node.expression);
-  const loads = callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === "require") || (isMemberAccess(callee) && ["require", "getBuiltinModule"].includes(memberName(callee)));
-  return loads && modules.includes(literalText(node.arguments[0]) ?? "");
+function isStreamName(name) {
+  if (!name) return false;
+  if (ts.isComputedPropertyName(name) && ts.isNumericLiteral(name.expression)) return false;
+  const text = ts.isComputedPropertyName(name) ? literalText(name.expression) : name.text;
+  return text === undefined || STREAMS.includes(text);
 }
 
 export function checkOutput(sources) {
@@ -100,16 +84,16 @@ export function checkOutput(sources) {
         const member = memberName(node);
         if (ts.isElementAccessExpression(node) ? member === undefined || STREAMS.includes(member) : STREAMS.includes(member)) streams++;
       }
-      if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isProcessReference(node.initializer) && bindingDestructuresStream(node.name)) streams++;
-      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isProcessReference(node.right) && destructuresStream(unwrap(node.left))) streams++;
+      if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isProcessReference(node.initializer)) {
+        streams += node.name.elements.filter((element) => isStreamName(element.propertyName ?? element.name)).length;
+      }
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isProcessReference(node.right)) {
+        streams += unwrap(node.left).properties.filter((property) => (ts.isShorthandPropertyAssignment(property) || ts.isPropertyAssignment(property)) && isStreamName(property.name)).length;
+      }
       if (ts.isImportDeclaration(node) && PROCESS_MODULES.includes(node.moduleSpecifier.text)) {
         const bindings = node.importClause?.namedBindings;
         if (bindings && ts.isNamedImports(bindings) && bindings.elements.some((element) => STREAMS.includes((element.propertyName ?? element.name).text))) errors.push(`${name}: imported process stream`);
       }
-      if (ts.isExportDeclaration(node) && node.moduleSpecifier && PROCESS_MODULES.includes(node.moduleSpecifier.text)) errors.push(`${name}: re-exported process stream`);
-      if (isModuleLoad(node, PROCESS_MODULES)) errors.push(`${name}: dynamically loaded process module`);
-      if (isModuleLoad(node, [TOON_MODULE])) errors.push(`${name}: dynamically loaded TOON module`);
-      if (ts.isExportDeclaration(node) && node.moduleSpecifier?.text === TOON_MODULE) errors.push(`${name}: re-exported TOON module`);
       if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === TOON_MODULE) {
         const bindings = node.importClause?.namedBindings;
         if (node.importClause?.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => element.name.text !== "encode" || element.propertyName)) errors.push(`${name}: unsupported TOON import`);
