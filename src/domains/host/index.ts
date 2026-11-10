@@ -23,6 +23,7 @@ import {
 import type { Query, ReadBudget } from "../../core/transport.js";
 
 const DEFAULT_LIST_LIMIT = 100;
+const MIN_PREVIEW_CHARS = 32;
 
 const LIST_SCHEMA = {
   label: "hosts",
@@ -396,18 +397,31 @@ function* inspectPlan(input: SubcommandInput): Plan<DomainResult> {
     const values = fields.filter(([owner, key]) => owner[key] !== undefined)
       .map(([owner, key]) => ({ owner, key, text: encode({ [key]: owner[key] }) }))
       .sort((left, right) => right.text.length - left.text.length);
+    const truncations: { text: string; preview: { truncated: true; total_chars: number; preview: string } }[] = [];
+    const setPreviewLength = (length: number) => {
+      for (const { text, preview } of truncations) preview.preview = text.slice(0, length);
+    };
+    const overBudget = () => encode({ hosts: [row] }).length > rowLimit;
     for (const { owner, key, text } of values) {
-      if (encode({ hosts: [row] }).length <= rowLimit) break;
+      if (!overBudget()) break;
       if (text.length <= 100) continue;
-      const preview = { truncated: true, total_chars: text.length, preview: text.slice(0, Math.floor(rowLimit / 8)) };
+      const preview = { truncated: true as const, total_chars: text.length, preview: "" };
       owner[key] = preview;
+      truncations.push({ text, preview });
       if (row.status === "complete") row.status = "failed";
       row.complete = false;
       row.code = "OUTPUT_BUDGET";
-      while (preview.preview.length > 0 && encode({ hosts: [row] }).length > rowLimit) {
-        preview.preview = preview.preview.slice(0, Math.floor(preview.preview.length / 2));
-      }
+      setPreviewLength(MIN_PREVIEW_CHARS);
     }
+    let shortest = MIN_PREVIEW_CHARS;
+    let longest = Math.floor(rowLimit / 8);
+    while (truncations.length > 0 && shortest < longest) {
+      const middle = Math.ceil((shortest + longest) / 2);
+      setPreviewLength(middle);
+      if (overBudget()) longest = middle - 1;
+      else shortest = middle;
+    }
+    setPreviewLength(shortest);
     hosts.push(row);
   }
   const complete = hosts.every((host) => host.complete === true);
