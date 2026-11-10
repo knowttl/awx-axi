@@ -230,6 +230,12 @@ describe("redaction guard", () => {
     ["destructured alias", "import { encode } from '@toon-format/toon'; const { call } = encode; call(secret)"],
     ["call helper", "import { encode } from '@toon-format/toon'; encode.call(undefined, secret)"],
     ["object member alias", "import { encode } from '@toon-format/toon'; const output = { render: encode }; output.render(secret)"],
+    ["dynamic import member", "const toon = await import('@toon-format/toon'); const render = toon['encode']; render(secret)"],
+    ["direct require member", "const render = require('@toon-format/toon')['encode']; render(secret)"],
+    ["direct dynamic import member", "const render = (await import('@toon-format/toon'))[`encode`]; render(secret)"],
+    ["aliased require member", "const toon = require('@toon-format/toon'); const other = toon; const render = other['encode']; render(secret)"],
+    ["dynamic import destructuring", "const { ['encode']: render } = await import('@toon-format/toon'); render(secret)"],
+    ["require destructuring assignment", "let render; ({ ['encode']: render } = require('@toon-format/toon')); render(secret)"],
   ])("rejects an encoder reached through %s", (_name, source) => {
     expect(checkOutput([["new.ts", source]])).not.toEqual([]);
   });
@@ -245,9 +251,19 @@ describe("redaction guard", () => {
   });
 
   it.each([
+    "const key = 'stdout'; const { [key]: out } = process; out.write(secret)",
+    "const key = 'stdout'; let out; ({ [key]: out } = process); out.write(secret)",
+  ])("rejects unknown destructured keys regardless of allowance: %s", (source) => {
+    expect(checkOutput([["core/auth.ts", source]])).not.toEqual([]);
+    expect(checkOutput([["core/auth.ts", `process.stderr.write(x); ${source}`]])).not.toEqual([]);
+  });
+
+  it.each([
     "export { cwd } from 'node:process'",
     "export { decode } from '@toon-format/toon'",
     "const toon = await import('@toon-format/toon'); toon.decode(value)",
+    "const toon = require('@toon-format/toon'); toon['decode'](value)",
+    "const { ['decode']: parse } = await import('@toon-format/toon'); parse(value)",
     "const proc = require('node:process'); proc.cwd()",
     "other.require('node:process')",
   ])("accepts unrelated module operations: %s", (source) => {

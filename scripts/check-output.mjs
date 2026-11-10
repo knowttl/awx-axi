@@ -65,9 +65,36 @@ function collectProcessAliases(source) {
 
 function isStreamName(name) {
   if (!name) return false;
-  if (ts.isComputedPropertyName(name) && ts.isNumericLiteral(name.expression)) return false;
   const text = ts.isComputedPropertyName(name) ? literalText(name.expression) : name.text;
-  return text === undefined || STREAMS.includes(text);
+  return STREAMS.includes(text);
+}
+
+function isUnknownComputedName(name) {
+  return name && ts.isComputedPropertyName(name) && literalText(name.expression) === undefined && !ts.isNumericLiteral(name.expression);
+}
+
+function collectToonAliases(source) {
+  const aliases = new Set();
+  function isToonReference(node) {
+    node = unwrap(node);
+    if (!node) return false;
+    if (ts.isAwaitExpression(node)) return isToonReference(node.expression);
+    if (ts.isIdentifier(node)) return aliases.has(node.text);
+    if (!ts.isCallExpression(node) || node.arguments.length !== 1 || literalText(node.arguments[0]) !== TOON_MODULE) return false;
+    const callee = unwrap(node.expression);
+    return callee.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(callee) && callee.text === "require");
+  }
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isToonReference(node.initializer)) aliases.add(node.name.text);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(unwrap(node.left)) && isToonReference(node.right)) aliases.add(unwrap(node.left).text);
+    ts.forEachChild(node, visit);
+  }
+  let size;
+  do {
+    size = aliases.size;
+    visit(source);
+  } while (aliases.size !== size);
+  return isToonReference;
 }
 
 export function checkOutput(sources) {
@@ -76,6 +103,7 @@ export function checkOutput(sources) {
     const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true);
     const allowed = allowances[name] ?? {};
     const { isProcessReference } = collectProcessAliases(source);
+    const isToonReference = collectToonAliases(source);
     let streams = 0;
     let encodes = 0;
     function visit(node) {
@@ -85,10 +113,18 @@ export function checkOutput(sources) {
         if (ts.isElementAccessExpression(node) ? member === undefined || STREAMS.includes(member) : STREAMS.includes(member)) streams++;
       }
       if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isProcessReference(node.initializer)) {
-        streams += node.name.elements.filter((element) => isStreamName(element.propertyName ?? element.name)).length;
+        for (const element of node.name.elements) {
+          const property = element.propertyName ?? element.name;
+          if (isUnknownComputedName(property)) errors.push(`${name}: unknown process stream`);
+          else if (isStreamName(property)) streams++;
+        }
       }
       if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isProcessReference(node.right)) {
-        streams += unwrap(node.left).properties.filter((property) => (ts.isShorthandPropertyAssignment(property) || ts.isPropertyAssignment(property)) && isStreamName(property.name)).length;
+        for (const property of unwrap(node.left).properties) {
+          if (!ts.isShorthandPropertyAssignment(property) && !ts.isPropertyAssignment(property)) continue;
+          if (isUnknownComputedName(property.name)) errors.push(`${name}: unknown process stream`);
+          else if (isStreamName(property.name)) streams++;
+        }
       }
       if (ts.isImportDeclaration(node) && PROCESS_MODULES.includes(node.moduleSpecifier.text)) {
         const bindings = node.importClause?.namedBindings;
@@ -98,6 +134,15 @@ export function checkOutput(sources) {
         const bindings = node.importClause?.namedBindings;
         if (node.importClause?.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => element.name.text !== "encode" || element.propertyName)) errors.push(`${name}: unsupported TOON import`);
       }
+      if (isMemberAccess(node) && isToonReference(node.expression) && memberName(node) === "encode") errors.push(`${name}: aliased TOON encoder`);
+      if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isToonReference(node.initializer) && node.name.elements.some((element) => {
+        const property = element.propertyName ?? element.name;
+        return (ts.isComputedPropertyName(property) ? literalText(property.expression) : property.text) === "encode";
+      })) errors.push(`${name}: aliased TOON encoder`);
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isToonReference(node.right) && unwrap(node.left).properties.some((property) => {
+        if (!ts.isShorthandPropertyAssignment(property) && !ts.isPropertyAssignment(property)) return false;
+        return (ts.isComputedPropertyName(property.name) ? literalText(property.name.expression) : property.name.text) === "encode";
+      })) errors.push(`${name}: aliased TOON encoder`);
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "encode") encodes++;
       if (ts.isIdentifier(node) && node.text === "encode" && !(ts.isCallExpression(node.parent) && node.parent.expression === node) && !ts.isImportSpecifier(node.parent)) errors.push(`${name}: aliased TOON encoder`);
       ts.forEachChild(node, visit);
