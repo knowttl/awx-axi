@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.13...awx-axi-v0.1.14) (2026-11-10)
+
+
+### Bug Fixes
+
+* preserve nonempty host inspection previews ([#89](https://github.com/knowttl/awx-axi/issues/89)) ([88002bf](https://github.com/knowttl/awx-axi/commit/88002bf2a6d150f2fc6d3fa7ae43a5c3d8c4795f))
+
 ## [0.1.13](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.12...awx-axi-v0.1.13) (2026-11-10)
 
 
