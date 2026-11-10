@@ -24,6 +24,10 @@ export function checkOutput(sources) {
       if (ts.isIdentifier(node) && node.text === "console") errors.push(`${name}: console output`);
       if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "process" && ["stdout", "stderr"].includes(node.name.text)) streams++;
       if (ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "process") streams++;
+      if (ts.isImportDeclaration(node) && ["node:process", "process"].includes(node.moduleSpecifier.text)) {
+        const bindings = node.importClause?.namedBindings;
+        if (bindings && ts.isNamedImports(bindings) && bindings.elements.some((element) => ["stdout", "stderr"].includes((element.propertyName ?? element.name).text))) errors.push(`${name}: imported process stream`);
+      }
       if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === "@toon-format/toon") {
         const bindings = node.importClause?.namedBindings;
         if (!bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => element.name.text !== "encode" || element.propertyName)) errors.push(`${name}: unsupported TOON import`);

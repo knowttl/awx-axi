@@ -94,6 +94,27 @@ describe("secret redaction choke point", () => {
     });
   });
 
+  it("redacts a registered long password inside a longer token", async () => {
+    await withPrivateFile("abc12345", async (file) => {
+      const run = await runCli(["user", "create", "alice", "--password-file", file, "--confirm"], {
+        env: WRITES_ON, script: [{ status: 400, body: { detail: "invalid abc12345suffix" } }],
+      });
+      expect(run.stdout).toContain("invalid ***suffix");
+      expect(run.stdout).not.toContain("abc12345");
+    });
+  });
+
+  it("redacts credential edit inputs without a credential type", async () => {
+    await withPrivateFile('{"custom_field":"longsecret"}', async (file) => {
+      const run = await runCli(["credential", "edit", "7", "--inputs-file", file, "--confirm"], {
+        env: WRITES_ON, script: [{ status: 400, body: { detail: "invalid longsecret" } }],
+      });
+      expect(run.transport.requests[0]).toMatchObject({ method: "PATCH", route: "credentials/7/", body: { inputs: { custom_field: "longsecret" } } });
+      expect(run.stdout).toContain("invalid ***");
+      expect(run.stdout).not.toContain("longsecret");
+    });
+  });
+
   it("redacts controller protocol fields and response echoes", async () => {
     const run = await runCli(["api", "get", "jobs/7/"], { script: [{ status: 200, body: {
       message: "echo longsecret", status: ["rejected: longsecret"], code: "longsecret", action: ["longsecret"], password: "longsecret",
@@ -148,6 +169,10 @@ describe("secret redaction choke point", () => {
 describe("redaction guard", () => {
   it.each(["process.stdout.write(secret)", "process.stderr.write(secret)", "process['stdout'].write(secret)", "process['stderr'].write(secret)", "console.log(secret)", "encode(secret)", "import { encode } from '@toon-format/toon'; const render = encode; render(secret)", "import { encode as render } from '@toon-format/toon'; render(secret)"])("rejects bypass %s", (source) => {
     expect(checkOutput([["new.ts", source]])).not.toEqual([]);
+  });
+
+  it.each(["stdout", "stderr"])("rejects an imported %s stream", (stream) => {
+    expect(checkOutput([["new.ts", `import { ${stream} as output } from 'node:process'; output.write(secret)`]])).not.toEqual([]);
   });
 
   it("accepts a command returning data for the output boundary", () => {

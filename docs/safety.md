@@ -49,6 +49,8 @@ Use the least privilege needed for the requested commands.
 Credentials stay in environment references, private files or protected local state.
 See [authentication and credentials](credentials.md) for storage and platform permissions.
 Secrets are redacted from structured output; resource data and logs can still contain sensitive operational content.
+Registered secrets of at least eight characters are masked wherever they occur in text, including inside longer words.
+Shorter registered secrets are masked only at word boundaries to preserve ordinary prose, so they can remain visible inside longer words.
 Controller requests send authentication plus requested query parameters or mutation payloads to the selected origin.
 Discovery makes unauthenticated metadata reads.
 Installation, skill installation and update commands contact their package or source services.
