@@ -199,7 +199,7 @@ function* testPlan(input: SubcommandInput): Plan<DomainResult> {
   if (response.status !== 202 && response.status !== 200 && response.status !== 201) throw errorForResponse(response, { subject: `notification template ${id} test` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   const status = typeof body.status === "string" ? body.status : "pending";
-  return detailOutput({ label: "notification_test", fields: { notification_template: id, notification: body.notification ?? null, status } });
+  return detailOutput({ trustedFields: typeof body.status !== "string" ? ["status"] : [], label: "notification_test", fields: { notification_template: id, notification: body.notification ?? null, status } });
 }
 
 function* copyPlan(input: SubcommandInput): Plan<DomainResult> {

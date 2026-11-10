@@ -642,6 +642,7 @@ function* syncPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   return detailOutput({
+    trustedFields: resBody.status == null ? ["status"] : [],
     label: "inventory_update",
     fields: {
       id: updateId,

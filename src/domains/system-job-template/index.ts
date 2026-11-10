@@ -110,7 +110,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   if (response.status !== 201 && response.status !== 202 && response.status !== 200) throw errorForResponse(response, { subject: `system job template ${id}` });
   const body = (response.body ?? {}) as Record<string, unknown>;
   const jobId = typeof body.system_job === "number" ? body.system_job : typeof body.id === "number" ? body.id : 0;
-  return detailOutput({ label: "system_job", fields: { id: jobId, template: id, status: body.status ?? "pending" }, help: [`Run \`awx-axi system-job show ${jobId}\` to inspect the maintenance job`] });
+  return detailOutput({ trustedFields: body.status == null ? ["status"] : [], label: "system_job", fields: { id: jobId, template: id, status: body.status ?? "pending" }, help: [`Run \`awx-axi system-job show ${jobId}\` to inspect the maintenance job`] });
 }
 
 function* showPlan(input: SubcommandInput): Plan<DomainResult> {

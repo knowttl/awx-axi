@@ -417,6 +417,7 @@ function* launchPlan(input: SubcommandInput): Plan<DomainResult> {
   }
 
   return detailOutput({
+    trustedFields: typeof resBody.status !== "string" ? ["status"] : [],
     label: "job",
     fields: {
       id: jobId,

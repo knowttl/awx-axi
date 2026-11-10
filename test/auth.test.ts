@@ -55,6 +55,35 @@ describe("credential profiles", () => {
       process.exitCode = previousExitCode;
     }
   });
+
+  it.each([
+    [["job", "relaunch", "7", "--type", "job", "--confirm"], "pending", {}, "pending"],
+    [["job", "relaunch", "7", "--type", "job", "--confirm"], "pending", { status: "pending" }, "***"],
+    [["job", "cancel", "7", "--type", "job", "--confirm"], "canceled", { status: null }, "canceled"],
+    [["job", "cancel", "7", "--type", "job", "--confirm"], "canceled", { status: "canceled" }, "***"],
+    [["inventory", "sync", "7", "--confirm"], "pending", {}, "pending"],
+    [["inventory", "sync", "7", "--confirm"], "pending", { status: "pending" }, "***"],
+    [["system-job-template", "launch", "7", "--confirm"], "pending", {}, "pending"],
+    [["system-job-template", "launch", "7", "--confirm"], "pending", { status: "pending" }, "***"],
+    [["notification-template", "test", "7", "--confirm"], "pending", {}, "pending"],
+    [["notification-template", "test", "7", "--confirm"], "pending", { status: "pending" }, "***"],
+  ])("preserves only CLI fallback status for %j", async (argv, token, body, expected) => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_TOKEN: token };
+    const transport = new RecordedTransport([{ status: 202, body: { id: 8, ...body } }], { env });
+    const chunks: string[] = [];
+    const previousExitCode = process.exitCode;
+    process.exitCode = 0;
+    try {
+      await main({ argv, env, stdout: { write: (chunk) => { chunks.push(chunk); } }, createTransport: () => {
+        resolveCredential(env);
+        return transport;
+      } });
+      expect(Number(process.exitCode)).toBe(0);
+      expect(chunks.join("")).toContain(`status: ${expected}`);
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
   it("explains how to configure a missing profile before any request", async () => {
     const run = await runCli(["auth", "status"], { env: environment() });
     expect(run.exitCode).toBe(1);
