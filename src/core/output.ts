@@ -8,7 +8,7 @@
  */
 import { encode } from "@toon-format/toon";
 
-import { redact, redactValue } from "./redact.js";
+import { redact, redactValue, trustFields } from "./redact.js";
 import type { PagedResult } from "./transport.js";
 
 /** Row values after projection: whatever the encoder can put in a cell. */
@@ -91,7 +91,7 @@ export interface DetailOutputOptions {
 export function detailOutput(
   options: DetailOutputOptions,
 ): Record<string, unknown> {
-  const fields = Object.fromEntries(Object.entries(options.fields).map(([key, value]) => [key, redactValue(value)]));
+  const fields = redactValue(options.label === "dry_run" ? trustFields(options.fields, ["action"]) : options.fields);
   return withHelp({ [options.label]: fields }, options.help);
 }
 

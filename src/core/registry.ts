@@ -8,7 +8,7 @@
  */
 import { validationError } from "./errors.js";
 import type { PageBudget } from "./paginate.js";
-import { registerSecret, registerSensitiveValues } from "./redact.js";
+import { registerSensitiveValues } from "./redact.js";
 import {
   assertNoSecretFlags,
   assertUsableArity,
@@ -258,11 +258,8 @@ export async function runPlan<T>(
       step = plan.throw(error);
       continue;
     }
-    if (request.kind === "write") {
-      const response = result as AwxResponse;
-      if (response.body && typeof response.body === "object" &&
-        "token" in response.body && typeof response.body.token === "string") registerSecret(response.body.token);
-    }
+    if (request.kind === "read" || request.kind === "write") registerSensitiveValues((result as AwxResponse).body);
+    if (request.kind === "readPaged") registerSensitiveValues((result as PagedResult).rows);
     step = plan.next(result);
   }
 

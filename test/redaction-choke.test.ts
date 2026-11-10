@@ -96,11 +96,30 @@ describe("secret redaction choke point", () => {
 
   it("redacts controller protocol fields and response echoes", async () => {
     const run = await runCli(["api", "get", "jobs/7/"], { script: [{ status: 200, body: {
-      message: "echo longsecret", status: ["rejected: longsecret"], password: "longsecret",
+      message: "echo longsecret", status: ["rejected: longsecret"], code: "longsecret", action: ["longsecret"], password: "longsecret",
     } }] });
     expect(run.stdout).not.toContain("longsecret");
     expect(run.stdout).toContain("echo ***");
     expect(run.stdout).toContain("rejected: ***");
+  });
+
+  it("preserves the CLI dry-run action when it equals a password", async () => {
+    await withPrivateFile("create", async (file) => {
+      const run = await runCli(["user", "create", "alice", "--password-file", file]);
+      expect(run.stdout).toContain("action: create");
+    });
+  });
+
+  it("registers numeric response secrets before masking", async () => {
+    const run = await runCli(["api", "get", "jobs/7/"], { script: [{ status: 200, body: { password: 123456, message: "echo 123456" } }] });
+    expect(run.stdout).toContain("echo ***");
+    expect(run.stdout).not.toContain("123456");
+  });
+
+  it("registers dedicated command error response secrets", async () => {
+    const run = await runCli(["user", "show", "7"], { script: [{ status: 400, body: { password: "longsecret", detail: "echo longsecret" } }] });
+    expect(run.stdout).toContain("echo ***");
+    expect(run.stdout).not.toContain("longsecret");
   });
 
   it("redacts a domain result that bypasses detailOutput", async () => {
@@ -127,7 +146,7 @@ describe("secret redaction choke point", () => {
 });
 
 describe("redaction guard", () => {
-  it.each(["process.stdout.write(secret)", "process.stderr.write(secret)", "console.log(secret)", "encode(secret)"])("rejects bypass %s", (source) => {
+  it.each(["process.stdout.write(secret)", "process.stderr.write(secret)", "process['stdout'].write(secret)", "process['stderr'].write(secret)", "console.log(secret)", "encode(secret)", "import { encode } from '@toon-format/toon'; const render = encode; render(secret)", "import { encode as render } from '@toon-format/toon'; render(secret)"])("rejects bypass %s", (source) => {
     expect(checkOutput([["new.ts", source]])).not.toEqual([]);
   });
 

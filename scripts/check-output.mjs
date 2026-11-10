@@ -23,11 +23,13 @@ export function checkOutput(sources) {
     function visit(node) {
       if (ts.isIdentifier(node) && node.text === "console") errors.push(`${name}: console output`);
       if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "process" && ["stdout", "stderr"].includes(node.name.text)) streams++;
+      if (ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "process") streams++;
       if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === "@toon-format/toon") {
         const bindings = node.importClause?.namedBindings;
         if (!bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => element.name.text !== "encode" || element.propertyName)) errors.push(`${name}: unsupported TOON import`);
       }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "encode") encodes++;
+      if (ts.isIdentifier(node) && node.text === "encode" && !(ts.isCallExpression(node.parent) && node.parent.expression === node) && !ts.isImportSpecifier(node.parent)) errors.push(`${name}: aliased TOON encoder`);
       ts.forEachChild(node, visit);
     }
     visit(source);

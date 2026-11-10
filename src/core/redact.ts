@@ -21,6 +21,7 @@ const ENCRYPTED = /\$encrypted\$[^\s"'&]*/g;
 export const REDACTION = "***";
 
 const secrets = new Set<string>();
+const trustedFields = new WeakMap<object, ReadonlySet<string>>();
 
 export function registerSecret(secret: string): void {
   if (secret.length === 0) return;
@@ -31,6 +32,7 @@ export function registerSecret(secret: string): void {
 
 export function registerSecretValues(value: unknown): void {
   if (typeof value === "string") registerSecret(value);
+  else if (typeof value === "number" || typeof value === "boolean") registerSecret(String(value));
   else if (value !== null && typeof value === "object") {
     for (const entry of Object.values(value)) registerSecretValues(entry);
   }
@@ -100,11 +102,20 @@ export function redactValue(value: unknown, key = ""): unknown {
   if (Array.isArray(value)) return value.map((entry) => redactValue(entry, key));
   if (value === null || typeof value !== "object") return value;
   const credential = "credential_type" in value;
-  return Object.fromEntries(Object.entries(value).map(([field, raw]) => {
+  const trusted = trustedFields.get(value);
+  const result = Object.fromEntries(Object.entries(value).map(([field, raw]) => {
+    if (trusted?.has(field)) return [field, raw];
     if (!isSensitiveKey(field) && !(credential && field === "inputs")) return [field, redactValue(raw, field)];
     registerSecretValues(raw);
     return [field, REDACTION];
   }));
+  if (trusted) trustedFields.set(result, trusted);
+  return result;
+}
+
+export function trustFields<T extends object>(value: T, fields: readonly string[]): T {
+  trustedFields.set(value, new Set(fields));
+  return value;
 }
 
 export function registerSensitiveValues(value: unknown): void {
