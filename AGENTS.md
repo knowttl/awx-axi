@@ -36,6 +36,7 @@ Exempt: validation-boundary tests, contract tests against an agreed schema or re
 ## External alignment and roadmap notes
 
 - This repository should treat `https://docs.ansible.com/projects/awx/en/latest/rest_api/api_ref.html` as the current AWX reference, and `https://docs.ansible.com/projects/awx/en/24.6.1/rest_api/` plus existing `docs/design.md` and `$tag` checks as the compatibility anchor for behavior currently frozen in 24.6.1.
+- All CLI output passes through the redaction choke point in `src/core/redact.ts`, and every secret must be registered with `registerSecret`; never add a print path that bypasses it, and `scripts/check-output.mjs` fails the build on direct stream writes.
 - Keep the safety-gate contract in place by preserving `src/core/registry.ts` request kinds, `test/write-safety.test.ts`, and the captain's controller boundary.
 - The historical read-coverage audit is preserved on `archive/internal-docs`; `src/cli.ts` owns the current shipped domain inventory.
 - Use `https://raw.githubusercontent.com/surgex-labs/awx-mcp-server/main/AWX_MCP_QUERY_REFERENCE.md` as the awx-mcp capability source, and treat sections 13, 14, 15, 16, and 17 in that file as local Ansible/workspace capabilities rather than AWX REST API resources.

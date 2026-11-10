@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -192,6 +192,71 @@ describe("redaction guard", () => {
 
   it.each(["stdout", "stderr"])("rejects an imported %s stream", (stream) => {
     expect(checkOutput([["new.ts", `import { ${stream} as output } from 'node:process'; output.write(secret)`]])).not.toEqual([]);
+  });
+
+  describe.each(["stdout", "stderr"])("%s stream spellings", (stream) => {
+    it.each([
+      ["bracket notation", `process['${stream}'].write(secret)`],
+      ["template bracket notation", `process[\`${stream}\`].write(secret)`],
+      ["default import", `import proc from 'node:process'; proc.${stream}.write(secret)`],
+      ["default import with bracket notation", `import proc from 'process'; proc['${stream}'].write(secret)`],
+      ["namespace import", `import * as proc from 'node:process'; proc.${stream}.write(secret)`],
+      ["destructured global process", `const { ${stream} } = process; ${stream}.write(secret)`],
+      ["renamed destructured global process", `const { ${stream}: out } = process; out.write(secret)`],
+      ["computed-key destructured global process", `const { ['${stream}']: out } = process; out.write(secret)`],
+      ["destructured default import", `import proc from 'node:process'; const { ${stream} } = proc; ${stream}.write(secret)`],
+      ["destructured namespace import", `import * as proc from 'node:process'; const { ${stream} } = proc; ${stream}.write(secret)`],
+      ["destructuring assignment", `let out; ({ ${stream}: out } = process); out.write(secret)`],
+      ["globalThis process", `globalThis.process.${stream}.write(secret)`],
+      ["global process with bracket notation", `global['process']['${stream}'].write(secret)`],
+      ["destructured globalThis process", `const { ${stream} } = globalThis.process; ${stream}.write(secret)`],
+      ["aliased process", `const p = process; p.${stream}.write(secret)`],
+      ["twice aliased process", `const p = process; const q = p; q.${stream}.write(secret)`],
+      ["parenthesized process", `(process as NodeJS.Process).${stream}.write(secret)`],
+      ["dynamic key", `process[key].write(secret)`],
+      ["dynamic import", `const proc = await import('node:process'); proc.${stream}.write(secret)`],
+      ["require", `const proc = require('node:process'); proc.${stream}.write(secret)`],
+      ["built-in module lookup", `const proc = process.getBuiltinModule('node:process'); proc.${stream}.write(secret)`],
+      ["re-export", `export { ${stream} } from 'node:process'`],
+    ])("rejects %s", (_name, source) => {
+      expect(checkOutput([["new.ts", source]])).not.toEqual([]);
+    });
+  });
+
+  it.each([
+    ["namespace import", "import * as toon from '@toon-format/toon'; toon.encode(secret)"],
+    ["default import", "import toon from '@toon-format/toon'; toon.encode(secret)"],
+    ["renamed import", "import { encode as render } from '@toon-format/toon'; render(secret)"],
+    ["variable alias", "import { encode } from '@toon-format/toon'; const render = encode; render(secret)"],
+    ["destructured alias", "import { encode } from '@toon-format/toon'; const { call } = encode; call(secret)"],
+    ["call helper", "import { encode } from '@toon-format/toon'; encode.call(undefined, secret)"],
+    ["object member alias", "import { encode } from '@toon-format/toon'; const output = { render: encode }; output.render(secret)"],
+    ["re-export", "export { encode } from '@toon-format/toon'"],
+    ["dynamic import", "const toon = await import('@toon-format/toon'); toon.encode(secret)"],
+    ["require", "const toon = require('@toon-format/toon'); toon.encode(secret)"],
+  ])("rejects an encoder reached through %s", (_name, source) => {
+    expect(checkOutput([["new.ts", source]])).not.toEqual([]);
+  });
+
+  it.each([
+    ["process stream", "cli.ts", Array.from({ length: 4 }, () => "process.stdout.write(x);").join("")],
+    ["aliased process stream", "cli.ts", "import proc from 'node:process';" + Array.from({ length: 4 }, () => "proc.stdout.write(x);").join("")],
+    ["destructured process stream", "cli.ts", "process.stdout.write(x); process.stdout.write(x); process.stderr.write(x); const { stdout } = process;"],
+  ])("counts a %s spelling against the per-file allowance", (_name, file, source) => {
+    expect(checkOutput([[file, source]])).toContain(`${file}: unapproved process stream`);
+  });
+
+  it("runs in the build before compilation", () => {
+    const { scripts } = JSON.parse(readFileSync(join(import.meta.dirname, "../package.json"), "utf8")) as { scripts: Record<string, string> };
+    expect(scripts.build?.startsWith("node scripts/check-output.mjs && ")).toBe(true);
+  });
+
+  it("accepts the shipped sources", () => {
+    const root = join(import.meta.dirname, "../src");
+    const sources = (readdirSync(root, { recursive: true, encoding: "utf8" }))
+      .filter((path) => path.endsWith(".ts"))
+      .map((path): [string, string] => [path, readFileSync(join(root, path), "utf8")]);
+    expect(checkOutput(sources)).toEqual([]);
   });
 
   it("accepts a command returning data for the output boundary", () => {
