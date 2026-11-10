@@ -95,12 +95,12 @@ describe("credential profiles", () => {
     expect(run.transport.requests).toHaveLength(0);
   });
 
-  it.each(["t", "token", "1234567"])("preserves prose when a short token is resolved: %s", async (token) => {
+  it.each([["t", "operator-token-1234567"], ["token", "operator-***-1234567"], ["1234567", "operator-token-***"]])("applies word boundaries when a short token is resolved: %s", async (token, expected) => {
     const env = { ...environment(), PRODUCTION_PAT: token };
     configure(env, { production });
     const run = await runCli(["auth", "status"], { env, script: [{ status: 200, body: { results: [{ username: "operator-token-1234567" }] } }] });
     expect(run.exitCode).toBe(0);
-    expect(run.stdout).toContain("user: operator-token-1234567");
+    expect(run.stdout).toContain(`user: ${expected}`);
     expect(run.stdout).toContain("profile: production");
   });
 

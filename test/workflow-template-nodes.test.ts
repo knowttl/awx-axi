@@ -168,7 +168,7 @@ describe("workflow template-node inspection", () => {
     expect(run.stdout).toContain("unified_job_type: job");
     expect(run.stdout).toContain("unified_job_template: 12 (Deploy web tier)");
     expect(run.stdout).toContain("Production inventory");
-    expect(run.stdout).toContain("SSH deploy");
+    expect(run.stdout).toContain("SSH ***");
     expect(run.stdout).toContain("Control EE");
     expect(run.stdout).toContain("all_parents_must_converge: true");
     expect(run.stdout).toContain("release");
@@ -523,7 +523,7 @@ describe("workflow template-node inspection", () => {
       "workflow_job_template_nodes/71/credentials/",
     );
     expect(run.transport.requests.every((request) => request.method === "GET")).toBe(true);
-    expect(run.stdout).toContain("SSH deploy");
+    expect(run.stdout).toContain("SSH ***");
     expect(run.stdout).toContain("credential_type");
     expect(run.stdout).toContain("1 (Machine)");
     expect(run.stdout).toContain("credentials_total: 1");

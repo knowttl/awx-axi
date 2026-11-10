@@ -286,8 +286,8 @@ describe("redaction (design.md §6.4)", () => {
     clearSecrets();
     try {
       registerSecret(secret);
-      expect(redactValue({ token: secret, nested: { password: secret }, description: `ordinary text token 1234567 ${secret}` })).toEqual({
-        token: "***", nested: { password: "***" }, description: `ordinary text token 1234567 ${secret}`,
+      expect(redactValue({ token: secret, nested: { password: secret }, description: `prefix${secret}suffix ${secret}` })).toEqual({
+        token: "***", nested: { password: "***" }, description: `prefix${secret}suffix ***`,
       });
     } finally {
       clearSecrets();

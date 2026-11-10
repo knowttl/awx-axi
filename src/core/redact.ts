@@ -32,10 +32,12 @@ export function registerSecret(secret: string): void {
 }
 
 export function registerSecretValues(value: unknown): void {
-  if (typeof value === "string") registerSecret(value);
-  else if (typeof value === "number" || typeof value === "boolean") registerSecret(String(value));
-  else if (value !== null && typeof value === "object") {
-    for (const entry of Object.values(value)) registerSecretValues(entry);
+  const pending = [value];
+  while (pending.length > 0) {
+    const entry = pending.pop();
+    if (typeof entry === "string") registerSecret(entry);
+    else if (typeof entry === "number" || typeof entry === "boolean") registerSecret(String(entry));
+    else if (entry !== null && typeof entry === "object") pending.push(...Object.values(entry));
   }
 }
 
@@ -120,7 +122,19 @@ export function trustFields<T extends object>(value: T, fields: readonly string[
 }
 
 export function registerSensitiveValues(value: unknown): void {
-  redactValue(value);
+  const pending = [value];
+  while (pending.length > 0) {
+    const entry = pending.pop();
+    if (entry === null || typeof entry !== "object") continue;
+    const credential = "credential_type" in entry;
+    const trusted = trustedFields.get(entry);
+    for (const [key, raw] of Object.entries(entry)) {
+      if (trusted?.has(key)) continue;
+      if (isSensitiveKey(key) || (credential && key === "inputs")) registerSecretValues(raw);
+      else if (key === "extra_vars" && typeof raw === "string") redactExtraVars(raw);
+      else pending.push(raw);
+    }
+  }
 }
 
 export function rawOutput(value: string): Record<string, unknown> {
@@ -130,6 +144,6 @@ export function rawOutput(value: string): Record<string, unknown> {
 export function redactResult(result: string | Record<string, unknown>): string | Record<string, unknown> {
   if (typeof result === "string") return redact(result);
   if (RAW_OUTPUT in result) return result[RAW_OUTPUT] as string;
-  registerSensitiveValues(result);
+  for (const section of Object.values(result)) registerSensitiveValues(section);
   return Object.fromEntries(Object.entries(result).map(([label, section]) => [label, redactValue(section, label)]));
 }
