@@ -14,6 +14,8 @@ npm run docs:commands -- --check
 Local validation is the required gate for changes; hosted PR test CI is not used.
 The repository validation configuration runs build, typecheck, tests and lint; also check command-documentation drift with the command above.
 Release automation remains separate and retains tags in the `awx-axi-vX.Y.Z` format.
+To publish an existing release tag, run the `release-please` workflow manually with the tag name as its required `tag` input.
+The workflow builds that tag and publishes it to npm with trusted publishing and provenance.
 
 The default test suite uses offline transports and synthetic fixtures and excludes `test/live/`.
 The installed-package tests in `test/package.test.ts` install a packed tarball with `npm install --prefer-offline`, reusing cached dependencies but permitting registry access when needed.
