@@ -2,6 +2,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { decode } from "@toon-format/toon";
 import { describe, expect, it } from "vitest";
 
 import { defineDomain, delay } from "../src/core/registry.js";
@@ -59,17 +60,17 @@ describe("secret redaction choke point", () => {
   });
 
   it.each([
-    ["ssh_key_data", { id: 7, ssh_key_data: SSH_KEY }, SSH_BODY],
-    ["ssh_key_unlock", { id: 7, ssh_key_unlock: "unlock-passphrase-2" }, "unlock-passphrase-2"],
-    ["credential inputs", { id: 7, credential_type: 1, inputs: { username: "svc-account-name", extra: "plain-input-field" } }, "plain-input-field"],
-    ["json extra_vars", { id: 7, extra_vars: '{"api_token":"s3cr3t-job-token"}' }, "s3cr3t-job-token"],
-    ["yaml extra_vars", { id: 7, extra_vars: "vault_password: s3cr3t-job-yaml\n" }, "s3cr3t-job-yaml"],
-    ["unparseable extra_vars", { id: 7, extra_vars: "{unterminated: s3cr3t-broken" }, "s3cr3t-broken"],
-  ])("masks %s in raw GET output", async (_name, body, secret) => {
+    ["ssh_key_data", { id: 7, ssh_key_data: SSH_KEY }, SSH_BODY, "ssh_key_data"],
+    ["ssh_key_unlock", { id: 7, ssh_key_unlock: "unlock-passphrase-2" }, "unlock-passphrase-2", "ssh_key_unlock"],
+    ["credential inputs", { id: 7, credential_type: 1, inputs: { username: "svc-account-name", extra: "plain-input-field" } }, "plain-input-field", "inputs"],
+    ["json extra_vars", { id: 7, extra_vars: '{"api_token":"s3cr3t-job-token"}' }, "s3cr3t-job-token", "extra_vars"],
+    ["yaml extra_vars", { id: 7, extra_vars: "vault_password: s3cr3t-job-yaml\n" }, "s3cr3t-job-yaml", "extra_vars"],
+    ["unparseable extra_vars", { id: 7, extra_vars: "{unterminated: s3cr3t-broken" }, "s3cr3t-broken", "extra_vars"],
+  ])("masks %s in raw GET output", async (_name, body, secret, field) => {
     const run = await runCli(["api", "get", "jobs/7/"], { script: [{ status: 200, body }] });
     expect(run.exitCode).toBe(0);
     expect(run.stdout).not.toContain(secret);
-    expect(run.stdout).toContain("id: 7");
+    expect(decode(run.stdout)).toMatchObject({ api_response: { body: { id: 7, [field]: "***" } } });
   });
 
   it("keeps non-secret extra_vars visible in raw GET output", async () => {
