@@ -146,7 +146,7 @@ export function rawRegion(options: RawRegionOptions): Record<string, unknown> {
   ];
 
   if (options.help !== undefined && options.help.length > 0) {
-    parts.push(encode({ help: [...options.help] }));
+    parts.push(encode({ help: options.help.map(redact) }));
   }
 
   return rawOutput(parts.join("\n"));

@@ -86,6 +86,19 @@ it.each([
   expect(result.stdout).toContain("\nstdout:\nsecret ***\n");
 });
 
+it.each([
+  ["job", ["--type", "job"], "stdout", "job *** 7"],
+  ["ad-hoc", [], "stdout", "ad-hoc *** 7"],
+  ["job", ["--type", "job"], "stdout 7", "job ***"],
+])("redacts the %s stdout help when the token is %s", async (noun, extra, token, suggestion) => {
+  const result = await runAgainst([noun, "stdout", "7", ...extra], fakeAwx().fetch, token);
+  expect(result.exitCode, result.stdout).toBe(0);
+  expect(result.stdout).toContain(`${noun === "job" ? "job_stdout" : "ad_hoc_stdout"}:`);
+  expect(result.stdout).toContain("\nstdout:\n");
+  expect(result.stdout).toContain(`awx-axi ${suggestion} --lines 1-200`);
+  expect(result.stdout.slice(result.stdout.indexOf("\nhelp"))).not.toContain(token);
+});
+
 describe.each([
   { noun: "job", id: "1839", extra: ["--type", "job"], header: "job_stdout" },
 ])("$noun stdout against an AWX that answers 406 HTML to a mismatched format", ({ noun, id, extra, header }) => {
