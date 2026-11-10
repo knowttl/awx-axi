@@ -151,6 +151,25 @@ describe("host inspect CLI", () => {
     expect(run.stdout).not.toContain("do-not-print");
   });
 
+  it.each([
+    { count: 1, variablesChars: 20_000, factsChars: 20_000 },
+    { count: 2, variablesChars: 12_000, factsChars: 12_000 },
+    { count: 10, variablesChars: 5_000, factsChars: 20_000 },
+  ])("keeps every truncated component's preview nonempty for $count hosts with $variablesChars/$factsChars chars", async ({ count, variablesChars, factsChars }) => {
+    const run = await runCli(["host", "inspect", Array.from({ length: count }, () => "501").join(",")], { script: Array.from({ length: count }, () => [
+      "host-detail", "host-groups", { status: 200, body: { notes: "x".repeat(variablesChars) } }, { status: 200, body: { facts: "x".repeat(factsChars) } },
+    ]).flat() });
+    expect(run.stdout.length).toBeLessThanOrEqual(20_000);
+    const hosts = (decode(run.stdout) as { hosts: Record<string, { truncated?: boolean; preview?: string }>[] }).hosts;
+    expect(hosts).toHaveLength(count);
+    for (const host of hosts) {
+      for (const component of ["variables", "facts"]) {
+        expect(host[component]).toMatchObject({ truncated: true });
+        expect(host[component]?.preview?.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("preserves independent outcomes when a ten-host batch truncates a long description", async () => {
     const run = await runCli(["host", "inspect", Array.from({ length: 10 }, () => "501").join(",")], { script: [
       { status: 200, body: { ...loadFixture("host-detail").body as object, description: "x".repeat(5_000) } },

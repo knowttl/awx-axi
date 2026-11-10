@@ -18,6 +18,7 @@ An ambiguous selector reports inventory-bearing candidates before any detail rea
 Groups use the [scoped design exception](design.md#103-the-transport-seam) and report pagination truncation.
 `REQUEST_BUDGET` and `TIME_BUDGET` stop further reads.
 `OUTPUT_BUDGET` marks output truncation: oversized fields or components can become objects containing `truncated`, `total_chars` and `preview`, with a per-host `host show` recovery hint.
+Truncated fields within a host share its output budget and retain nonempty previews.
 Oversized ambiguity results retain up to three compact candidates with IDs, names and inventory context, plus `candidates_truncated` and `candidates_total` for the returned candidate list.
 `inventory updates` reports source pagination and per-source truncation without inventing a combined server total.
 `workflow template-node` reads complete credentials and edge collections and accepts no row limit.
