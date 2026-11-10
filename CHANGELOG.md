@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.12...awx-axi-v0.1.13) (2026-11-10)
+
+
+### Bug Fixes
+
+* centralize secret redaction in CLI output ([#85](https://github.com/knowttl/awx-axi/issues/85)) ([b1e1dc7](https://github.com/knowttl/awx-axi/commit/b1e1dc7eb2c410fa8c791fa2453c09f9b6decbec))
+
 ## [0.1.12](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.11...awx-axi-v0.1.12) (2026-11-09)
 
 
