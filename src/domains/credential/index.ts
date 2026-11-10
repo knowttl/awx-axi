@@ -384,7 +384,7 @@ function* deleteCredentialPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `credential ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "credential",
     fields: {
       id,

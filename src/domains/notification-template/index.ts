@@ -189,7 +189,7 @@ function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "notification_template", { notification_template: id }, `DELETE notification_templates/${id}/`);
   const response = yield* write(`notification_templates/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `notification template ${id}` });
-  return detailOutput({ label: "notification_template", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "notification_template", fields: { id, status: "deleted" } });
 }
 
 function* testPlan(input: SubcommandInput): Plan<DomainResult> {

@@ -133,7 +133,7 @@ function* editNodePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("edit", "workflow_node", { node: id }, `PATCH workflow_job_template_nodes/${id}/`, payload);
   const response = yield* write(`workflow_job_template_nodes/${id}/`, payload, { method: "PATCH", tag: "config" });
   if (response.status !== 200) throw errorForResponse(response, { subject: `workflow node ${id}` });
-  return detailOutput({ label: "workflow_node", fields: { id, status: "updated" }, help: [`Run \`awx-axi workflow nodes <workflow-run-id>\` for run nodes`] });
+  return detailOutput({ trustedFields: ["status"], label: "workflow_node", fields: { id, status: "updated" }, help: [`Run \`awx-axi workflow nodes <workflow-run-id>\` for run nodes`] });
 }
 
 function* deleteNodePlan(input: SubcommandInput): Plan<DomainResult> {
@@ -141,7 +141,7 @@ function* deleteNodePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "workflow_node", { node: id }, `DELETE workflow_job_template_nodes/${id}/`);
   const response = yield* write(`workflow_job_template_nodes/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `workflow node ${id}` });
-  return detailOutput({ label: "workflow_node", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "workflow_node", fields: { id, status: "deleted" } });
 }
 
 function* linkNodePlan(input: SubcommandInput, remove = false): Plan<DomainResult> {
@@ -153,7 +153,7 @@ function* linkNodePlan(input: SubcommandInput, remove = false): Plan<DomainResul
   if (!isLive(input.flags)) return dryRun(remove ? "unlink" : "link", "workflow_node", { node, target, on: edge }, `POST ${path}`, payload);
   const response = yield* write(path, payload, { method: "POST", tag: "config" });
   if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `workflow node ${node}` });
-  return detailOutput({ label: "workflow_edge", fields: { node, target, on: edge, status: remove ? "unlinked" : "linked" } });
+  return detailOutput({ trustedFields: ["status"], label: "workflow_edge", fields: { node, target, on: edge, status: remove ? "unlinked" : "linked" } });
 }
 
 function nodeAssociationPlan(kind: "credential" | "label" | "instance-group", remove: boolean) {
@@ -169,7 +169,7 @@ function nodeAssociationPlan(kind: "credential" | "label" | "instance-group", re
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", noun, { node, [flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: kind === "credential" ? "security" : "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `workflow node ${node}` });
-    return detailOutput({ label: "workflow_node_association", fields: { node, [flag]: target, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "workflow_node_association", fields: { node, [flag]: target, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -205,7 +205,7 @@ function workflowLabelPlan(remove: boolean) {
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) {
       throw errorForResponse(response, { subject: `workflow ${workflow} label` });
     }
-    return detailOutput({ label: "workflow_label", fields: { workflow, label, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "workflow_label", fields: { workflow, label, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -242,7 +242,7 @@ function notificationAssociationPlan(remove: boolean) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { workflow, notification_template: template, event }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `workflow ${workflow} notifications` });
-    return detailOutput({ label: "workflow_notification", fields: { workflow, notification_template: template, event, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "workflow_notification", fields: { workflow, notification_template: template, event, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -1069,7 +1069,7 @@ function* deleteWorkflowPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `workflow ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "workflow",
     fields: {
       id,

@@ -85,13 +85,15 @@ export interface DetailOutputOptions {
   readonly label: string;
   readonly fields: Record<string, unknown>;
   readonly help?: readonly string[];
+  readonly trustedFields?: readonly string[];
 }
 
 /** A detail response. Suggestions are optional: a detail view is self-contained. */
 export function detailOutput(
   options: DetailOutputOptions,
 ): Record<string, unknown> {
-  const fields = redactValue(options.label === "dry_run" ? trustFields(options.fields, ["action"]) : options.fields);
+  const trusted = options.label === "dry_run" ? ["action"] : options.trustedFields ?? [];
+  const fields = redactValue(trustFields(options.fields, trusted));
   return withHelp({ [options.label]: fields }, options.help);
 }
 

@@ -20,14 +20,14 @@ const ENCRYPTED = /\$encrypted\$[^\s"'&]*/g;
 
 export const REDACTION = "***";
 
-const secrets = new Set<string>();
+const secrets = new Map<string, boolean>();
 const trustedFields = new WeakMap<object, ReadonlySet<string>>();
 
 export function registerSecret(secret: string): void {
   if (secret.length === 0) return;
-  secrets.add(secret);
-  secrets.add(JSON.stringify(secret).slice(1, -1));
-  secrets.add(encodeURIComponent(secret));
+  for (const representation of [secret, JSON.stringify(secret).slice(1, -1), encodeURIComponent(secret)]) {
+    secrets.set(representation, secrets.get(representation) === true || secret.length >= 8);
+  }
 }
 
 export function registerSecretValues(value: unknown): void {
@@ -43,8 +43,8 @@ export function clearSecrets(): void { secrets.clear(); }
 /** Redact one log body. Applied to every log body awx-axi prints. */
 export function redact(text: string): string {
   let safe = text;
-  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
-    if (secret.length >= 8) safe = safe.replaceAll(secret, REDACTION);
+  for (const [secret, long] of [...secrets].sort(([a], [b]) => b.length - a.length)) {
+    if (long) safe = safe.replaceAll(secret, REDACTION);
     else {
       const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       safe = safe.replace(new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "gu"), REDACTION);

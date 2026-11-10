@@ -51,6 +51,10 @@ describe("secret redaction choke point", () => {
       const rejected = await runCli([...args, "--confirm"], { env: WRITES_ON, script: [{ status: 400, body: { detail: secret } }] });
       for (const run of [preview, echoed, rejected]) expect(run.stdout).not.toContain(secret);
       expect(preview.stdout).toContain("would_send: POST credentials/");
+      expect(echoed.exitCode).toBe(0);
+      expect(echoed.stdout).toContain("echoed: ***");
+      expect(rejected.exitCode).toBe(2);
+      expect(rejected.stdout).toContain("***");
     });
   });
 
@@ -76,11 +80,13 @@ describe("secret redaction choke point", () => {
   it("registers write-body secrets from any domain before a controller error can echo them", async () => {
     const secret = "s3cr3t-team-credential";
     await withPrivateFile(JSON.stringify({ name: "cred", credential_type: 1, inputs: { password: secret } }), async (file) => {
-      const run = await runCli(["team", "credential", "create", "5", "--name", "cred", "--credential-type", "1", "--inputs-file", file, "--confirm"], {
+      const run = await runCli(["team", "credential-create", "5", "--name", "cred", "--credential-type", "1", "--inputs-file", file, "--confirm"], {
         env: WRITES_ON,
         script: [{ status: 400, body: { detail: `bad input ${secret}` } }],
       });
       expect(run.stdout).not.toContain(secret);
+      expect(run.exitCode).toBe(2);
+      expect(run.stdout).toContain("bad input ***");
     });
   });
 
@@ -101,6 +107,16 @@ describe("secret redaction choke point", () => {
       });
       expect(run.stdout).toContain("invalid ***suffix");
       expect(run.stdout).not.toContain("abc12345");
+    });
+  });
+
+  it("applies the original short-secret boundary to URL encoding", async () => {
+    await withPrivateFile("éé", async (file) => {
+      const run = await runCli(["user", "create", "alice", "--password-file", file, "--confirm"], {
+        env: WRITES_ON, script: [{ status: 400, body: { detail: "x%C3%A9%C3%A9y and %C3%A9%C3%A9" } }],
+      });
+      expect(run.exitCode).toBe(2);
+      expect(run.stdout).toContain("x%C3%A9%C3%A9y and ***");
     });
   });
 
@@ -161,6 +177,8 @@ describe("secret redaction choke point", () => {
       }],
     });
     const run = await runCli(["leaky", "show"], { domain });
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toContain("log line with ***");
     expect(run.stdout).not.toContain(SSH_BODY);
     expect(run.stdout).not.toContain("hunter2hunter2");
   });

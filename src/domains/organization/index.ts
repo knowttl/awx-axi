@@ -111,7 +111,7 @@ function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "organization", { organization: id }, `DELETE organizations/${id}/`);
   const response = yield* write(`organizations/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `organization ${id}` });
-  return detailOutput({ label: "organization", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "organization", fields: { id, status: "deleted" } });
 }
 
 const ORGANIZATION_ASSOCIATIONS: Record<string, {
@@ -154,7 +154,7 @@ function associationPlan(operation: string) {
   if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", spec.noun, { organization, [spec.flag]: target }, `POST ${path}`, payload);
   const response = yield* write(path, payload, { method: "POST", tag: spec.tag });
   if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `organization ${organization}` });
-  return detailOutput({ label: "organization_association", fields: { organization, [spec.flag]: target, status: remove ? "removed" : "added" } });
+  return detailOutput({ trustedFields: ["status"], label: "organization_association", fields: { organization, [spec.flag]: target, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -168,7 +168,7 @@ function organizationNotificationPlan(remove: boolean) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { organization, notification_template: template, event }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `organization ${organization} notifications` });
-    return detailOutput({ label: "organization_notification", fields: { organization, notification_template: template, event, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "organization_notification", fields: { organization, notification_template: template, event, status: remove ? "removed" : "added" } });
   };
 }
 

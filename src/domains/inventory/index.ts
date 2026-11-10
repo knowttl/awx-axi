@@ -940,7 +940,7 @@ function* deleteInventoryPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `inventory ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "inventory",
     fields: {
       id,
@@ -982,7 +982,7 @@ function* deleteGroupPlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "group", { group: id }, `DELETE groups/${id}/`);
   const response = yield* write(`groups/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `group ${id}` });
-  return detailOutput({ label: "group", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "group", fields: { id, status: "deleted" } });
 }
 
 function associationPlan(kind: "host" | "child", remove: boolean) {
@@ -999,7 +999,7 @@ function associationPlan(kind: "host" | "child", remove: boolean) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", noun, { group, [flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `group ${group}` });
-    return detailOutput({ label: "group_association", fields: { group, [flag]: target, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "group_association", fields: { group, [flag]: target, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -1048,7 +1048,7 @@ function* deleteSourcePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "inventory_source", { inventory_source: id }, `DELETE inventory_sources/${id}/`);
   const response = yield* write(`inventory_sources/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `inventory source ${id}` });
-  return detailOutput({ label: "inventory_source", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "inventory_source", fields: { id, status: "deleted" } });
 }
 
 function sourceCredentialPlan(remove: boolean): (input: SubcommandInput) => Plan<DomainResult> {
@@ -1060,7 +1060,7 @@ function sourceCredentialPlan(remove: boolean): (input: SubcommandInput) => Plan
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "credential", { inventory_source: source, credential }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "security" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `inventory source ${source}` });
-    return detailOutput({ label: "inventory_source_credential", fields: { inventory_source: source, credential, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "inventory_source_credential", fields: { inventory_source: source, credential, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -1074,7 +1074,7 @@ function sourceNotificationPlan(remove: boolean) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", "notification_template", { inventory_source: source, notification_template: template, event }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `inventory source ${source} notifications` });
-    return detailOutput({ label: "inventory_source_notification", fields: { inventory_source: source, notification_template: template, event, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "inventory_source_notification", fields: { inventory_source: source, notification_template: template, event, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -1091,7 +1091,7 @@ function* bulkHostCreatePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("create", "hosts", { inventory, count: hosts.length }, "POST bulk/host_create/", payload);
   const response = yield* write("bulk/host_create/", payload, { method: "POST", tag: "config" });
   if (response.status !== 200 && response.status !== 201) throw errorForResponse(response, { subject: `bulk hosts in inventory ${inventory}` });
-  return detailOutput({ label: "hosts", fields: { inventory, count: hosts.length, status: "created" } });
+  return detailOutput({ trustedFields: ["status"], label: "hosts", fields: { inventory, count: hosts.length, status: "created" } });
 }
 
 function* bulkHostDeletePlan(input: SubcommandInput): Plan<DomainResult> {
@@ -1103,7 +1103,7 @@ function* bulkHostDeletePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "hosts", { count: ids.length }, "POST bulk/host_delete/", payload);
   const response = yield* write("bulk/host_delete/", payload, { method: "POST", tag: "delete" });
   if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: "bulk hosts" });
-  return detailOutput({ label: "hosts", fields: { count: ids.length, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "hosts", fields: { count: ids.length, status: "deleted" } });
 }
 
 function* deleteHostPlan(input: SubcommandInput): Plan<DomainResult> {
@@ -1132,7 +1132,7 @@ function* deleteHostPlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `host ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "host",
     fields: {
       id,

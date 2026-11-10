@@ -513,7 +513,7 @@ function associationPlan(operation: string) {
     if (!isLive(input.flags)) return dryRun(remove ? "remove" : "add", spec.noun, { schedule, [spec.flag]: target }, `POST ${path}`, payload);
     const response = yield* write(path, payload, { method: "POST", tag: spec.flag === "credential" ? "security" : "config" });
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw errorForResponse(response, { subject: `schedule ${schedule}` });
-    return detailOutput({ label: "schedule_association", fields: { schedule, [spec.flag]: target, status: remove ? "removed" : "added" } });
+    return detailOutput({ trustedFields: ["status"], label: "schedule_association", fields: { schedule, [spec.flag]: target, status: remove ? "removed" : "added" } });
   };
 }
 
@@ -543,7 +543,7 @@ function* deleteSchedulePlan(input: SubcommandInput): Plan<DomainResult> {
     throw errorForResponse(res, { subject: `schedule ${id}` });
   }
 
-  return detailOutput({
+  return detailOutput({ trustedFields: ["status"],
     label: "schedule",
     fields: {
       id,

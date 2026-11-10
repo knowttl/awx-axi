@@ -140,7 +140,7 @@ function* deletePlan(input: SubcommandInput): Plan<DomainResult> {
   if (!isLive(input.flags)) return dryRun("delete", "execution_environment", { execution_environment: id }, `DELETE execution_environments/${id}/`);
   const response = yield* write(`execution_environments/${id}/`, undefined, { method: "DELETE", tag: "delete" });
   if (response.status !== 204 && response.status !== 200 && response.status !== 202) throw errorForResponse(response, { subject: `execution environment ${id}` });
-  return detailOutput({ label: "execution_environment", fields: { id, status: "deleted" } });
+  return detailOutput({ trustedFields: ["status"], label: "execution_environment", fields: { id, status: "deleted" } });
 }
 
 function* copyPlan(input: SubcommandInput): Plan<DomainResult> {

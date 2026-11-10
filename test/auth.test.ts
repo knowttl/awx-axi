@@ -11,6 +11,7 @@ import { RecordedTransport } from "../src/core/transport.js";
 import { PrivateFiles } from "../src/core/private-file.js";
 import { booleanEnv, configPath, credentialsPath, deleteToken, loadConfig, loadCredentials, normalizeEnv, saveToken, selectProfile, toolDirectory, validateOrigin, validateRef, type Env } from "../src/core/profiles.js";
 import { runCli } from "./support/run.js";
+import { main } from "../src/cli.js";
 
 const homes: string[] = [];
 const files = new PrivateFiles();
@@ -29,6 +30,31 @@ const passwordPreflight = [{ status: 200, body: { passwords_needed_to_start: ["s
 afterEach(() => { homes.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })); });
 
 describe("credential profiles", () => {
+  it("registers authentication response secrets before translating errors", async () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_USERNAME: "operator", AWX_AXI_PASSWORD: "login-password" };
+    const run = await runCli(["auth", "login"], { env, script: [{ status: 400, body: { password: "longsecret", detail: "echo longsecret" } }] });
+    expect(run.exitCode).toBe(2);
+    expect(run.stdout).toContain("echo ***");
+    expect(run.stdout).not.toContain("longsecret");
+  });
+
+  it("preserves mutation status when it matches the configured token", async () => {
+    const env = { ...environment(), AWX_AXI_ORIGIN: production.origin, AWX_AXI_TOKEN: "deleted", AWX_AXI_ALLOW_DELETES: "1" };
+    const transport = new RecordedTransport([{ status: 204 }], { env });
+    const chunks: string[] = [];
+    const previousExitCode = process.exitCode;
+    process.exitCode = 0;
+    try {
+      await main({ argv: ["user", "delete", "7", "--confirm"], env, stdout: { write: (chunk) => { chunks.push(chunk); } }, createTransport: () => {
+        resolveCredential(env);
+        return transport;
+      } });
+      expect(Number(process.exitCode)).toBe(0);
+      expect(chunks.join("")).toContain("status: deleted");
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
   it("explains how to configure a missing profile before any request", async () => {
     const run = await runCli(["auth", "status"], { env: environment() });
     expect(run.exitCode).toBe(1);
