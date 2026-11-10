@@ -60,14 +60,14 @@ export function formatError(error: unknown, diagnostics?: ResponseDiagnostics): 
       output.help = error.suggestions;
     }
     return {
-      output: `${encode(redactValue(output))}\n`,
+      output: `${encode({ ...(redactValue(output) as Record<string, unknown>), code: error.code })}\n`,
       exitCode: USAGE_ERROR_CODES.includes(error.code) ? 2 : 1,
     };
   }
 
   const message = error instanceof Error ? error.message : String(error);
   return {
-    output: `${encode(redactValue({ error: message, code: "UNKNOWN" }))}\n`,
+    output: `${encode({ ...(redactValue({ error: message }) as Record<string, unknown>), code: "UNKNOWN" })}\n`,
     exitCode: 1,
   };
 }

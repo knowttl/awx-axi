@@ -9,7 +9,7 @@ import { errorForResponse, validationError } from "../../core/errors.js";
 import { detailOutput } from "../../core/output.js";
 import { dryRun, isLive, MUTATION_FLAGS, parseJsonObject } from "../../core/mutations.js";
 import { PrivateFiles } from "../../core/private-file.js";
-import { isSensitiveKey, REDACTION, registerSecretValues } from "../../core/redact.js";
+import { isSensitiveKey, REDACTION, registerSecretValues, registerSensitiveValues } from "../../core/redact.js";
 import { booleanEnv } from "../../core/profiles.js";
 import { AxiError } from "axi-sdk-js";
 import { parse as parseYaml } from "yaml";
@@ -111,6 +111,7 @@ function scrubResponse(value: unknown, secrets: readonly string[]): unknown {
 }
 
 function responseOutput(method: string, path: string, response: AwxResponse, secrets: readonly string[] = []) {
+  registerSensitiveValues(response.body);
   const body = scrubResponse(response.body ?? null, secrets);
   if (response.status < 200 || response.status >= 300) {
     throw errorForResponse({ ...response, body }, { subject: `${method} ${path}` });

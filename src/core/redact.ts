@@ -23,8 +23,7 @@ export const REDACTION = "***";
 const secrets = new Set<string>();
 
 export function registerSecret(secret: string): void {
-  // Short values occur in ordinary prose; sensitive fields are masked separately.
-  if (secret.length < 8) return;
+  if (secret.length === 0) return;
   secrets.add(secret);
   secrets.add(JSON.stringify(secret).slice(1, -1));
   secrets.add(encodeURIComponent(secret));
@@ -42,7 +41,13 @@ export function clearSecrets(): void { secrets.clear(); }
 /** Redact one log body. Applied to every log body awx-axi prints. */
 export function redact(text: string): string {
   let safe = text;
-  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) safe = safe.replaceAll(secret, REDACTION);
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
+    if (secret.length >= 8) safe = safe.replaceAll(secret, REDACTION);
+    else {
+      const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      safe = safe.replace(new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "gu"), REDACTION);
+    }
+  }
   return safe
     .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, REDACTION)
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, REDACTION)
@@ -57,15 +62,13 @@ export function redact(text: string): string {
  *
  * Every domain result, error and dry-run preview is redacted here, by walking
  * the value rather than substring-replacing the encoded text, so keys and the
- * protocol fields in {@link PROTOCOL_KEYS} survive a registered secret that
- * happens to equal them.
+ * keys survive a registered secret that happens to equal them.
  * - string values pass through `redact` for URLs and `$encrypted$`
  * - values under secret keys are registered, then replaced with `***`
  * - serialized `extra_vars` holding a secret key are replaced whole
  * - arrays and objects are walked recursively
  */
 const SENSITIVE_KEY = /(password|api[-_]?key|access[-_]?key|private[-_]?key|ssh[-_]?key[-_](?:data|unlock)|secret|token|passphrase|notification[-_]configuration|authorization$)/i;
-const PROTOCOL_KEYS: ReadonlySet<string> = new Set(["code", "status", "action"]);
 
 export function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEY.test(key);
@@ -92,7 +95,6 @@ function redactExtraVars(text: string): string {
 
 export function redactValue(value: unknown, key = ""): unknown {
   if (typeof value === "string") {
-    if (PROTOCOL_KEYS.has(key)) return value;
     return key === "extra_vars" ? redactExtraVars(value) : redact(value);
   }
   if (Array.isArray(value)) return value.map((entry) => redactValue(entry, key));
@@ -111,5 +113,6 @@ export function registerSensitiveValues(value: unknown): void {
 
 export function redactResult(result: string | Record<string, unknown>): string | Record<string, unknown> {
   if (typeof result === "string") return redact(result);
+  registerSensitiveValues(result);
   return Object.fromEntries(Object.entries(result).map(([label, section]) => [label, redactValue(section, label)]));
 }

@@ -1,12 +1,12 @@
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { defineDomain, delay } from "../src/core/registry.js";
 import { runCli } from "./support/run.js";
+import { checkOutput } from "../scripts/check-output.mjs";
 
 const WRITES_ON = { AWX_AXI_ALLOW_SECURITY_WRITES: "1", AWX_AXI_ALLOW_DELETES: "1", AWX_AXI_ALLOW_CONFIG_WRITES: "1" };
 const SSH_KEY = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAAsecretkeybody\n-----END OPENSSH PRIVATE KEY-----";
@@ -84,6 +84,25 @@ describe("secret redaction choke point", () => {
     });
   });
 
+  it("redacts a short private password echoed by the controller", async () => {
+    await withPrivateFile("abc123", async (file) => {
+      const run = await runCli(["user", "create", "alice", "--password-file", file, "--confirm"], {
+        env: WRITES_ON, script: [{ status: 400, body: { detail: "invalid password abc123" } }],
+      });
+      expect(run.stdout).toContain("invalid password ***");
+      expect(run.stdout).not.toContain("abc123");
+    });
+  });
+
+  it("redacts controller protocol fields and response echoes", async () => {
+    const run = await runCli(["api", "get", "jobs/7/"], { script: [{ status: 200, body: {
+      message: "echo longsecret", status: ["rejected: longsecret"], password: "longsecret",
+    } }] });
+    expect(run.stdout).not.toContain("longsecret");
+    expect(run.stdout).toContain("echo ***");
+    expect(run.stdout).toContain("rejected: ***");
+  });
+
   it("redacts a domain result that bypasses detailOutput", async () => {
     const domain = defineDomain({
       name: "leaky",
@@ -108,37 +127,11 @@ describe("secret redaction choke point", () => {
 });
 
 describe("redaction guard", () => {
-  const srcRoot = fileURLToPath(new URL("../src/", import.meta.url));
-  const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    return entry.isDirectory() ? sources(path) : path.endsWith(".ts") ? [path] : [];
-  });
-  const files = sources(srcRoot).map((path) => ({ name: relative(srcRoot, path), text: readFileSync(path, "utf8") }));
-
-  it("encodes output only in modules that apply the redaction choke point", () => {
-    const encoders = files.filter((file) => file.text.includes("@toon-format/toon")).map((file) => file.name).sort();
-    expect(encoders).toEqual(["cli.ts", "core/errors.ts", "core/output.ts", "domains/host/index.ts"]);
-    const errors = files.find((file) => file.name === "core/errors.ts")!.text;
-    expect(errors.split("\n").filter((line) => /\bencode\(/.test(line) && !line.includes("encode(redactValue("))).toEqual([]);
+  it.each(["process.stdout.write(secret)", "process.stderr.write(secret)", "console.log(secret)", "encode(secret)"])("rejects bypass %s", (source) => {
+    expect(checkOutput([["new.ts", source]])).not.toEqual([]);
   });
 
-  it("writes to the process streams only through redact or from fixed text", () => {
-    const writes = files.flatMap((file) => file.text.split("\n")
-      .filter((line) => /process\.(?:stdout|stderr)|console\./.test(line))
-      .map((line) => `${file.name}: ${line.trim()}`));
-    expect(writes).toEqual([
-      "cli.ts: (options.stdout ?? process.stdout).write(error.output);",
-      "cli.ts: (options.stdout ?? process.stdout).write(error.output);",
-      "cli.ts: stdout: options.stdout ?? process.stdout,",
-      'core/auth.ts: if (profile.origin.startsWith("http://")) process.stderr.write("warning: plain HTTP controller traffic, including credentials, is unencrypted\\n");',
-      "core/profiles.ts: export function normalizeEnv(env: Env, notice: (message: string) => void = (message) => process.stderr.write(`${message}\\n`)): Env {",
-      "core/transport.ts: process.stderr.write(redact(`Write journal failed after ${method} returned ${response.status}: ${String(error)}\\n`));",
-    ]);
-  });
-
-  it("routes every command result through redactResult", () => {
-    const cli = files.find((file) => file.name === "cli.ts")!.text;
-    expect(cli).toContain("redactResult((await command(args, commandContext))");
-    expect(cli).toContain("home: () => redactResult(home!)");
+  it("accepts a command returning data for the output boundary", () => {
+    expect(checkOutput([["new.ts", "export const command = () => ({ value: 'example' });"]])).toEqual([]);
   });
 });

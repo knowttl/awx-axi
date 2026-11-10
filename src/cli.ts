@@ -178,11 +178,10 @@ export async function main(options: MainOptions = {}): Promise<void> {
     // three other codes must also exit 2 (§9).
     formatError: (error) => formatError(error, diagnostics),
     renderUnknownCommand: (command) =>
-      `${encode(redactValue({
+      `${encode({ ...(redactValue({
         error: `Unknown command: ${command}`,
-        code: "VALIDATION_ERROR",
         help: ["Run `awx-axi --help` to see available commands"],
-      }))}\n`,
+      }) as Record<string, unknown>), code: "VALIDATION_ERROR" })}\n`,
     getCommandHelp: (command) => {
       if (command === "auth") {
         return AUTH_HELP;
