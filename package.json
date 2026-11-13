@@ -1,6 +1,6 @@
 {
   "name": "@knowttl/awx-axi",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Inspect and run AWX automation from the shell",
   "type": "module",
   "license": "MIT",
