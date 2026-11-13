@@ -163,7 +163,7 @@ export function checkOutput(sources) {
       }
       if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === TOON_MODULE) {
         const bindings = node.importClause?.namedBindings;
-        if (node.importClause?.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => element.name.text !== "encode" || element.propertyName)) errors.push(`${name}: unsupported TOON import`);
+        if (node.importClause?.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.some((element) => (element.propertyName ?? element.name).text === "encode" && element.propertyName)) errors.push(`${name}: unsupported TOON import`);
       }
       if (isMemberAccess(node) && isToonReference(node.expression) && (memberName(node) === "encode" || (ts.isElementAccessExpression(node) && memberName(node) === undefined))) errors.push(`${name}: aliased TOON encoder`);
       if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isToonReference(node.initializer) && node.name.elements.some((element) => {

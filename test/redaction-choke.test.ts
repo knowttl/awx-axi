@@ -290,6 +290,13 @@ describe("redaction guard", () => {
   });
 
   it.each([
+    "import { decode } from '@toon-format/toon'; decode(value)",
+    "import { decode as parse } from '@toon-format/toon'; parse(value)",
+  ])("accepts static decoder imports (Part of #87): %s", (source) => {
+    expect(checkOutput([["new.ts", source]])).toEqual([]);
+  });
+
+  it.each([
     "export { cwd } from 'node:process'",
     "export { decode } from '@toon-format/toon'",
     "const toon = await import('@toon-format/toon'); toon.decode(value)",
