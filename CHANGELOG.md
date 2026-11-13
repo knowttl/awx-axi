@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.14...awx-axi-v0.1.15) (2026-11-13)
+
+
+### Bug Fixes
+
+* allow static TOON decoder imports ([#92](https://github.com/knowttl/awx-axi/issues/92)) ([dd77691](https://github.com/knowttl/awx-axi/commit/dd7769108aea9f8352e6d6815f4825f2f619fca5))
+* track static process aliases in output guard ([#91](https://github.com/knowttl/awx-axi/issues/91)) ([e875312](https://github.com/knowttl/awx-axi/commit/e8753127656bce23043b78f2caa0e3d4b01dad0f))
+
 ## [0.1.14](https://github.com/knowttl/awx-axi/compare/awx-axi-v0.1.13...awx-axi-v0.1.14) (2026-11-10)
 
 
