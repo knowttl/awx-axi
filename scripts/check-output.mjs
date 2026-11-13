@@ -63,13 +63,17 @@ function collectProcessAliases(source) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isProcessReference(node.initializer)) aliases.add(node.name.text);
     if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isGlobalObject(node.initializer)) {
       for (const element of node.name.elements) {
-        if (!element.dotDotDotToken && (element.propertyName ?? element.name).text === "process" && ts.isIdentifier(element.name)) aliases.add(element.name.text);
+        const property = element.propertyName ?? element.name;
+        if (!element.dotDotDotToken && (isProcessName(property) || isUnknownComputedName(property)) && ts.isIdentifier(element.name)) aliases.add(element.name.text);
       }
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(unwrap(node.left)) && isProcessReference(node.right)) aliases.add(unwrap(node.left).text);
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isGlobalObject(node.right)) {
       for (const property of unwrap(node.left).properties) {
-        if (ts.isPropertyAssignment(property) && property.name.text === "process" && ts.isIdentifier(unwrap(property.initializer))) aliases.add(unwrap(property.initializer).text);
+        if (!ts.isPropertyAssignment(property) || (!isProcessName(property.name) && !isUnknownComputedName(property.name))) continue;
+        let target = unwrap(property.initializer);
+        if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) target = unwrap(target.left);
+        if (ts.isIdentifier(target)) aliases.add(target.text);
       }
     }
     ts.forEachChild(node, visit);
@@ -80,6 +84,10 @@ function collectProcessAliases(source) {
     visit(source);
   } while (aliases.size !== size);
   return { aliases, isProcessReference };
+}
+
+function isProcessName(name) {
+  return (ts.isComputedPropertyName(name) ? literalText(name.expression) : name.text) === "process";
 }
 
 function isStreamName(name) {

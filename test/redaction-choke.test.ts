@@ -228,6 +228,18 @@ describe("redaction guard", () => {
     });
   });
 
+  describe.each(["globalThis", "global"])("%s process destructuring", (globalObject) => {
+    it.each(["stdout", "stderr"])("rejects computed keys and defaults for %s", (stream) => {
+      for (const source of [
+        `const { ['process']: proc } = ${globalObject}; proc.${stream}.write(secret)`,
+        `const key = 'process'; const { [key]: proc = fallback } = ${globalObject}; proc.${stream}.write(secret)`,
+        `let proc; ({ ['process']: proc } = ${globalObject}); proc.${stream}.write(secret)`,
+        `const key = 'process'; let proc; ({ [key]: proc = fallback } = ${globalObject}); proc.${stream}.write(secret)`,
+        `let proc; ({ process: proc = fallback } = ${globalObject}); proc.${stream}.write(secret)`,
+      ]) expect(checkOutput([["new.ts", source]])).not.toEqual([]);
+    });
+  });
+
   it.each([
     ["namespace import", "import * as toon from '@toon-format/toon'; toon.encode(secret)"],
     ["default import", "import toon from '@toon-format/toon'; toon.encode(secret)"],
