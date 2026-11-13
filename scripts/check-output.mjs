@@ -39,20 +39,43 @@ function isMemberAccess(node) {
 
 function collectProcessAliases(source) {
   const aliases = new Set(["process"]);
+  function isGlobalObject(node) {
+    node = unwrap(node);
+    return node && ts.isIdentifier(node) && GLOBAL_OBJECTS.includes(node.text);
+  }
   function isProcessReference(node) {
     node = unwrap(node);
     if (!node) return false;
     if (ts.isIdentifier(node)) return aliases.has(node.text);
-    return isMemberAccess(node) && memberName(node) === "process" && ts.isIdentifier(unwrap(node.expression)) && GLOBAL_OBJECTS.includes(unwrap(node.expression).text);
+    return isMemberAccess(node) && memberName(node) === "process" && isGlobalObject(node.expression);
   }
   function visit(node) {
     if (ts.isImportDeclaration(node) && PROCESS_MODULES.includes(node.moduleSpecifier.text)) {
       const clause = node.importClause;
       if (clause?.name) aliases.add(clause.name.text);
       if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) aliases.add(clause.namedBindings.name.text);
+      if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          if ((element.propertyName ?? element.name).text === "default") aliases.add(element.name.text);
+        }
+      }
     }
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isProcessReference(node.initializer)) aliases.add(node.name.text);
+    if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && isGlobalObject(node.initializer)) {
+      for (const element of node.name.elements) {
+        const property = element.propertyName ?? element.name;
+        if (!element.dotDotDotToken && (isProcessName(property) || isUnknownComputedName(property)) && ts.isIdentifier(element.name)) aliases.add(element.name.text);
+      }
+    }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(unwrap(node.left)) && isProcessReference(node.right)) aliases.add(unwrap(node.left).text);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isObjectLiteralExpression(unwrap(node.left)) && isGlobalObject(node.right)) {
+      for (const property of unwrap(node.left).properties) {
+        if (!ts.isPropertyAssignment(property) || (!isProcessName(property.name) && !isUnknownComputedName(property.name))) continue;
+        let target = unwrap(property.initializer);
+        if (ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken) target = unwrap(target.left);
+        if (ts.isIdentifier(target)) aliases.add(target.text);
+      }
+    }
     ts.forEachChild(node, visit);
   }
   let size;
@@ -61,6 +84,10 @@ function collectProcessAliases(source) {
     visit(source);
   } while (aliases.size !== size);
   return { aliases, isProcessReference };
+}
+
+function isProcessName(name) {
+  return (ts.isComputedPropertyName(name) ? literalText(name.expression) : name.text) === "process";
 }
 
 function isStreamName(name) {

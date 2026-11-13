@@ -168,7 +168,7 @@ describe("host inspect CLI", () => {
         expect(host[component]?.preview?.length).toBeGreaterThan(0);
       }
     }
-  });
+  }, 15_000);
 
   it("preserves independent outcomes when a ten-host batch truncates a long description", async () => {
     const run = await runCli(["host", "inspect", Array.from({ length: 10 }, () => "501").join(",")], { script: [

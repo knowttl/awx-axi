@@ -201,6 +201,8 @@ describe("redaction guard", () => {
       ["template bracket notation", `process[\`${stream}\`].write(secret)`],
       ["default import", `import proc from 'node:process'; proc.${stream}.write(secret)`],
       ["default import with bracket notation", `import proc from 'process'; proc['${stream}'].write(secret)`],
+      ["named default import", `import { default as proc } from 'node:process'; proc.${stream}.write(secret)`],
+      ["named default import from process", `import { default as proc } from 'process'; proc.${stream}.write(secret)`],
       ["namespace import", `import * as proc from 'node:process'; proc.${stream}.write(secret)`],
       ["destructured global process", `const { ${stream} } = process; ${stream}.write(secret)`],
       ["renamed destructured global process", `const { ${stream}: out } = process; out.write(secret)`],
@@ -211,6 +213,10 @@ describe("redaction guard", () => {
       ["destructuring assignment", `let out; ({ ${stream}: out } = process); out.write(secret)`],
       ["dynamic-key destructuring assignment", `const key = '${stream}'; let out; ({ [key]: out } = process); out.write(secret)`],
       ["globalThis process", `globalThis.process.${stream}.write(secret)`],
+      ["globalThis process binding", `const { process: proc } = globalThis; proc.${stream}.write(secret)`],
+      ["global process binding", `const { process: proc } = global; proc.${stream}.write(secret)`],
+      ["globalThis process assignment", `let proc; ({ process: proc } = globalThis); proc.${stream}.write(secret)`],
+      ["global process assignment", `let proc; ({ process: proc } = global); proc.${stream}.write(secret)`],
       ["global process with bracket notation", `global['process']['${stream}'].write(secret)`],
       ["destructured globalThis process", `const { ${stream} } = globalThis.process; ${stream}.write(secret)`],
       ["aliased process", `const p = process; p.${stream}.write(secret)`],
@@ -219,6 +225,18 @@ describe("redaction guard", () => {
       ["dynamic key", `process[key].write(secret)`],
     ])("rejects %s", (_name, source) => {
       expect(checkOutput([["new.ts", source]])).not.toEqual([]);
+    });
+  });
+
+  describe.each(["globalThis", "global"])("%s process destructuring", (globalObject) => {
+    it.each(["stdout", "stderr"])("rejects computed keys and defaults for %s", (stream) => {
+      for (const source of [
+        `const { ['process']: proc } = ${globalObject}; proc.${stream}.write(secret)`,
+        `const key = 'process'; const { [key]: proc = fallback } = ${globalObject}; proc.${stream}.write(secret)`,
+        `let proc; ({ ['process']: proc } = ${globalObject}); proc.${stream}.write(secret)`,
+        `const key = 'process'; let proc; ({ [key]: proc = fallback } = ${globalObject}); proc.${stream}.write(secret)`,
+        `let proc; ({ process: proc = fallback } = ${globalObject}); proc.${stream}.write(secret)`,
+      ]) expect(checkOutput([["new.ts", source]])).not.toEqual([]);
     });
   });
 
